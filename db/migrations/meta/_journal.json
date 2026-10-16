@@ -36,6 +36,20 @@
       "when": 1792192645693,
       "tag": "0004_audit_log_rls_and_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792193081890,
+      "tag": "0005_operators",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792193082322,
+      "tag": "0006_operator_grants",
+      "breakpoints": true
     }
   ]
 }

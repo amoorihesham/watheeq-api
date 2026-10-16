@@ -10,10 +10,21 @@ describe("parseConfig", () => {
       ok: true,
       config: {
         NODE_ENV: "development",
+        OPERATOR_SESSION_ABSOLUTE_SECONDS: 28800,
+        OPERATOR_SESSION_IDLE_SECONDS: 1800,
         PORT: 3000,
         DATABASE_URL: valid.DATABASE_URL,
         LOG_LEVEL: "info",
       },
+    });
+  });
+
+  it("reads operator session lifetimes and rejects nonsense", () => {
+    const ok = parseConfig({ ...valid, OPERATOR_SESSION_IDLE_SECONDS: "600" });
+    expect(ok.ok && ok.config.OPERATOR_SESSION_IDLE_SECONDS).toBe(600);
+    expect(parseConfig({ ...valid, OPERATOR_SESSION_ABSOLUTE_SECONDS: "0" })).toEqual({
+      ok: false,
+      message: "Invalid configuration: OPERATOR_SESSION_ABSOLUTE_SECONDS (too_small)",
     });
   });
 

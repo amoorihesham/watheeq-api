@@ -15,7 +15,7 @@ const config = parsed.config;
 
 const logger = createLogger(config.LOG_LEVEL);
 const pool = createPool(config.DATABASE_URL, logger);
-const server = buildApp({ pool, logger }).listen(config.PORT, () => {
+const server = buildApp({ pool, logger, config }).listen(config.PORT, () => {
   logger.info({ port: config.PORT, env: config.NODE_ENV }, "listening");
 });
 
