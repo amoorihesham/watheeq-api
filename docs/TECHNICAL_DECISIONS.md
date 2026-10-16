@@ -2,7 +2,7 @@
 
 ## Watheeq — Legal Affairs Management System
 
-**Status:** Approved (2026-10-17). Not yet implemented.
+**Status:** Approved (2026-10-17). T1-T22 implemented in Phase 0 (`docs/specs/phase-0-foundations.md`), which holds the full design and the smaller decisions P0.1-P0.27.
 **Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1–D15).
 
 ---
@@ -29,17 +29,29 @@
 | T8  | **Audit entries written in the same transaction** as the business change; audit table is append-only                                                                      | Audit can never disagree with the actual data                                                                                                                                              | Log files, asynchronous audit writes                                                                      |
 | T9  | **Modular monolith** organized by feature modules                                                                                                                         | One deployable; clear module boundaries without network and operational overhead                                                                                                           | Microservices                                                                                             |
 | T10 | **Express 5, zod, pino, Vitest; integration tests against real PostgreSQL in Docker; Docker packaging**                                                                   | Async error handling; input validation at the trust boundary; structured logs with request IDs; RLS and transactions require real-database tests; portability across KSA hosting providers | Jest; mocked databases                                                                                    |
+| T11 | **RLS enforced against a non-owner runtime role:** `watheeq_app` owns nothing and has no `BYPASSRLS`; every tenant table uses `FORCE ROW LEVEL SECURITY`; the tenant is a transaction-local setting read by `app_current_tenant()`, which raises when unset (P0.1, P0.2) | RLS is otherwise skipped for owners and superusers; a forgotten tenant context becomes an error instead of an empty or wrong result | Application-level `tenant_id` filters only |
+| T12 | **Database roles created by an administrator's bootstrap script**, not by migrations: `watheeq_owner` (migrations), `watheeq_app` (runtime), `watheeq_auth` (P0.8, P0.23) | Managed PostgreSQL often restricts role creation; migrations stay runnable by the owner role | Roles created in migrations |
+| T13 | **The two pre-tenant lookups (login by email, session by token) are `SECURITY DEFINER` functions owned by `watheeq_auth`** (`NOLOGIN`, `BYPASSRLS`, `SELECT` on `users` and `user_sessions` only) (P0.3, P0.23) | Forced RLS applies to the owner, so the bypass is confined to two fixed read-only queries | Unprotected lookup tables; dropping `FORCE` RLS; policy exceptions |
+| T14 | **Foreign keys to `tenants` are declared inline in `CREATE TABLE`** (P0.17) | Validating a foreign key added later reads `tenants` under forced RLS without a tenant context, and fails | `ALTER TABLE ... ADD CONSTRAINT` |
+| T15 | **Audit is append-only at the database level** (`INSERT` and `SELECT` only) and `audit()` accepts only a tenant transaction, taking the tenant from the transaction's context (P0.7, P0.18) | Entries cannot be rewritten, lost by a rollback mismatch, or attributed to another tenant | Application-enforced append-only |
+| T16 | **Sessions:** separate tables and cookies per realm (`__Host-wq_session`, `__Host-wq_operator`); only SHA-256 hashes of 256-bit tokens stored; idle and absolute expiry checked in SQL (P0.4, P0.5, P0.22) | Realm separation by construction; a database leak yields no usable sessions | Shared sessions table with a realm flag |
+| T17 | **CSRF token = HMAC-SHA256 keyed by the session token**, stable per session and never stored; login protected by JSON-only bodies and `SameSite=Lax` (P0.6) | Works across tabs and reloads, nothing to leak, no extra secret | Stored token hash (forced rotation, broke other tabs); double-submit cookie |
+| T18 | **Login throttling in PostgreSQL:** per account (5 failures, 15-minute lock) and per client IP (100 failures per 15 minutes; IPv6 counted per `/64`), for both realms; no Redis (P0.14, P0.24) | Covers single-account guessing and password spraying, works across instances, no extra datastore | Redis; per-IP only; per-account only |
+| T19 | **Same-origin deployment** behind one reverse proxy (API under `/api`), no CORS; client IP resolved through a configured `TRUST_PROXY` hop count (P0.15) | Simplest cookie and CSRF setup; prevents both shared-proxy-IP lockouts and spoofed `X-Forwarded-For` | Separate API subdomain with CORS |
+| T20 | **Operators are created only by the `operator:create` CLI**, connecting as `watheeq_owner`; the runtime role cannot insert or delete operators (P0.16, P0.20) | A compromised application cannot mint accounts with access to every tenant | Bootstrap HTTP endpoint; seeded migration |
+| T21 | **Error responses are `{error:{code, requestId, details?}}` with no human-readable message** (P0.12) | Clients localize from codes (Arabic and English); no server wording can leak internals | Message field in responses |
+| T22 | **Toolchain:** Node 24 LTS (pinned through pnpm `devEngines`), pnpm, ESM, `tsx`, tsup, Biome, Vitest with Testcontainers, PostgreSQL 18, Drizzle with hand-written SQL for RLS, grants and functions; argon2id via `@node-rs/argon2` (P0.13, P0.19) | Owner's choices; tests need nothing started by hand; policies have one owner (hand-written SQL) | ESLint + Prettier; `tsc` or tsdown builds; Drizzle-managed policies |
 
 ---
 
 ### Deferred Technical Decisions
 
 - **Background job runner** — decided in Phase 7 (escalation checks).
-- **Hosting provider in KSA** — decided at deployment; Docker keeps options open.
+- **Hosting provider in KSA**: decided at deployment; Docker keeps options open. The chosen managed PostgreSQL must offer version 18 and allow an administrator to create a `NOLOGIN BYPASSRLS` role (`watheeq_auth`, T13).
 - **Enterprise SSO, MFA for operators** — after the MVP.
 
 ---
 
 ### Items to Verify (Spikes)
 
-- **Step 0.3:** prove the Drizzle + RLS pattern — tenant context set per transaction; a query that deliberately omits `tenant_id` returns no rows from another tenant; a query with no tenant context set fails.
+- **Step 0.3 (resolved 2026-10-17):** the Drizzle + RLS pattern is proven by integration tests: tenant context set per transaction, a query omitting `tenant_id` returns no other-tenant rows, and a query with no tenant context fails.

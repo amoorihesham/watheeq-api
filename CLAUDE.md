@@ -8,7 +8,7 @@ Multi-tenant backend for managing internal legal departments, legal services, an
 
 Each phase follows this lifecycle:
 
-1. **Draft:** when I ask, create `docs/specs/phase-<N>-<name>.md` from `docs/specs/_TEMPLATE.md`. Status: `Draft`.
+1. **Draft:** when I ask, create `docs/specs/phase-<N>-<name>.md` from `templates/SPEC_TEMPLATE.md`. Status: `Draft`.
 2. **Review:** we discuss it. Resolve open questions, record decisions in the spec, and revise it. Status stays `Draft` (or `In Review`).
 3. **Approved:** I change the status to `Approved`. Only now may implementation start.
 4. **Implement:** one step at a time, in the order the spec defines. Stop after each step, show the verification results against that step's acceptance criteria, and wait for my go-ahead before the next step.

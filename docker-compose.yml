@@ -1,0 +1,25 @@
+# Local development database only. Data stays on this machine, in a named volume.
+# Tests do not use this file: they start their own database through Testcontainers.
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: watheeq
+      POSTGRES_PASSWORD: watheeq
+      POSTGRES_DB: watheeq
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - watheeq-pgdata:/var/lib/postgresql
+      # Creates the watheeq_owner and watheeq_app roles on first initialization of an empty volume only.
+      - ./db/bootstrap/roles.sql:/docker-entrypoint-initdb.d/01-roles.sql:ro
+    healthcheck:
+      # -h forces TCP: during first-time init the image runs a temporary server on the Unix socket only,
+      # so a socket check would report healthy before the real server accepts TCP connections.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U watheeq -d watheeq"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  watheeq-pgdata:
