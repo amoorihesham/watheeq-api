@@ -129,6 +129,8 @@ Both realms share the same rules, in PostgreSQL:
 - **Per IP:** 100 failed logins within a 15-minute window block that IP with 429 for every email.
   A window older than 15 minutes counts as zero.
   Every 401 counts, and a successful login does not reset the IP counter.
+  An IPv6 client is counted by its `/64` network, because one customer usually holds a whole `/64` and could otherwise rotate addresses.
+  Sessions still store the full address.
 - Counters are single atomic `UPDATE` or upsert statements, so concurrent attempts lose no increments.
 
 ### Client IP and `TRUST_PROXY`

@@ -370,6 +370,39 @@ describe("TRUST_PROXY and the counted client IP", () => {
     expect(op.rows.map((r) => r.ip)).toEqual([opIp]);
   });
 
+  it("counts every address in one IPv6 /64 as one client, so rotating addresses does not evade the limit", async () => {
+    const prefix = "2001:db8:ab:1";
+    for (let i = 1; i <= 4; i++) {
+      const res = await attempt(tenantRealm, "nobody@x.test", "x", `${prefix}::${i.toString(16)}`);
+      expect(res.status).toBe(401);
+    }
+    expect((await ipRow(`${prefix}::/64`))?.failed_count).toBe(4);
+    expect(await ipRow(`${prefix}::1`)).toBeUndefined();
+  });
+
+  it("blocks a whole IPv6 /64 once it reaches the limit, but not its neighbouring /64", async () => {
+    await admin.query(
+      "INSERT INTO login_ip_throttle (ip, failed_count, window_started_at) VALUES ($1::inet, 100, now())",
+      ["2001:db8:ab:2::/64"],
+    );
+    const blocked = await attempt(tenantRealm, "nobody@x.test", "x", "2001:db8:ab:2:ffff::9");
+    expect(blocked.status).toBe(429);
+    const neighbour = await attempt(tenantRealm, "nobody@x.test", "x", "2001:db8:ab:3::9");
+    expect(neighbour.status).toBe(401);
+  });
+
+  it("stores the full IPv6 address on the session, not the /64 key", async () => {
+    const realm = realms[0] as Realm;
+    const email = await newAccount(realm);
+    const res = await attempt(realm, email, PASSWORD, "2001:db8:ab:4::42");
+    expect(res.status).toBe(200);
+    const { rows } = await admin.query(
+      "SELECT ip FROM user_sessions WHERE user_id = (SELECT id FROM users WHERE email = $1)",
+      [email],
+    );
+    expect(rows.map((r) => r.ip)).toEqual(["2001:db8:ab:4::42"]);
+  });
+
   it("shares one counter between the two realms for the same IP", async () => {
     const ip = freshIp();
     await attempt(realms[0] as Realm, "nobody@x.test", "x", ip);

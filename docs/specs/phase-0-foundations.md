@@ -186,9 +186,13 @@ Without `UPDATE` or `DELETE` privileges and without policies for them, the datab
 
 | Column              | Type          | Notes                                                            |
 | ------------------- | ------------- | ---------------------------------------------------------------- |
-| `ip`                | `inet` PK     | Client IP as resolved under the trusted proxy setting (see 4.3). |
+| `ip`                | `inet` PK     | Throttle key: the client IPv4 address, or the client's IPv6 `/64` network (for example `2001:db8:1:2::/64`). The client IP is resolved under the trusted proxy setting (see 4.3). |
 | `failed_count`      | `integer`     | Failures within the current window.                              |
 | `window_started_at` | `timestamptz` | Start of the current 15-minute window.                           |
+
+An IPv6 client is counted by its `/64` network, not its full address, because providers usually give one customer a whole `/64` (2^64 addresses).
+Counted per address, an attacker could rotate through addresses in that block and never reach the limit.
+Sessions still store the full client address.
 
 This is platform-level security data, not tenant data, so it has no RLS.
 `watheeq_app` has `SELECT`, `INSERT`, `UPDATE`.
@@ -453,6 +457,7 @@ Modules depend on `db`, `http`, `logging`, and `config`; nothing depends on `aut
 | An attacker tries one password against 2,000 emails from one IP (password spraying).                                                               | No single account reaches 5 failures, but the IP counter reaches 100 and that IP gets 429 for the rest of its window (R0.16).                 |
 | 40 Al-Noor employees log in from one office IP on Sunday morning, a few with typos.                                                                | A handful of failures stays far below 100; nobody is blocked.                                                                                 |
 | An attacker sends `X-Forwarded-For: 1.2.3.4` with a different fake IP on every attempt.                                                            | Express only trusts hops added by the configured proxies, so the attacker's real IP is counted.                                               |
+| An attacker on IPv6 sprays one password across 2,000 emails, using a different address from its `/64` block for each attempt. | All attempts count against the same `/64` key, so the IP limit is reached after 100 failures (R0.16). |
 | Two wrong-password requests for Sara arrive at the same moment.                                                                                    | `failed_login_count = failed_login_count + 1` is a single atomic update, so neither increment is lost.                                        |
 | PostgreSQL is down at startup.                                                                                                                     | The app starts (config is valid) and `/health` returns 503. It does not crash-loop, so the host can see the failing health check.             |
 | PostgreSQL goes down while the app runs.                                                                                                           | `/health` returns 503 within its 2-second check timeout; other requests fail with 500 `INTERNAL`.                                             |
@@ -547,6 +552,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P0.21 | Auth responses send `Cache-Control: no-store`. | They carry tokens and identity, which must not be cached. |
 | P0.22 | Session lifetimes are configured in seconds (`*_SESSION_IDLE_SECONDS`, `*_SESSION_ABSOLUTE_SECONDS`), minimum 60. | One unit across all lifetime settings. |
 | P0.23 | The pre-context lookup functions are owned by `watheeq_auth` (`NOLOGIN`, `BYPASSRLS`, `SELECT` on `users` and `user_sessions` only). | Forced RLS applies to `watheeq_owner`, so functions it owns cannot do the lookups; this confines the RLS bypass to two read-only queries. |
+| P0.24 | The per-IP login limit counts IPv6 clients by their `/64` network; IPv4 clients by address. | One IPv6 customer usually holds a whole `/64`, so per-address counting is trivially evaded. |
 
 Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 
@@ -561,3 +567,4 @@ Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 | 2026-10-17 | Added grants for `operators` and `operator_sessions`, and the CLI's connection role (P0.16). | Spec gap found while briefing Step 0.5; approved by owner. |
 | 2026-10-17 | CSRF token derived from the session token instead of stored as a hash (P0.5, P0.6); recorded P0.17-P0.22 from Steps 0.4 and 0.5. | Stored-hash design broke multiple tabs (found in Step 0.5); owner chose option (a). |
 | 2026-10-17 | Pre-context lookup functions owned by a dedicated `watheeq_auth` role instead of `watheeq_owner` (P0.23). | Forced RLS on the owner would make every tenant login fail; found while briefing Step 0.6; owner chose option (a). |
+| 2026-10-17 | Per-IP throttling keys IPv6 clients by `/64` network (P0.24). | Found in Step 0.6 review; approved by owner. |

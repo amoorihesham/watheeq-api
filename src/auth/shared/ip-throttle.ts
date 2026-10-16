@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import type { Db } from "../../db/pool.js";
 
 export interface LoginThrottleSettings {
@@ -6,6 +6,15 @@ export interface LoginThrottleSettings {
   accountLockSeconds: number;
   ipMaxFailures: number;
   ipWindowSeconds: number;
+}
+
+/**
+ * The row key for a client IP (decision P0.24): an IPv4 address as is, an IPv6 address as its /64 network.
+ * One IPv6 customer usually holds a whole /64, so counting full addresses would let an attacker
+ * rotate through 2^64 addresses and never reach the limit.
+ */
+function throttleKey(ip: string): SQL {
+  return sql`(case when family(${ip}::inet) = 6 then network(set_masklen(${ip}::inet, 64))::inet else ${ip}::inet end)`;
 }
 
 /** True if this IP has reached the failure limit in its current window. A stale window counts as zero. */
@@ -16,7 +25,7 @@ export async function isIpBlocked(
 ): Promise<boolean> {
   const result = await db.execute(sql`
     select 1 from login_ip_throttle
-    where ip = ${ip}::inet
+    where ip = ${throttleKey(ip)}
       and failed_count >= ${settings.ipMaxFailures}
       and window_started_at > now() - make_interval(secs => ${settings.ipWindowSeconds})
   `);
@@ -35,7 +44,7 @@ export async function recordIpFailure(
 ): Promise<void> {
   await db.execute(sql`
     insert into login_ip_throttle as t (ip, failed_count, window_started_at)
-    values (${ip}::inet, 1, now())
+    values (${throttleKey(ip)}, 1, now())
     on conflict (ip) do update set
       failed_count = case
         when t.window_started_at <= now() - make_interval(secs => ${settings.ipWindowSeconds}) then 1
