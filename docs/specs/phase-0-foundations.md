@@ -2,7 +2,7 @@
 
 | Field                  | Value                             |
 | ---------------------- | --------------------------------- |
-| **Status**             | Approved                          |
+| **Status**             | Implemented                       |
 | **Approved by / date** | _Amr - 17/10/2026 at 01:56 am_    |
 | **Depends on**         | None                              |
 | **Related decisions**  | MVP 3.9 (audit); Technical T1-T10 |
@@ -553,8 +553,11 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P0.22 | Session lifetimes are configured in seconds (`*_SESSION_IDLE_SECONDS`, `*_SESSION_ABSOLUTE_SECONDS`), minimum 60. | One unit across all lifetime settings. |
 | P0.23 | The pre-context lookup functions are owned by `watheeq_auth` (`NOLOGIN`, `BYPASSRLS`, `SELECT` on `users` and `user_sessions` only). | Forced RLS applies to `watheeq_owner`, so functions it owns cannot do the lookups; this confines the RLS bypass to two read-only queries. |
 | P0.24 | The per-IP login limit counts IPv6 clients by their `/64` network; IPv4 clients by address. | One IPv6 customer usually holds a whole `/64`, so per-address counting is trivially evaded. |
+| P0.25 | The `watheeq_auth` role receives `CREATE` on the schema only for the duration of the migration statements that transfer function ownership to it. | PostgreSQL requires the new owner of a function to hold `CREATE` on its schema; revoking it afterwards leaves only the two `SELECT` grants. |
+| P0.26 | `auth_resolve_user_session` also requires the session's tenant to equal its user's tenant. | Defense in depth; costs nothing. |
+| P0.27 | A successful login clears both the failure count and `locked_until`; the lock check compares `locked_until` with the application clock. | A 15-minute lock makes clock skew irrelevant; session validity is still checked against the database clock. |
 
-Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
+Promoted to `TECHNICAL_DECISIONS.md` as T11-T22 on 2026-10-17. Decisions not promoted are detail that stays authoritative here.
 
 ## 11. Change Log
 
@@ -568,3 +571,4 @@ Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 | 2026-10-17 | CSRF token derived from the session token instead of stored as a hash (P0.5, P0.6); recorded P0.17-P0.22 from Steps 0.4 and 0.5. | Stored-hash design broke multiple tabs (found in Step 0.5); owner chose option (a). |
 | 2026-10-17 | Pre-context lookup functions owned by a dedicated `watheeq_auth` role instead of `watheeq_owner` (P0.23). | Forced RLS on the owner would make every tenant login fail; found while briefing Step 0.6; owner chose option (a). |
 | 2026-10-17 | Per-IP throttling keys IPv6 clients by `/64` network (P0.24). | Found in Step 0.6 review; approved by owner. |
+| 2026-10-17 | Recorded P0.25-P0.27 from Step 0.6; status set to `Implemented`; decisions promoted to `TECHNICAL_DECISIONS.md`. | All six steps verified against their acceptance criteria. |
