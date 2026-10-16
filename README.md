@@ -19,8 +19,33 @@ docker compose up -d db
 pnpm dev
 ```
 
-The app does not load `.env` by itself yet.
-Export the variables in your shell, or rely on the defaults in `src/main.ts`, which match `docker-compose.yml`.
+`pnpm dev` loads `.env` through Node's `--env-file-if-exists` flag, so no extra dependency is needed.
+`pnpm start` does not read `.env`: it uses the real process environment, as in production.
+
+## Configuration
+
+The app validates its environment at startup.
+If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` and exits with code 1.
+The message names keys and reasons only, never values.
+
+| Key            | Default       | Meaning                                                              |
+| -------------- | ------------- | -------------------------------------------------------------------- |
+| `DATABASE_URL` | none          | Required. PostgreSQL connection URL.                                 |
+| `PORT`         | `3000`        | HTTP port.                                                           |
+| `NODE_ENV`     | `development` | `development`, `test`, or `production`.                              |
+| `LOG_LEVEL`    | `info`        | `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent`.     |
+
+## HTTP behavior
+
+- Every response has an `X-Request-Id` header.
+  A client-sent `X-Request-Id` is reused only if it matches `^[A-Za-z0-9._-]{1,64}$`, otherwise a UUID is generated.
+- Every log line of a request carries it as `reqId`.
+- Errors use one JSON shape: `{"error":{"code","requestId","details?"}}`.
+  There is no human-readable message. Clients map `code` to text.
+  `details` (a list of `{path, code}`) appears only for validation errors.
+- Request bodies must be `application/json` and at most 100 KB (otherwise 415 or 413).
+- Logs are JSON on stdout. `password`, `cookie`, `set-cookie`, `x-csrf-token`, and `authorization` are redacted.
+- On `SIGTERM` or `SIGINT` the server stops accepting connections, lets in-flight requests finish (up to 10 seconds), closes the database pool, and exits.
 
 ## Scripts
 
