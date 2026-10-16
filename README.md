@@ -34,6 +34,8 @@ The message names keys and reasons only, never values.
 | `DATABASE_URL` | none          | Required. PostgreSQL connection URL, as `watheeq_app`.               |
 | `PORT`         | `3000`        | HTTP port.                                                           |
 | `NODE_ENV`     | `development` | `development`, `test`, or `production`.                              |
+| `OPERATOR_SESSION_IDLE_SECONDS` | `1800` | Operator session idle timeout (minimum 60). |
+| `OPERATOR_SESSION_ABSOLUTE_SECONDS` | `28800` | Operator session absolute lifetime (minimum 60). |
 | `LOG_LEVEL`    | `info`        | `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent`.     |
 
 ## HTTP behavior
@@ -47,6 +49,36 @@ The message names keys and reasons only, never values.
 - Request bodies must be `application/json` and at most 100 KB (otherwise 415 or 413).
 - Logs are JSON on stdout. `password`, `cookie`, `set-cookie`, `x-csrf-token`, and `authorization` are redacted.
 - On `SIGTERM` or `SIGINT` the server stops accepting connections, lets in-flight requests finish (up to 10 seconds), closes the database pool, and exits.
+
+## Operator authentication
+
+Platform operators log in through their own realm, separate from tenant users.
+
+| Endpoint                      | Auth           | Result                                                                                          |
+| ----------------------------- | -------------- | ----------------------------------------------------------------------------------------------- |
+| `POST /operator/auth/login`   | none           | 200 `{operator:{id,email}, csrfToken}` and a cookie. 401 `INVALID_CREDENTIALS` for any failure. |
+| `GET /operator/auth/session`  | session        | 200 `{operator, csrfToken}`. 401 `UNAUTHENTICATED`.                                             |
+| `POST /operator/auth/logout`  | session + CSRF | 204 and the cookie is cleared. 403 `CSRF_FAILED` without a valid `X-CSRF-Token` header.         |
+
+- The session cookie is `__Host-wq_operator` (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`).
+  Browsers treat `http://localhost` as a secure context, but `curl` needs the cookie sent by hand over plain HTTP.
+- Only SHA-256 hashes of the session and CSRF tokens are stored.
+- `GET /operator/auth/session` returns a fresh CSRF token each time, because only its hash is stored.
+  The previous CSRF token stops working, so a client keeps the latest one.
+- A session is rejected when it is revoked, past its absolute lifetime, idle for too long, or its operator is deactivated.
+- Passwords are hashed with argon2id (19 MiB, 2 iterations, 1 lane) through `@node-rs/argon2`.
+- Logins and logouts go to the application log, never with passwords, cookies, or tokens.
+
+Create the first operator with the CLI, which connects as `watheeq_owner` through `MIGRATION_DATABASE_URL`:
+
+```sh
+pnpm operator:create omar@watheeq.sa          # prompts for the password without echo
+OPERATOR_PASSWORD=... pnpm operator:create omar@watheeq.sa
+```
+
+The password is never read from command-line arguments, because those end up in shell history.
+It must be 12 to 256 characters.
+The application role `watheeq_app` can read and update operators but cannot insert or delete them, so a compromised application cannot create operators.
 
 ## Local database
 
@@ -90,6 +122,7 @@ Two PostgreSQL roles are used, so the application cannot bypass Row-Level Securi
 | `pnpm format`      | Formats all files with Biome.                                     |
 | `pnpm db:generate` | Generates a migration from changes in `src/db/schema/`.           |
 | `pnpm db:migrate`  | Applies migrations as `watheeq_owner` (`MIGRATION_DATABASE_URL`). |
+| `pnpm operator:create <email>` | Creates a platform operator as `watheeq_owner`.      |
 
 ## Notes
 

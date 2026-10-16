@@ -7,6 +7,9 @@ const configSchema = z.object({
     .string()
     .min(1)
     .refine((value) => /^postgres(ql)?:\/\//.test(value), { message: "must be a PostgreSQL URL" }),
+  // Operator session lifetimes in seconds (spec 4.3): 30 minutes idle, 8 hours absolute.
+  OPERATOR_SESSION_IDLE_SECONDS: z.coerce.number().int().min(60).default(1800),
+  OPERATOR_SESSION_ABSOLUTE_SECONDS: z.coerce.number().int().min(60).default(28800),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 

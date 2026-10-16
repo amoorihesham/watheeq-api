@@ -29,9 +29,11 @@
     "format": "biome format --write .",
     "check": "biome check --error-on-warnings .",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx --env-file-if-exists=.env src/cli/migrate.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env src/cli/migrate.ts",
+    "operator:create": "tsx --env-file-if-exists=.env src/cli/create-operator.ts"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.2",
     "drizzle-orm": "^0.45.4",
     "express": "^5.3.0",
     "pg": "^8.23.1",

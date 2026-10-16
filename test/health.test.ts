@@ -3,6 +3,7 @@ import { afterAll, describe, expect, inject, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { createPool } from "../src/db/pool.js";
 import { createLogger } from "../src/logging/logger.js";
+import { testConfig } from "./helpers/config.js";
 
 describe("GET /health", () => {
   const logger = createLogger("silent");
@@ -15,14 +16,18 @@ describe("GET /health", () => {
   });
 
   it("returns 200 with db up when PostgreSQL is reachable", async () => {
-    const res = await request(buildApp({ pool: upPool, logger })).get("/health");
+    const res = await request(buildApp({ pool: upPool, logger, config: testConfig() })).get(
+      "/health",
+    );
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: "ok", db: "up" });
   });
 
   it("returns 503 with db down, within the timeout, when PostgreSQL is unreachable", async () => {
     const started = Date.now();
-    const res = await request(buildApp({ pool: downPool, logger })).get("/health");
+    const res = await request(buildApp({ pool: downPool, logger, config: testConfig() })).get(
+      "/health",
+    );
     expect(res.status).toBe(503);
     expect(res.body).toEqual({ status: "error", db: "down" });
     expect(Date.now() - started).toBeLessThan(2500);

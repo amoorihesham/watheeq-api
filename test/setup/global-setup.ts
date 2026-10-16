@@ -36,6 +36,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
 
   project.provide("databaseUrl", urlFor(adminUrl, "watheeq_app", "watheeq_app"));
   project.provide("adminDatabaseUrl", adminUrl);
+  project.provide("ownerDatabaseUrl", ownerUrl);
   return async () => {
     await container?.stop();
   };
@@ -45,6 +46,8 @@ declare module "vitest" {
   export interface ProvidedContext {
     /** Runtime role (`watheeq_app`): what the application uses. */
     databaseUrl: string;
+    /** Owner role (`watheeq_owner`): what migrations and `operator:create` use. */
+    ownerDatabaseUrl: string;
     /** Container superuser: test fixtures only (it bypasses RLS, which FORCE applies to the owner role). */
     adminDatabaseUrl: string;
   }

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { buildApp } from "../src/app.js";
 import { createPool } from "../src/db/pool.js";
 import { validate } from "../src/http/validate.js";
+import { testConfig } from "./helpers/config.js";
 import { captureLogs } from "./helpers/log-capture.js";
 
 const capture = captureLogs();
@@ -27,7 +28,7 @@ testRouter.get("/async-boom", async () => {
   throw new Error("async secret detail");
 });
 
-const app = buildApp({ pool, logger: capture.logger, routers: [testRouter] });
+const app = buildApp({ pool, logger: capture.logger, config: testConfig(), routers: [testRouter] });
 
 afterAll(async () => {
   await pool.end();
@@ -204,7 +205,9 @@ describe("request logging", () => {
       res.setHeader("Set-Cookie", "sid=supersecretsession; HttpOnly");
       res.json({});
     });
-    await request(buildApp({ pool, logger: local.logger, routers: [cookieRouter] })).get("/cookie");
+    await request(
+      buildApp({ pool, logger: local.logger, config: testConfig(), routers: [cookieRouter] }),
+    ).get("/cookie");
     const text = JSON.stringify(local.lines());
     expect(text).toContain("[Redacted]");
     expect(text).not.toContain("supersecretsession");

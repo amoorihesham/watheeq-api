@@ -22,6 +22,20 @@
       "when": 1792192517217,
       "tag": "0002_users_tenant_index_and_email_check",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792192697433,
+      "tag": "0003_operators",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792192697956,
+      "tag": "0004_operator_grants",
+      "breakpoints": true
     }
   ]
 }
