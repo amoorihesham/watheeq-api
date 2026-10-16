@@ -76,6 +76,7 @@ So the runtime connection uses a role that is none of these.
 | --------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
 | `watheeq_owner` | Migrations only         | Owns the schema and all tables, functions, and policies.                                  |
 | `watheeq_app`   | The running application | `LOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`. Only the table privileges granted per table below. |
+| `watheeq_auth`  | The two pre-context lookup functions only | `NOLOGIN`, `BYPASSRLS`. Owns the two `SECURITY DEFINER` functions; `SELECT` on `users` and `user_sessions` only. `watheeq_app` cannot become this role. |
 
 Roles are cluster-level objects, and managed PostgreSQL offerings often restrict who can create them.
 So roles are created by a one-time bootstrap SQL script (`db/bootstrap/roles.sql`), run by the database administrator, the Docker init hook, and the test setup.
@@ -204,12 +205,23 @@ Two lookups must happen before the tenant is known:
 2. Every request: the cookie carries only a token; we must find the session to learn the tenant.
 
 Under RLS, both queries would fail because no tenant context exists yet.
-They go through two narrow `SECURITY DEFINER` functions owned by `watheeq_owner`, which run with the owner's rights:
+They go through two narrow `SECURITY DEFINER` functions owned by `watheeq_auth`, which run with that role's rights:
 
 - `auth_find_user_for_login(email)` returns `id, tenant_id, password_hash, is_active, failed_login_count, locked_until` for one email.
-- `auth_resolve_user_session(token_hash)` returns the session and user if the session is valid: not revoked, not expired, idle timeout not exceeded, user active.
+- `auth_resolve_user_session(token_hash, idle_timeout_seconds)` returns the session and user if the session is valid: not revoked, not expired, idle timeout not exceeded, user active.
 
 Both pin `search_path`, revoke `EXECUTE` from `PUBLIC`, and grant it only to `watheeq_app`.
+
+Why a dedicated role: the functions cannot be owned by `watheeq_owner`, because `FORCE ROW LEVEL SECURITY` (P0.1) applies RLS to the owner too.
+Owned by `watheeq_owner`, Sara's login lookup would run `app_current_tenant()` with no tenant set and fail with `tenant context is not set`, so nobody could log in.
+`watheeq_auth` bypasses RLS, but it cannot log in, it owns nothing except these two functions, and it can only read `users` and `user_sessions`.
+So the RLS bypass is confined to two fixed, read-only queries.
+The bootstrap script creates it (creating a `BYPASSRLS` role needs an administrator) and makes `watheeq_owner` a member, so migrations can assign the functions to it.
+Membership adds no power to `watheeq_owner`, which can already disable RLS on the tables it owns.
+
+Rejected alternatives: dropping `FORCE` RLS on `users` and `user_sessions` (removes the P0.1 safeguard on the most sensitive tables), and policy exceptions for the function owner (fragile, because PostgreSQL does not guarantee that the exception is evaluated before `app_current_tenant()` raises).
+
+_To verify when hosting is chosen:_ the managed PostgreSQL offering must allow creating a `NOLOGIN BYPASSRLS` role. If it does not, revisit this decision for that environment.
 Everything after these lookups runs inside a normal tenant transaction.
 
 Alternative considered: keep sessions and a login email index in tables without RLS.
@@ -534,6 +546,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P0.20 | `operator:create` requires passwords of 12 to 256 characters. | Operator accounts reach every tenant; login itself only enforces the 256 cap. |
 | P0.21 | Auth responses send `Cache-Control: no-store`. | They carry tokens and identity, which must not be cached. |
 | P0.22 | Session lifetimes are configured in seconds (`*_SESSION_IDLE_SECONDS`, `*_SESSION_ABSOLUTE_SECONDS`), minimum 60. | One unit across all lifetime settings. |
+| P0.23 | The pre-context lookup functions are owned by `watheeq_auth` (`NOLOGIN`, `BYPASSRLS`, `SELECT` on `users` and `user_sessions` only). | Forced RLS applies to `watheeq_owner`, so functions it owns cannot do the lookups; this confines the RLS bypass to two read-only queries. |
 
 Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 
@@ -547,3 +560,4 @@ Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 | 2026-10-17 | `users`: index on `tenant_id`; check constraint enforcing lowercased, trimmed email. | Found in Step 0.3 review; approved by owner. |
 | 2026-10-17 | Added grants for `operators` and `operator_sessions`, and the CLI's connection role (P0.16). | Spec gap found while briefing Step 0.5; approved by owner. |
 | 2026-10-17 | CSRF token derived from the session token instead of stored as a hash (P0.5, P0.6); recorded P0.17-P0.22 from Steps 0.4 and 0.5. | Stored-hash design broke multiple tabs (found in Step 0.5); owner chose option (a). |
+| 2026-10-17 | Pre-context lookup functions owned by a dedicated `watheeq_auth` role instead of `watheeq_owner` (P0.23). | Forced RLS on the owner would make every tenant login fail; found while briefing Step 0.6; owner chose option (a). |
