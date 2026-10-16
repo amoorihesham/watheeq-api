@@ -40,7 +40,6 @@ export const operatorSessions = pgTable(
       .notNull()
       .references(() => operators.id),
     tokenHash: bytea("token_hash").notNull(),
-    csrfTokenHash: bytea("csrf_token_hash").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

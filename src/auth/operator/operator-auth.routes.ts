@@ -4,13 +4,13 @@ import type { Db } from "../../db/pool.js";
 import { AppError } from "../../http/errors.js";
 import { validate } from "../../http/validate.js";
 import { clearSessionCookie, readCookie, setSessionCookie } from "../shared/cookies.js";
+import { csrfTokenFor } from "../shared/csrf.js";
 import { DUMMY_PASSWORD_HASH, verifyPassword } from "../shared/passwords.js";
 import { LAST_SEEN_RESOLUTION_MS, sessionAuth } from "../shared/session-middleware.js";
 import { generateToken, hashToken, isWellFormedToken } from "../shared/tokens.js";
 import {
   findOperatorByEmail,
   type OperatorIdentity,
-  replaceCsrfTokenHash,
   replaceSession,
   resolveOperatorSession,
   revokeSession,
@@ -85,11 +85,9 @@ export function operatorAuthRouter(db: Db, lifetimes: OperatorSessionLifetimes):
     const presentedHash =
       presented !== undefined && isWellFormedToken(presented) ? hashToken(presented) : undefined;
     const sessionToken = generateToken();
-    const csrfToken = generateToken();
     await replaceSession(db, presentedHash, {
       operatorId: operator.id,
       tokenHash: hashToken(sessionToken),
-      csrfTokenHash: hashToken(csrfToken),
       absoluteLifetimeSeconds: lifetimes.absoluteLifetimeSeconds,
       userAgent: req.get("user-agent")?.slice(0, USER_AGENT_MAX_LENGTH),
       ip: req.ip,
@@ -97,7 +95,10 @@ export function operatorAuthRouter(db: Db, lifetimes: OperatorSessionLifetimes):
 
     setSessionCookie(res, OPERATOR_COOKIE, sessionToken);
     req.log.info({ operatorId: operator.id }, "operator logged in");
-    res.json({ operator: { id: operator.id, email: operator.email }, csrfToken });
+    res.json({
+      operator: { id: operator.id, email: operator.email },
+      csrfToken: csrfTokenFor(sessionToken),
+    });
   });
 
   router.post("/operator/auth/logout", authenticate, async (req, res) => {
@@ -108,13 +109,15 @@ export function operatorAuthRouter(db: Db, lifetimes: OperatorSessionLifetimes):
     res.status(204).end();
   });
 
-  // Only the hash of the CSRF token is stored, so the token cannot be read back.
-  // The browser app recovers it after a reload by getting a fresh one here, which replaces the stored hash.
-  router.get("/operator/auth/session", authenticate, async (req, res) => {
+  // The browser app keeps the CSRF token in memory and recovers it here after a reload.
+  // It is derived from the session cookie, so it is the same token login returned.
+  router.get("/operator/auth/session", authenticate, (req, res) => {
     const auth = requireAuth(req);
-    const csrfToken = generateToken();
-    await replaceCsrfTokenHash(db, auth.sessionId, hashToken(csrfToken));
-    res.json({ operator: auth.operator, csrfToken });
+    const sessionToken = readCookie(req, OPERATOR_COOKIE);
+    if (sessionToken === undefined) {
+      throw new AppError("UNAUTHENTICATED");
+    }
+    res.json({ operator: auth.operator, csrfToken: csrfTokenFor(sessionToken) });
   });
 
   return router;

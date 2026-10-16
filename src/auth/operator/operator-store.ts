@@ -16,7 +16,6 @@ export async function findOperatorByEmail(db: Db, email: string) {
 export interface NewSession {
   operatorId: string;
   tokenHash: Buffer;
-  csrfTokenHash: Buffer;
   absoluteLifetimeSeconds: number;
   userAgent: string | undefined;
   ip: string | undefined;
@@ -43,7 +42,6 @@ export async function replaceSession(
     await tx.insert(operatorSessions).values({
       operatorId: next.operatorId,
       tokenHash: next.tokenHash,
-      csrfTokenHash: next.csrfTokenHash,
       expiresAt: sql`now() + make_interval(secs => ${next.absoluteLifetimeSeconds})`,
       userAgent: next.userAgent,
       ip: next.ip,
@@ -60,7 +58,6 @@ export async function resolveOperatorSession(
   const [row] = await db
     .select({
       sessionId: operatorSessions.id,
-      csrfTokenHash: operatorSessions.csrfTokenHash,
       lastSeenAt: operatorSessions.lastSeenAt,
       operatorId: operators.id,
       email: operators.email,
@@ -82,7 +79,6 @@ export async function resolveOperatorSession(
   }
   return {
     sessionId: row.sessionId,
-    csrfTokenHash: row.csrfTokenHash,
     lastSeenAt: row.lastSeenAt,
     principal: { id: row.operatorId, email: row.email },
   };
@@ -110,15 +106,4 @@ export async function revokeSession(db: Db, sessionId: string): Promise<void> {
     .update(operatorSessions)
     .set({ revokedAt: sql`now()` })
     .where(and(eq(operatorSessions.id, sessionId), isNull(operatorSessions.revokedAt)));
-}
-
-export async function replaceCsrfTokenHash(
-  db: Db,
-  sessionId: string,
-  csrfTokenHash: Buffer,
-): Promise<void> {
-  await db
-    .update(operatorSessions)
-    .set({ csrfTokenHash })
-    .where(eq(operatorSessions.id, sessionId));
 }

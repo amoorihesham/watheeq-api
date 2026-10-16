@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 const TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
 
-/** 256 random bits, base64url (43 characters). Used for both session and CSRF tokens. */
+/** 256 random bits, base64url (43 characters). Used for session tokens; CSRF tokens are derived from them (csrf.ts). */
 export function generateToken(): string {
   return randomBytes(32).toString("base64url");
 }

@@ -50,6 +50,13 @@
       "when": 1792193082322,
       "tag": "0006_operator_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792193406473,
+      "tag": "0007_drop_operator_csrf_token_hash",
+      "breakpoints": true
     }
   ]
 }

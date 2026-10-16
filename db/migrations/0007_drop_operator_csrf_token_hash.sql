@@ -1,0 +1,1 @@
+ALTER TABLE "operator_sessions" DROP COLUMN "csrf_token_hash";

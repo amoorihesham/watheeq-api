@@ -175,17 +175,15 @@ describe("cookie and stored session", () => {
     expect(flags.some((flag) => flag.startsWith("domain"))).toBe(false);
   });
 
-  it("stores only the SHA-256 hash of the session and CSRF tokens", async () => {
+  it("stores only the SHA-256 hash of the session token and nothing for CSRF", async () => {
     const res = await login(OMAR_EMAIL, OMAR_PASSWORD);
     const row = await sessionRow(res.token);
     expect(row.token_hash).not.toBe(Buffer.from(res.token).toString("hex"));
-    expect(row.token_hash).toHaveLength(64);
+    expect(row.token_hash).toBe(createHash("sha256").update(res.token).digest("hex"));
     const { rows } = await admin.query(
-      "SELECT encode(token_hash, 'hex') AS t, encode(csrf_token_hash, 'hex') AS c FROM operator_sessions WHERE token_hash = sha256($1::bytea)",
-      [Buffer.from(res.token)],
+      "SELECT column_name FROM information_schema.columns WHERE table_name = 'operator_sessions' AND column_name LIKE '%csrf%'",
     );
-    expect(rows[0].t).toBe(createHash("sha256").update(res.token).digest("hex"));
-    expect(rows[0].c).toBe(createHash("sha256").update(res.csrf).digest("hex"));
+    expect(rows).toEqual([]);
   });
 });
 
@@ -234,21 +232,27 @@ describe("logout and CSRF", () => {
     expect(res.status).toBe(401);
   });
 
-  it("accepts the CSRF token returned by GET /session and invalidates the previous one", async () => {
-    const res = await login(OMAR_EMAIL, OMAR_PASSWORD);
-    const session = await request(app)
-      .get("/operator/auth/session")
-      .set("Cookie", authed(res.token));
-    const stale = await request(app)
+  it("keeps the login CSRF token valid after GET /session, so a second tab does not break the first", async () => {
+    // Omar logs in on tab A, then tab B reloads and recovers the token through GET /session.
+    const tabA = await login(OMAR_EMAIL, OMAR_PASSWORD);
+    const tabB = await request(app).get("/operator/auth/session").set("Cookie", authed(tabA.token));
+    expect(tabB.body.csrfToken).toBe(tabA.csrf);
+    const out = await request(app)
       .post("/operator/auth/logout")
-      .set("Cookie", authed(res.token))
-      .set("X-CSRF-Token", res.csrf);
-    expect(stale.status).toBe(403);
-    const fresh = await request(app)
+      .set("Cookie", authed(tabA.token))
+      .set("X-CSRF-Token", tabA.csrf);
+    expect(out.status).toBe(204);
+  });
+
+  it("rejects one session's CSRF token on another session", async () => {
+    const first = await login(OMAR_EMAIL, OMAR_PASSWORD);
+    const second = await login(OMAR_EMAIL, OMAR_PASSWORD);
+    expect(second.csrf).not.toBe(first.csrf);
+    const crossed = await request(app)
       .post("/operator/auth/logout")
-      .set("Cookie", authed(res.token))
-      .set("X-CSRF-Token", session.body.csrfToken);
-    expect(fresh.status).toBe(204);
+      .set("Cookie", authed(second.token))
+      .set("X-CSRF-Token", first.csrf);
+    expect(crossed.status).toBe(403);
   });
 });
 

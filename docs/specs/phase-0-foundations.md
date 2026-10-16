@@ -143,7 +143,6 @@ Index on `tenant_id`, since every RLS check filters on it.
 | `tenant_id`        | `uuid`        | Not null. Same tenant as the user.                     |
 | `user_id`          | `uuid`        | FK to `users`.                                         |
 | `token_hash`       | `bytea`       | SHA-256 of the session token. Unique.                  |
-| `csrf_token_hash`  | `bytea`       | SHA-256 of the CSRF token.                             |
 | `created_at`       | `timestamptz` |                                                        |
 | `last_seen_at`     | `timestamptz` | Used for the idle timeout.                             |
 | `expires_at`       | `timestamptz` | Absolute expiry.                                       |
@@ -159,7 +158,7 @@ They are reached only by the operator realm code (T6).
 So even an attacker who takes over the running application cannot create an operator account for themselves.
 Operators are created only by `pnpm operator:create`, which connects as `watheeq_owner` through `MIGRATION_DATABASE_URL`.
 
-Only hashes of tokens are stored.
+Only hashes of session tokens are stored, and nothing is stored for CSRF tokens, which are derived from the session token (4.3).
 If the database or a backup leaks, the stored values cannot be replayed as cookies.
 
 **`audit_log`**:
@@ -223,6 +222,9 @@ Drizzle Kit generates SQL migration files, which are committed and reviewed.
 RLS policies, grants, and the functions above are written as hand-authored SQL migrations, so their exact SQL is visible in review.
 Migrations run as `watheeq_owner` via the Drizzle migrator, never at application startup.
 
+Foreign keys to `tenants` are declared inside `CREATE TABLE`, never added later with `ALTER TABLE`.
+Adding one later makes PostgreSQL validate it by reading `tenants`, which has forced RLS, and the migration has no tenant context, so it fails with `tenant context is not set`.
+
 _To verify in step 0.3:_ how Drizzle Kit's built-in RLS and policy support interacts with hand-written policy migrations; if both would fight over the same policies, we use only one of them.
 
 ### 4.2 API
@@ -238,6 +240,7 @@ _To verify in step 0.3:_ how Drizzle Kit's built-in RLS and policy support inter
 | GET    | `/operator/auth/session` | operator | session        | none                | Same as tenant session.                                                                                                           |
 
 `GET /auth/session` returns the CSRF token so that the browser app can recover it after a page reload, since the app keeps it only in memory.
+It is the same token login returned, since it is derived from the session cookie.
 
 #### Standard error shape
 
@@ -342,7 +345,7 @@ Operator login follows the same flow against `operators` and `operator_sessions`
 2. Hash the token and resolve it (`auth_resolve_user_session` for tenants, a direct query for operators).
 3. If nothing valid is found, return 401 `UNAUTHENTICATED`.
 4. If `last_seen_at` is older than one minute, update it. This bounds session writes to about one per minute per active user, instead of one per request.
-5. For `POST`, `PUT`, `PATCH`, and `DELETE`: compare the SHA-256 of the `X-CSRF-Token` header with `csrf_token_hash` using a constant-time comparison. Mismatch or missing: 403 `CSRF_FAILED`.
+5. For `POST`, `PUT`, `PATCH`, and `DELETE`: compute the expected CSRF token as `HMAC-SHA256(key = session token, message = "csrf")` and compare it with the `X-CSRF-Token` header in constant time. Mismatch or missing: 403 `CSRF_FAILED`.
 6. Attach the principal and tenant ID to the request context.
 
 Realm separation (R0.14) holds by construction.
@@ -367,6 +370,15 @@ Behind a proxy, every request reaches Express from the proxy's address.
 If the IP throttle used that address, all of Al-Noor's and Al-Rashid's users would share one counter and block each other.
 If Express trusted any `X-Forwarded-For` header, an attacker could send a fake IP with each attempt and never be throttled.
 So Express's `trust proxy` setting comes from configuration (`TRUST_PROXY`, the number of proxy hops in front of the app), and the client IP is taken only from hops added by trusted proxies.
+
+#### CSRF token
+
+The CSRF token is `HMAC-SHA256(key = session token, message = "csrf")`, encoded as base64url.
+Login and `GET /session` both return it, and it stays the same for the life of the session.
+Omar can have two tabs open: tab B recovering the token after a reload gets the same token tab A already holds, so tab A keeps working.
+A malicious site cannot compute the token, because it would need the httpOnly session cookie, and it cannot read API responses, because the API sends no CORS headers.
+The token does not reveal the session token, because HMAC cannot be reversed.
+Nothing is stored for it, so a database leak exposes no CSRF tokens either.
 
 #### Login CSRF
 
@@ -443,8 +455,8 @@ Modules depend on `db`, `http`, `logging`, and `config`; nothing depends on `aut
 - **Tenant isolation:** enforced by PostgreSQL RLS with a non-owner, non-bypass runtime role, `FORCE ROW LEVEL SECURITY`, and a context function that fails when unset. Application-level `tenant_id` filters are still written, as clarity, but are not relied on.
 - **Pre-context lookups:** limited to two `SECURITY DEFINER` functions with pinned `search_path` and narrow return values.
 - **Passwords:** argon2id with OWASP-recommended minimum parameters (19 MiB memory, 2 iterations, 1 lane). Hashes are never logged or returned.
-- **Sessions:** 256-bit random tokens; only SHA-256 hashes stored; httpOnly, Secure, `SameSite=Lax`, `__Host-` cookies; idle and absolute expiry; immediate revocation.
-- **CSRF:** a per-session token (synchronizer token pattern) on unsafe methods; JSON-only bodies for login.
+- **Sessions:** 256-bit random tokens; only SHA-256 hashes of session tokens stored; httpOnly, Secure, `SameSite=Lax`, `__Host-` cookies; idle and absolute expiry; immediate revocation.
+- **CSRF:** a per-session token derived from the session token (HMAC-SHA256), required on unsafe methods; JSON-only bodies for login.
 - **Enumeration:** identical responses and similar timing for unknown email, wrong password, and inactive account.
 - **Logging:** pino redacts `password`, `cookie`, `set-cookie`, `x-csrf-token`, and `authorization` fields. Logs never contain request bodies of auth routes.
 - **Data residency:** logs go to stdout only. No third-party log or error service in Phase 0.
@@ -504,8 +516,8 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P0.2  | Tenant context is a transaction-local setting read by `app_current_tenant()`, which raises when unset.                             | Makes a missing context an error rather than an empty or wrong result, independent of pooled connection history.       |
 | P0.3  | Pre-context lookups (login by email, session by token) use two narrow `SECURITY DEFINER` functions.                                | Keeps all tenant-related tables under RLS while allowing the two unavoidable lookups.                                  |
 | P0.4  | Separate `users`/`user_sessions` and `operators`/`operator_sessions` tables and separate cookies.                                  | Applies T6 to sessions; realm separation holds by construction.                                                        |
-| P0.5  | Store only SHA-256 hashes of session and CSRF tokens.                                                                              | A database or backup leak does not yield usable sessions.                                                              |
-| P0.6  | CSRF via per-session synchronizer token; login protected by JSON-only bodies and `SameSite=Lax`.                                   | Server sessions already exist, so the stronger synchronizer pattern costs nothing extra.                               |
+| P0.5  | Store only SHA-256 hashes of session tokens; store nothing for CSRF tokens. | A database or backup leak does not yield usable sessions or CSRF tokens. |
+| P0.6  | CSRF token = HMAC-SHA256 keyed by the session token, stable per session; login protected by JSON-only bodies and `SameSite=Lax`. | Stable across tabs and reloads, nothing stored, no extra secret to manage. Replaces the stored-hash design, which forced token rotation on every `GET /session` and broke other tabs. |
 | P0.7  | Audit privileges are `INSERT` and `SELECT` only; `audit()` accepts only a tenant transaction.                                      | Append-only is enforced by the database; same-transaction writes are enforced by the type system.                      |
 | P0.8  | Database roles are created by a bootstrap script, not by migrations.                                                               | Managed PostgreSQL often restricts role creation; migrations stay runnable by the owner role.                          |
 | P0.9  | Phase 0 creates minimal `tenants` and `users` tables, extended by Phases 1 and 2.                                                  | RLS and tenant login must be proven on real tables, not throwaway ones.                                                |
@@ -516,6 +528,12 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P0.14 | Login throttling per account and per IP, both stored in PostgreSQL; no Redis.                                                      | Covers both single-account guessing and password spraying without adding a datastore.                                  |
 | P0.15 | App and API on the same origin behind one reverse proxy; no CORS; client IP resolved through a configured `trust proxy` hop count. | Simplest cookie and CSRF setup; prevents both shared-proxy-IP lockouts and spoofed IPs.                                |
 | P0.16 | The runtime role cannot insert or delete operators; the `operator:create` CLI connects as `watheeq_owner`. | A compromised application must not be able to mint operator accounts with access to every tenant. |
+| P0.17 | Foreign keys to `tenants` are declared inline in `CREATE TABLE`. | Validating a foreign key added later reads `tenants` under forced RLS without a tenant context, and fails. |
+| P0.18 | `audit_log`: `resource_id` and `request_id` are required; `actor_id` may be null only for `system`; index on `(tenant_id, occurred_at)`. | Every audited action has a resource and a request; only system actions lack an actor; history is read per tenant in time order. |
+| P0.19 | Password hashing via `@node-rs/argon2` (m=19456 KiB, t=2, p=1). | Maintained, ships prebuilt binaries, so pnpm needs no build-script approval. |
+| P0.20 | `operator:create` requires passwords of 12 to 256 characters. | Operator accounts reach every tenant; login itself only enforces the 256 cap. |
+| P0.21 | Auth responses send `Cache-Control: no-store`. | They carry tokens and identity, which must not be cached. |
+| P0.22 | Session lifetimes are configured in seconds (`*_SESSION_IDLE_SECONDS`, `*_SESSION_ABSOLUTE_SECONDS`), minimum 60. | One unit across all lifetime settings. |
 
 Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 
@@ -528,3 +546,4 @@ Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 | 2026-10-17 | Resolved Q2, Q5, Q6, Q7; added per-IP throttling, `login_ip_throttle` table, and deployment topology section. | Owner review.           |
 | 2026-10-17 | `users`: index on `tenant_id`; check constraint enforcing lowercased, trimmed email. | Found in Step 0.3 review; approved by owner. |
 | 2026-10-17 | Added grants for `operators` and `operator_sessions`, and the CLI's connection role (P0.16). | Spec gap found while briefing Step 0.5; approved by owner. |
+| 2026-10-17 | CSRF token derived from the session token instead of stored as a hash (P0.5, P0.6); recorded P0.17-P0.22 from Steps 0.4 and 0.5. | Stored-hash design broke multiple tabs (found in Step 0.5); owner chose option (a). |

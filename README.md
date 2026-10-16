@@ -62,9 +62,9 @@ Platform operators log in through their own realm, separate from tenant users.
 
 - The session cookie is `__Host-wq_operator` (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`).
   Browsers treat `http://localhost` as a secure context, but `curl` needs the cookie sent by hand over plain HTTP.
-- Only SHA-256 hashes of the session and CSRF tokens are stored.
-- `GET /operator/auth/session` returns a fresh CSRF token each time, because only its hash is stored.
-  The previous CSRF token stops working, so a client keeps the latest one.
+- Only the SHA-256 hash of the session token is stored.
+- The CSRF token is HMAC-SHA256 of the session token, so nothing is stored for it and it stays the same for the whole session.
+  `GET /operator/auth/session` returns the same token as login, so every tab and every reload uses one token.
 - A session is rejected when it is revoked, past its absolute lifetime, idle for too long, or its operator is deactivated.
 - Passwords are hashed with argon2id (19 MiB, 2 iterations, 1 lane) through `@node-rs/argon2`.
 - Logins and logouts go to the application log, never with passwords, cookies, or tokens.

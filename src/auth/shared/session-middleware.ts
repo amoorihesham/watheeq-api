@@ -9,7 +9,6 @@ export const LAST_SEEN_RESOLUTION_MS = 60_000;
 
 export interface ResolvedSession<P> {
   sessionId: string;
-  csrfTokenHash: Buffer;
   lastSeenAt: Date;
   principal: P;
 }
@@ -41,10 +40,7 @@ export function sessionAuth<P>(options: SessionAuthOptions<P>): RequestHandler {
     if (Date.now() - session.lastSeenAt.getTime() > LAST_SEEN_RESOLUTION_MS) {
       await options.touch(session.sessionId);
     }
-    if (
-      isUnsafeMethod(req.method) &&
-      !csrfTokenMatches(req.get(CSRF_HEADER), session.csrfTokenHash)
-    ) {
+    if (isUnsafeMethod(req.method) && !csrfTokenMatches(req.get(CSRF_HEADER), token)) {
       throw new AppError("CSRF_FAILED");
     }
     options.attach(req, { sessionId: session.sessionId, principal: session.principal });
