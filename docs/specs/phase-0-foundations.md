@@ -155,6 +155,9 @@ RLS: `tenant_id = app_current_tenant()`.
 **`operators`** and **`operator_sessions`**: same shape as `users` and `user_sessions` without `tenant_id`.
 They are platform tables, not tenant-owned, so they have no RLS.
 They are reached only by the operator realm code (T6).
+`watheeq_app` has `SELECT`, `UPDATE` on `operators` (no `INSERT`, no `DELETE`) and `SELECT`, `INSERT`, `UPDATE` on `operator_sessions`.
+So even an attacker who takes over the running application cannot create an operator account for themselves.
+Operators are created only by `pnpm operator:create`, which connects as `watheeq_owner` through `MIGRATION_DATABASE_URL`.
 
 Only hashes of tokens are stored.
 If the database or a backup leaks, the stored values cannot be replayed as cookies.
@@ -512,6 +515,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P0.13 | Toolchain: Node 24 LTS, pnpm, ESM, `tsx`, tsup, Biome, Vitest, PostgreSQL 18, Testcontainers for tests.                            | Resolved Q1-Q4. tsup is unmaintained upstream; risk accepted.                                                          |
 | P0.14 | Login throttling per account and per IP, both stored in PostgreSQL; no Redis.                                                      | Covers both single-account guessing and password spraying without adding a datastore.                                  |
 | P0.15 | App and API on the same origin behind one reverse proxy; no CORS; client IP resolved through a configured `trust proxy` hop count. | Simplest cookie and CSRF setup; prevents both shared-proxy-IP lockouts and spoofed IPs.                                |
+| P0.16 | The runtime role cannot insert or delete operators; the `operator:create` CLI connects as `watheeq_owner`. | A compromised application must not be able to mint operator accounts with access to every tenant. |
 
 Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 
@@ -523,3 +527,4 @@ Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 | 2026-10-17 | Resolved Q1, Q3, Q4, Q8 and most of Q2; removed `message` from the error shape.                               | Owner review.           |
 | 2026-10-17 | Resolved Q2, Q5, Q6, Q7; added per-IP throttling, `login_ip_throttle` table, and deployment topology section. | Owner review.           |
 | 2026-10-17 | `users`: index on `tenant_id`; check constraint enforcing lowercased, trimmed email. | Found in Step 0.3 review; approved by owner. |
+| 2026-10-17 | Added grants for `operators` and `operator_sessions`, and the CLI's connection role (P0.16). | Spec gap found while briefing Step 0.5; approved by owner. |
