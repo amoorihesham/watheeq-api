@@ -98,6 +98,17 @@ describe("tenant isolation (real PostgreSQL, connected as watheeq_app)", () => {
     expect(err).toMatch(/row-level security policy/);
   });
 
+  it("rejects an email that is not lowercased and trimmed", async () => {
+    for (const email of ["Sara2@AlNoor.test", " sara2@alnoor.test"]) {
+      const err = await rejectionText(
+        withTenantTx(db, alNoor, (tx) =>
+          tx.insert(users).values({ tenantId: alNoor, email, passwordHash: "x" }),
+        ),
+      );
+      expect(err).toMatch(/users_email_normalized/);
+    }
+  });
+
   it("rejects moving an Al-Noor user to Al-Rashid with UPDATE (WITH CHECK)", async () => {
     const err = await rejectionText(
       withTenantTx(db, alNoor, (tx) =>

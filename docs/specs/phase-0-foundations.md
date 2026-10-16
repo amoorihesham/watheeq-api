@@ -124,7 +124,7 @@ RLS: `SELECT` only where `id = app_current_tenant()`.
 | -------------------- | ------------- | ---------------------------------------------------------------------------------------- |
 | `id`                 | `uuid` PK     |                                                                                          |
 | `tenant_id`          | `uuid`        | FK to `tenants`, not null.                                                               |
-| `email`              | `text`        | Stored lowercased and trimmed. Unique across the platform (T7): unique index on `email`. |
+| `email`              | `text`        | Lowercased and trimmed, enforced by the check constraint `email = lower(btrim(email))`. Unique across the platform (T7): unique index on `email`. |
 | `password_hash`      | `text`        | argon2id encoded hash.                                                                   |
 | `is_active`          | `boolean`     | Default `true`.                                                                          |
 | `failed_login_count` | `integer`     | Default 0. Used by login throttling.                                                     |
@@ -133,6 +133,7 @@ RLS: `SELECT` only where `id = app_current_tenant()`.
 
 RLS: `tenant_id = app_current_tenant()` for `SELECT`, `INSERT`, `UPDATE`.
 `watheeq_app` has `SELECT`, `INSERT`, `UPDATE`; no `DELETE`.
+Index on `tenant_id`, since every RLS check filters on it.
 
 **`user_sessions`**: tenant user sessions.
 
@@ -521,3 +522,4 @@ Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 | 2026-10-17 | Initial draft.                                                                                                | Phase 0 spec requested. |
 | 2026-10-17 | Resolved Q1, Q3, Q4, Q8 and most of Q2; removed `message` from the error shape.                               | Owner review.           |
 | 2026-10-17 | Resolved Q2, Q5, Q6, Q7; added per-IP throttling, `login_ip_throttle` table, and deployment topology section. | Owner review.           |
+| 2026-10-17 | `users`: index on `tenant_id`; check constraint enforcing lowercased, trimmed email. | Found in Step 0.3 review; approved by owner. |
