@@ -76,6 +76,18 @@ Two PostgreSQL roles are used, so the application cannot bypass Row-Level Securi
   It sets a transaction-local tenant context that the RLS policies read through `app_current_tenant()`.
   Querying a tenant table without a context fails with `tenant context is not set`.
 
+## Audit
+
+- Business changes are recorded with `audit(tx, ctx, entry)` from `src/audit/`, inside the same `withTenantTx` transaction as the change.
+  The entry commits or rolls back together with the change.
+- `audit` accepts only a transaction (`Tx`), so calling it with the top-level `db` is a compile error.
+- `ctx` is `{ actor: { type, id }, requestId }`.
+  The tenant is never passed: the database fills it from the transaction's tenant context.
+- `audit_log` is append-only: `watheeq_app` has `INSERT` and `SELECT` only, and RLS limits both to the current tenant.
+  `UPDATE` and `DELETE` fail with `permission denied`.
+- A migration that adds a foreign key to `tenants` on a new table must declare it inline in `CREATE TABLE`.
+  A separate `ALTER TABLE ... ADD CONSTRAINT` makes the owner read `tenants`, which has forced RLS, and fails with `tenant context is not set`.
+
 ## Scripts
 
 | Script             | What it does                                                      |
