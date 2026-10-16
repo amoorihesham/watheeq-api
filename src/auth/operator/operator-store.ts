@@ -1,6 +1,8 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Db } from "../../db/pool.js";
 import { operatorSessions, operators } from "../../db/schema/index.js";
+import { successfulLoginUpdate, wrongPasswordUpdate } from "../shared/account-throttle.js";
+import type { LoginThrottleSettings } from "../shared/ip-throttle.js";
 import type { ResolvedSession } from "../shared/session-middleware.js";
 
 export interface OperatorIdentity {
@@ -13,6 +15,18 @@ export async function findOperatorByEmail(db: Db, email: string) {
   return row;
 }
 
+/** One atomic UPDATE: counts the wrong password and locks the operator at the limit. */
+export async function recordWrongPassword(
+  db: Db,
+  operatorId: string,
+  settings: LoginThrottleSettings,
+): Promise<void> {
+  await db
+    .update(operators)
+    .set(wrongPasswordUpdate(operators, settings))
+    .where(eq(operators.id, operatorId));
+}
+
 export interface NewSession {
   operatorId: string;
   tokenHash: Buffer;
@@ -21,13 +35,14 @@ export interface NewSession {
   ip: string | undefined;
 }
 
-/** Revokes the session behind the presented cookie (if any) and inserts the new one, atomically. */
+/** Resets the failure count, revokes the session behind the presented cookie (if any), and inserts the new one, atomically. */
 export async function replaceSession(
   db: Db,
   presentedTokenHash: Buffer | undefined,
   next: NewSession,
 ): Promise<void> {
   await db.transaction(async (tx) => {
+    await tx.update(operators).set(successfulLoginUpdate).where(eq(operators.id, next.operatorId));
     if (presentedTokenHash) {
       await tx
         .update(operatorSessions)

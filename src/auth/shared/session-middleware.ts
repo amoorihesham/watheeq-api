@@ -18,8 +18,8 @@ export interface SessionAuthOptions<P> {
   cookieName: string;
   /** Returns the session only if it is valid: not revoked, not expired, not idle-expired, principal active. */
   resolve(tokenHash: Buffer): Promise<ResolvedSession<P> | undefined>;
-  /** Marks the session as seen now. Must be safe to call concurrently. */
-  touch(sessionId: string): Promise<void>;
+  /** Marks the session as seen now. Must be safe to call concurrently. Gets the principal so a realm can pick its transaction (tenant). */
+  touch(session: { sessionId: string; principal: P }): Promise<void>;
   attach(req: Request, session: { sessionId: string; principal: P }): void;
 }
 
@@ -38,7 +38,7 @@ export function sessionAuth<P>(options: SessionAuthOptions<P>): RequestHandler {
       throw new AppError("UNAUTHENTICATED");
     }
     if (Date.now() - session.lastSeenAt.getTime() > LAST_SEEN_RESOLUTION_MS) {
-      await options.touch(session.sessionId);
+      await options.touch(session);
     }
     if (isUnsafeMethod(req.method) && !csrfTokenMatches(req.get(CSRF_HEADER), token)) {
       throw new AppError("CSRF_FAILED");

@@ -10,6 +10,17 @@ const configSchema = z.object({
   // Operator session lifetimes in seconds (spec 4.3): 30 minutes idle, 8 hours absolute.
   OPERATOR_SESSION_IDLE_SECONDS: z.coerce.number().int().min(60).default(1800),
   OPERATOR_SESSION_ABSOLUTE_SECONDS: z.coerce.number().int().min(60).default(28800),
+  // Tenant session lifetimes in seconds (spec 4.3): 2 hours idle, 12 hours absolute.
+  TENANT_SESSION_IDLE_SECONDS: z.coerce.number().int().min(60).default(7200),
+  TENANT_SESSION_ABSOLUTE_SECONDS: z.coerce.number().int().min(60).default(43200),
+  // Login throttling (spec 4.3): 5 failures lock an account for 15 minutes; 100 failures per 15-minute window block an IP.
+  LOGIN_ACCOUNT_MAX_FAILURES: z.coerce.number().int().min(1).default(5),
+  LOGIN_ACCOUNT_LOCK_SECONDS: z.coerce.number().int().min(1).default(900),
+  LOGIN_IP_MAX_FAILURES: z.coerce.number().int().min(1).default(100),
+  LOGIN_IP_WINDOW_SECONDS: z.coerce.number().int().min(1).default(900),
+  // Number of reverse proxies in front of the app (spec 4.3, "Deployment topology and client IP").
+  // 0 ignores X-Forwarded-For entirely; N trusts only the N proxy hops nearest to the app.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 

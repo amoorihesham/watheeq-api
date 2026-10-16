@@ -36,6 +36,13 @@ The message names keys and reasons only, never values.
 | `NODE_ENV`     | `development` | `development`, `test`, or `production`.                              |
 | `OPERATOR_SESSION_IDLE_SECONDS` | `1800` | Operator session idle timeout (minimum 60). |
 | `OPERATOR_SESSION_ABSOLUTE_SECONDS` | `28800` | Operator session absolute lifetime (minimum 60). |
+| `TENANT_SESSION_IDLE_SECONDS` | `7200` | Tenant session idle timeout (minimum 60). |
+| `TENANT_SESSION_ABSOLUTE_SECONDS` | `43200` | Tenant session absolute lifetime (minimum 60). |
+| `LOGIN_ACCOUNT_MAX_FAILURES` | `5` | Consecutive wrong passwords that lock an account. |
+| `LOGIN_ACCOUNT_LOCK_SECONDS` | `900` | How long a locked account is refused. |
+| `LOGIN_IP_MAX_FAILURES` | `100` | Failed logins per client IP and window before that IP is blocked. |
+| `LOGIN_IP_WINDOW_SECONDS` | `900` | Length of the per-IP window. |
+| `TRUST_PROXY` | `0` | Number of reverse proxies in front of the app (see "Client IP and throttling"). |
 | `LOG_LEVEL`    | `info`        | `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent`.     |
 
 ## HTTP behavior
@@ -80,6 +87,58 @@ The password is never read from command-line arguments, because those end up in 
 It must be 12 to 256 characters.
 The application role `watheeq_app` can read and update operators but cannot insert or delete them, so a compromised application cannot create operators.
 
+## Tenant authentication
+
+Tenant users (for example Sara at Al-Noor) log in through the tenant realm, which works like the operator realm.
+
+| Endpoint              | Auth           | Result                                                                                                  |
+| --------------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
+| `POST /auth/login`    | none           | 200 `{user:{id,email,tenantId}, csrfToken}` and a cookie. 401 `INVALID_CREDENTIALS`. 429 `TOO_MANY_ATTEMPTS`. |
+| `GET /auth/session`   | session        | 200 `{user, csrfToken}`. 401 `UNAUTHENTICATED`.                                                         |
+| `POST /auth/logout`   | session + CSRF | 204 and the cookie is cleared. 403 `CSRF_FAILED` without a valid `X-CSRF-Token` header.                 |
+
+- The session cookie is `__Host-wq_session`, with the same flags as the operator cookie.
+  Each realm reads only its own cookie and its own session table (`user_sessions` or `operator_sessions`), so a session never works in the other realm.
+- A user's session belongs to the user's tenant, and everything after the first lookup runs in that tenant's `withTenantTx`.
+- Login must find the user by email, and a request must find its session by token, before the tenant is known.
+  Both go through two `SECURITY DEFINER` functions, `auth_find_user_for_login` and `auth_resolve_user_session`.
+  They are owned by the `watheeq_auth` role, which is the only RLS bypass in the system (see below).
+- There is no tenant or user creation API yet (Phase 1 and 2).
+  To log in locally, insert them as the database superuser, because forced RLS also applies to `watheeq_owner`:
+
+```sh
+docker compose exec db psql -U watheeq -d watheeq <<'SQL'
+BEGIN;
+WITH t AS (INSERT INTO tenants (name) VALUES ('Al-Noor') RETURNING id)
+SELECT set_config('app.tenant_id', id::text, true) FROM t;
+INSERT INTO users (tenant_id, email, password_hash)
+VALUES (current_setting('app.tenant_id')::uuid, 'sara@alnoor.test', '<argon2id hash>');
+COMMIT;
+SQL
+```
+
+  Create the hash with `node -e "import('@node-rs/argon2').then(a => a.hash('the password', {memoryCost:19456,timeCost:2,parallelism:1})).then(console.log)"`.
+
+## Login throttling
+
+Both realms share the same rules, in PostgreSQL:
+
+- **Per account:** 5 consecutive wrong passwords lock the account for 15 minutes.
+  While locked, login returns 429 `TOO_MANY_ATTEMPTS` without checking the password.
+  A successful login resets the count.
+- **Per IP:** 100 failed logins within a 15-minute window block that IP with 429 for every email.
+  A window older than 15 minutes counts as zero.
+  Every 401 counts, and a successful login does not reset the IP counter.
+- Counters are single atomic `UPDATE` or upsert statements, so concurrent attempts lose no increments.
+
+### Client IP and `TRUST_PROXY`
+
+The IP counter uses Express's `req.ip`.
+`TRUST_PROXY` is the number of reverse proxies in front of the app (Express `trust proxy` set to a number).
+With `0`, `X-Forwarded-For` is ignored and the socket address is used.
+With `N`, the address is read from the `X-Forwarded-For` entries added by the N proxy hops nearest to the app, so entries a client supplies itself are never counted.
+Set it to exactly the number of proxies you run: too low counts the proxy's address (all users share one counter), and too high lets a client choose its own address.
+
 ## Local database
 
 `docker compose up` creates the database roles only when the volume is empty.
@@ -87,14 +146,17 @@ If you have an older volume without them, run `docker compose down -v` first (th
 
 ## Database roles and migrations
 
-Two PostgreSQL roles are used, so the application cannot bypass Row-Level Security (RLS).
+Three PostgreSQL roles are used, so the application cannot bypass Row-Level Security (RLS).
 
 | Role            | Used by                 | Privileges                                                                            |
 | --------------- | ----------------------- | ------------------------------------------------------------------------------------- |
 | `watheeq_owner` | Migrations only         | Owns the schema, tables, functions, and policies.                                     |
 | `watheeq_app`   | The running application | `LOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`, owns nothing, only the grants migrations give. |
+| `watheeq_auth`  | The two lookup functions only | `NOLOGIN`, `BYPASSRLS`, owns `auth_find_user_for_login` and `auth_resolve_user_session`, and has `SELECT` on `users` and `user_sessions` only. `watheeq_app` is not a member and cannot become it. |
 
-- `db/bootstrap/roles.sql` creates both roles. It is run once by a database administrator.
+- `db/bootstrap/roles.sql` creates the three roles and makes `watheeq_owner` a member of `watheeq_auth`, so migrations can assign function ownership.
+  Creating a `BYPASSRLS` role needs an administrator, which is why this is not a migration.
+  It is run once by a database administrator.
   Docker Compose runs it through `/docker-entrypoint-initdb.d`, and the test setup runs it as the container superuser.
   Its passwords are for local development only.
 - `DATABASE_URL` is the runtime connection (`watheeq_app`).

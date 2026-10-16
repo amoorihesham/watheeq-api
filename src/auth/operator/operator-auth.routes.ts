@@ -3,14 +3,17 @@ import { z } from "zod";
 import type { Db } from "../../db/pool.js";
 import { AppError } from "../../http/errors.js";
 import { validate } from "../../http/validate.js";
+import { clientIp } from "../shared/client-ip.js";
 import { clearSessionCookie, readCookie, setSessionCookie } from "../shared/cookies.js";
 import { csrfTokenFor } from "../shared/csrf.js";
-import { DUMMY_PASSWORD_HASH, verifyPassword } from "../shared/passwords.js";
+import type { LoginThrottleSettings } from "../shared/ip-throttle.js";
+import { checkCredentials } from "../shared/login.js";
 import { LAST_SEEN_RESOLUTION_MS, sessionAuth } from "../shared/session-middleware.js";
 import { generateToken, hashToken, isWellFormedToken } from "../shared/tokens.js";
 import {
   findOperatorByEmail,
   type OperatorIdentity,
+  recordWrongPassword,
   replaceSession,
   resolveOperatorSession,
   revokeSession,
@@ -48,14 +51,18 @@ export function requireOperator(
   return sessionAuth<OperatorIdentity>({
     cookieName: OPERATOR_COOKIE,
     resolve: (tokenHash) => resolveOperatorSession(db, tokenHash, lifetimes.idleTimeoutSeconds),
-    touch: (sessionId) => touchSession(db, sessionId, LAST_SEEN_RESOLUTION_MS / 1000),
+    touch: ({ sessionId }) => touchSession(db, sessionId, LAST_SEEN_RESOLUTION_MS / 1000),
     attach: (req, { sessionId, principal }) => {
       req.operatorAuth = { sessionId, operator: principal };
     },
   });
 }
 
-export function operatorAuthRouter(db: Db, lifetimes: OperatorSessionLifetimes): express.Router {
+export function operatorAuthRouter(
+  db: Db,
+  lifetimes: OperatorSessionLifetimes,
+  throttle: LoginThrottleSettings,
+): express.Router {
   const router = express.Router();
   const authenticate = requireOperator(db, lifetimes);
 
@@ -68,17 +75,15 @@ export function operatorAuthRouter(db: Db, lifetimes: OperatorSessionLifetimes):
   router.post("/operator/auth/login", async (req, res) => {
     const { email, password } = validate(loginBody, req.body);
 
-    const operator = await findOperatorByEmail(db, email);
-    // Unknown email: verify against a dummy hash so the response time matches a wrong password.
-    const passwordOk = await verifyPassword(
-      operator?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    const ip = clientIp(req);
+    const operator = await checkCredentials(db, throttle, {
+      realm: "operator",
+      ip,
       password,
-    );
-    if (!operator || !passwordOk || !operator.isActive) {
-      const reason = !operator ? "unknown_email" : !passwordOk ? "wrong_password" : "inactive";
-      req.log.warn({ reason, operatorId: operator?.id }, "operator login failed");
-      throw new AppError("INVALID_CREDENTIALS");
-    }
+      find: () => findOperatorByEmail(db, email),
+      recordWrongPassword: (account) => recordWrongPassword(db, account.id, throttle),
+      log: req.log,
+    });
 
     // A new token on every login: a token planted before login (fixation) never becomes a logged-in session.
     const presented = readCookie(req, OPERATOR_COOKIE);
@@ -90,7 +95,7 @@ export function operatorAuthRouter(db: Db, lifetimes: OperatorSessionLifetimes):
       tokenHash: hashToken(sessionToken),
       absoluteLifetimeSeconds: lifetimes.absoluteLifetimeSeconds,
       userAgent: req.get("user-agent")?.slice(0, USER_AGENT_MAX_LENGTH),
-      ip: req.ip,
+      ip,
     });
 
     setSessionCookie(res, OPERATOR_COOKIE, sessionToken);

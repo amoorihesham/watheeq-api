@@ -15,7 +15,16 @@ BEGIN
     CREATE ROLE watheeq_app LOGIN PASSWORD 'watheeq_app'
       NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   END IF;
+  -- Owns the two pre-context lookup functions (decision P0.23). It cannot log in, owns nothing else,
+  -- and migrations grant it SELECT on users and user_sessions only. Creating a BYPASSRLS role needs an administrator.
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'watheeq_auth') THEN
+    CREATE ROLE watheeq_auth NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS;
+  END IF;
 END $$;
+
+-- Lets watheeq_owner assign function ownership to watheeq_auth in migrations.
+-- watheeq_app is deliberately not a member and cannot become this role.
+GRANT watheeq_auth TO watheeq_owner;
 
 -- The owner role owns the schema (so it can create tables there) and may create the "drizzle" migration schema.
 ALTER SCHEMA public OWNER TO watheeq_owner;
