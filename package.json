@@ -27,9 +27,12 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome lint --error-on-warnings .",
     "format": "biome format --write .",
-    "check": "biome check --error-on-warnings ."
+    "check": "biome check --error-on-warnings .",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file-if-exists=.env src/cli/migrate.ts"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.4",
     "express": "^5.3.0",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
@@ -43,6 +46,7 @@
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
+    "drizzle-kit": "^0.31.11",
     "supertest": "^7.3.1",
     "testcontainers": "^12.2.1",
     "tsup": "^9.0.0",

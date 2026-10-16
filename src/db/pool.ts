@@ -1,5 +1,7 @@
+import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import type { Logger } from "../logging/logger.js";
+import * as schema from "./schema/index.js";
 
 export const HEALTH_TIMEOUT_MS = 2000;
 
@@ -15,3 +17,10 @@ export function createPool(connectionString: string, logger: Logger): pg.Pool {
   });
   return pool;
 }
+
+export function createDb(pool: pg.Pool) {
+  return drizzle(pool, { schema });
+}
+
+export type Db = ReturnType<typeof createDb>;
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
