@@ -1,6 +1,6 @@
-import type { Db } from "../../db/pool.js";
-import { AppError } from "../../http/errors.js";
-import type { Logger } from "../../logging/logger.js";
+import type { Db } from "../../../db/pool.js";
+import { AppError } from "../../../http/errors.js";
+import type { Logger } from "../../../logging/logger.js";
 import { isIpBlocked, type LoginThrottleSettings, recordIpFailure } from "./ip-throttle.js";
 import { DUMMY_PASSWORD_HASH, verifyPassword } from "./passwords.js";
 

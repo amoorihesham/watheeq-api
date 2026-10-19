@@ -1,9 +1,9 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
-import type { Db } from "../../db/pool.js";
-import { operatorSessions, operators } from "../../db/schema/index.js";
+import type { Db } from "../../../db/pool.js";
+import { operatorSessions, operators } from "../../../db/schema/index.js";
+import type { ResolvedSession } from "../../../middleware/session-auth.js";
 import { successfulLoginUpdate, wrongPasswordUpdate } from "../shared/account-throttle.js";
 import type { LoginThrottleSettings } from "../shared/ip-throttle.js";
-import type { ResolvedSession } from "../shared/session-middleware.js";
 
 export interface OperatorIdentity {
   id: string;

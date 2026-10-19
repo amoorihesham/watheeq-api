@@ -1,5 +1,9 @@
 import type { Request, Response } from "express";
 
+// One cookie per realm, so a session of one realm is never read by the other (T6). The `__Host-` prefix requires Secure, Path=/, and no Domain.
+export const OPERATOR_COOKIE = "__Host-wq_operator";
+export const TENANT_COOKIE = "__Host-wq_session";
+
 const COOKIE_FLAGS = { httpOnly: true, secure: true, sameSite: "lax", path: "/" } as const;
 
 /**

@@ -1,8 +1,8 @@
 import type { Request, RequestHandler } from "express";
-import { AppError } from "../../http/errors.js";
-import { readCookie } from "./cookies.js";
-import { CSRF_HEADER, csrfTokenMatches, isUnsafeMethod } from "./csrf.js";
-import { hashToken, isWellFormedToken } from "./tokens.js";
+import { AppError } from "../http/errors.js";
+import { readCookie } from "../modules/auth/shared/cookies.js";
+import { CSRF_HEADER, csrfTokenMatches, isUnsafeMethod } from "../modules/auth/shared/csrf.js";
+import { hashToken, isWellFormedToken } from "../modules/auth/shared/tokens.js";
 
 /** `last_seen_at` is rewritten at most once per minute per session (spec 4.3, "Request authentication"). */
 export const LAST_SEEN_RESOLUTION_MS = 60_000;

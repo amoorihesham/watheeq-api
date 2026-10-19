@@ -1,40 +1,27 @@
 import express from "express";
 import { z } from "zod";
-import type { Db } from "../../db/pool.js";
-import { AppError } from "../../http/errors.js";
-import { validate } from "../../http/validate.js";
+import type { Db } from "../../../db/pool.js";
+import { AppError } from "../../../http/errors.js";
+import { validate } from "../../../http/validate.js";
+import { noStore } from "../../../middleware/no-store.js";
+import type { TenantSessionLifetimes } from "../../../middleware/require-user.js";
 import { clientIp } from "../shared/client-ip.js";
-import { clearSessionCookie, readCookie, setSessionCookie } from "../shared/cookies.js";
+import {
+  clearSessionCookie,
+  readCookie,
+  setSessionCookie,
+  TENANT_COOKIE,
+} from "../shared/cookies.js";
 import { csrfTokenFor } from "../shared/csrf.js";
 import type { LoginThrottleSettings } from "../shared/ip-throttle.js";
 import { checkCredentials } from "../shared/login.js";
-import { LAST_SEEN_RESOLUTION_MS, sessionAuth } from "../shared/session-middleware.js";
 import { generateToken, hashToken, isWellFormedToken } from "../shared/tokens.js";
 import {
   findUserForLogin,
   recordWrongPassword,
   replaceSession,
-  resolveUserSession,
   revokeSession,
-  touchSession,
-  type UserIdentity,
 } from "./tenant-store.js";
-
-export const TENANT_COOKIE = "__Host-wq_session";
-
-export interface TenantSessionLifetimes {
-  idleTimeoutSeconds: number;
-  absoluteLifetimeSeconds: number;
-}
-
-declare global {
-  namespace Express {
-    interface Request {
-      /** Set by `requireUser`. `user.tenantId` is the tenant the session belongs to. */
-      userAuth?: { sessionId: string; user: UserIdentity };
-    }
-  }
-}
 
 // Passwords are checked against a 256-character cap before any hashing work (spec section 5).
 const loginBody = z.object({
@@ -44,31 +31,15 @@ const loginBody = z.object({
 
 const USER_AGENT_MAX_LENGTH = 512;
 
-export function requireUser(db: Db, lifetimes: TenantSessionLifetimes): express.RequestHandler {
-  return sessionAuth<UserIdentity>({
-    cookieName: TENANT_COOKIE,
-    resolve: (tokenHash) => resolveUserSession(db, tokenHash, lifetimes.idleTimeoutSeconds),
-    touch: ({ sessionId, principal }) =>
-      touchSession(db, principal.tenantId, sessionId, LAST_SEEN_RESOLUTION_MS / 1000),
-    attach: (req, { sessionId, principal }) => {
-      req.userAuth = { sessionId, user: principal };
-    },
-  });
-}
-
 export function tenantAuthRouter(
   db: Db,
   lifetimes: TenantSessionLifetimes,
   throttle: LoginThrottleSettings,
+  authenticate: express.RequestHandler,
 ): express.Router {
   const router = express.Router();
-  const authenticate = requireUser(db, lifetimes);
 
-  // Responses carry tokens and identity, so no browser or proxy cache may keep them.
-  router.use("/auth", (_req, res, next) => {
-    res.set("Cache-Control", "no-store");
-    next();
-  });
+  router.use("/auth", noStore);
 
   router.post("/auth/login", async (req, res) => {
     const { email, password } = validate(loginBody, req.body);

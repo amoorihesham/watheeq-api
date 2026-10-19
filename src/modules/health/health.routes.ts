@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type pg from "pg";
-import { HEALTH_TIMEOUT_MS } from "../db/pool.js";
+import { HEALTH_TIMEOUT_MS } from "../../db/pool.js";
 
 async function isDbUp(pool: pg.Pool): Promise<boolean> {
   let timer: NodeJS.Timeout | undefined;

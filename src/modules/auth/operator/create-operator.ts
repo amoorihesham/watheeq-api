@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { z } from "zod";
-import { operators } from "../../db/schema/index.js";
+import { operators } from "../../../db/schema/index.js";
 import { hashPassword } from "../shared/passwords.js";
 
 export const MIN_PASSWORD_LENGTH = 12;

@@ -1,4 +1,4 @@
-import { CreateOperatorError, createOperator } from "../auth/operator/create-operator.js";
+import { CreateOperatorError, createOperator } from "../modules/auth/operator/create-operator.js";
 
 // Reads the URL directly: validated config is for the running app, not this tool.
 // Connects as watheeq_owner, because the application role cannot insert operators.

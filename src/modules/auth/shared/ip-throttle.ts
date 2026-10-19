@@ -1,5 +1,5 @@
 import { type SQL, sql } from "drizzle-orm";
-import type { Db } from "../../db/pool.js";
+import type { Db } from "../../../db/pool.js";
 
 export interface LoginThrottleSettings {
   accountMaxFailures: number;

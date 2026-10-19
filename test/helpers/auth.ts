@@ -1,11 +1,10 @@
 import type express from "express";
 import type pg from "pg";
 import request from "supertest";
-import { OPERATOR_COOKIE } from "../../src/auth/operator/operator-auth.routes.js";
-import { TENANT_COOKIE } from "../../src/auth/tenant/tenant-auth.routes.js";
+import { OPERATOR_COOKIE, TENANT_COOKIE } from "../../src/modules/auth/shared/cookies.js";
 
 // Tests reach auth internals only through this file, so moving them touches one import.
-export { hashPassword } from "../../src/auth/shared/passwords.js";
+export { hashPassword } from "../../src/modules/auth/shared/passwords.js";
 export { OPERATOR_COOKIE, TENANT_COOKIE };
 
 export interface Realm {

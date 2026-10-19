@@ -1,5 +1,5 @@
 import express from "express";
-import { AppError } from "./errors.js";
+import { AppError } from "../http/errors.js";
 
 export const BODY_LIMIT = "100kb";
 
@@ -18,7 +18,3 @@ const requireJsonBody: express.RequestHandler = (req, _res, next) => {
 export function jsonBody(): express.RequestHandler[] {
   return [requireJsonBody, express.json({ limit: BODY_LIMIT })];
 }
-
-export const notFoundHandler: express.RequestHandler = (_req, _res, next) => {
-  next(new AppError("NOT_FOUND"));
-};

@@ -1,40 +1,27 @@
 import express from "express";
 import { z } from "zod";
-import type { Db } from "../../db/pool.js";
-import { AppError } from "../../http/errors.js";
-import { validate } from "../../http/validate.js";
+import type { Db } from "../../../db/pool.js";
+import { AppError } from "../../../http/errors.js";
+import { validate } from "../../../http/validate.js";
+import { noStore } from "../../../middleware/no-store.js";
+import type { OperatorSessionLifetimes } from "../../../middleware/require-operator.js";
 import { clientIp } from "../shared/client-ip.js";
-import { clearSessionCookie, readCookie, setSessionCookie } from "../shared/cookies.js";
+import {
+  clearSessionCookie,
+  OPERATOR_COOKIE,
+  readCookie,
+  setSessionCookie,
+} from "../shared/cookies.js";
 import { csrfTokenFor } from "../shared/csrf.js";
 import type { LoginThrottleSettings } from "../shared/ip-throttle.js";
 import { checkCredentials } from "../shared/login.js";
-import { LAST_SEEN_RESOLUTION_MS, sessionAuth } from "../shared/session-middleware.js";
 import { generateToken, hashToken, isWellFormedToken } from "../shared/tokens.js";
 import {
   findOperatorByEmail,
-  type OperatorIdentity,
   recordWrongPassword,
   replaceSession,
-  resolveOperatorSession,
   revokeSession,
-  touchSession,
 } from "./operator-store.js";
-
-export const OPERATOR_COOKIE = "__Host-wq_operator";
-
-export interface OperatorSessionLifetimes {
-  idleTimeoutSeconds: number;
-  absoluteLifetimeSeconds: number;
-}
-
-declare global {
-  namespace Express {
-    interface Request {
-      /** Set by `requireOperator`. */
-      operatorAuth?: { sessionId: string; operator: OperatorIdentity };
-    }
-  }
-}
 
 // Passwords are checked against a 256-character cap before any hashing work (spec section 5).
 const loginBody = z.object({
@@ -44,33 +31,15 @@ const loginBody = z.object({
 
 const USER_AGENT_MAX_LENGTH = 512;
 
-export function requireOperator(
-  db: Db,
-  lifetimes: OperatorSessionLifetimes,
-): express.RequestHandler {
-  return sessionAuth<OperatorIdentity>({
-    cookieName: OPERATOR_COOKIE,
-    resolve: (tokenHash) => resolveOperatorSession(db, tokenHash, lifetimes.idleTimeoutSeconds),
-    touch: ({ sessionId }) => touchSession(db, sessionId, LAST_SEEN_RESOLUTION_MS / 1000),
-    attach: (req, { sessionId, principal }) => {
-      req.operatorAuth = { sessionId, operator: principal };
-    },
-  });
-}
-
 export function operatorAuthRouter(
   db: Db,
   lifetimes: OperatorSessionLifetimes,
   throttle: LoginThrottleSettings,
+  authenticate: express.RequestHandler,
 ): express.Router {
   const router = express.Router();
-  const authenticate = requireOperator(db, lifetimes);
 
-  // Responses carry tokens and identity, so no browser or proxy cache may keep them.
-  router.use("/operator/auth", (_req, res, next) => {
-    res.set("Cache-Control", "no-store");
-    next();
-  });
+  router.use("/operator/auth", noStore);
 
   router.post("/operator/auth/login", async (req, res) => {
     const { email, password } = validate(loginBody, req.body);
