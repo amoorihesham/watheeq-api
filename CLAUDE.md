@@ -1,4 +1,4 @@
-# Watheeq — Legal Affairs Management System (Backend)
+# Watheeq - Legal Affairs Management System (Backend)
 
 Multi-tenant backend for managing internal legal departments, legal services, and the legal request lifecycle.
 
@@ -34,14 +34,14 @@ Each document is authoritative for its own topic. Do not duplicate content betwe
 | Document                      | Authoritative for                                                                |
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | `docs/PRODUCT_VISION.md`      | Long-term product direction                                                      |
-| `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1–D15; open product questions |
-| `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T22                                     |
+| `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1-D15; open product questions |
+| `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T23                                     |
 | `docs/ROADMAP_AND_STATUS.md`  | Phase list, phase status, next action                                            |
 | `docs/specs/phase-<N>-*.md`   | Detailed requirements, design, steps, and acceptance criteria for one phase      |
 | `templates/SPEC_TEMPLATE.md`  | Structure every phase spec must follow                                           |
 
 Read `MVP_SCOPE.md` and `TECHNICAL_DECISIONS.md` before designing or implementing anything.
 
-## Stack (summary — see TECHNICAL_DECISIONS.md for rationale)
+## Stack (summary - see TECHNICAL_DECISIONS.md for rationale)
 
 Node.js + TypeScript (strict), Express 5, PostgreSQL with Row-Level Security, Drizzle ORM, zod, pino, Vitest with real PostgreSQL in Docker. All data must stay in Saudi Arabia.

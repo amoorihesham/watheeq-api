@@ -1,14 +1,25 @@
 import express from "express";
 import type pg from "pg";
-import { operatorAuthRouter } from "./auth/operator/operator-auth.routes.js";
-import { tenantAuthRouter } from "./auth/tenant/tenant-auth.routes.js";
 import type { Config } from "./config/config.js";
 import { createDb } from "./db/pool.js";
-import { healthRouter } from "./health/health.routes.js";
-import { errorHandler } from "./http/error-handler.js";
-import { jsonBody, notFoundHandler } from "./http/middleware.js";
-import { httpLogger } from "./logging/http-logger.js";
 import type { Logger } from "./logging/logger.js";
+import { errorHandler } from "./middleware/error-handler.js";
+import { jsonBody } from "./middleware/json-body.js";
+import { notFoundHandler } from "./middleware/not-found.js";
+import { requestLogger } from "./middleware/request-logger.js";
+import { createRequireOperator } from "./middleware/require-operator.js";
+import { createRequireUser } from "./middleware/require-user.js";
+import { createOperatorRepository } from "./modules/auth/operator/operator.repository.js";
+import { createOperatorAuthController } from "./modules/auth/operator/operator-auth.controller.js";
+import { operatorAuthRouter } from "./modules/auth/operator/operator-auth.routes.js";
+import { createOperatorAuthService } from "./modules/auth/operator/operator-auth.service.js";
+import { createTenantRepository } from "./modules/auth/tenant/tenant.repository.js";
+import { createTenantAuthController } from "./modules/auth/tenant/tenant-auth.controller.js";
+import { tenantAuthRouter } from "./modules/auth/tenant/tenant-auth.routes.js";
+import { createTenantAuthService } from "./modules/auth/tenant/tenant-auth.service.js";
+import { createHealthController } from "./modules/health/health.controller.js";
+import { createHealthRepository } from "./modules/health/health.repository.js";
+import { healthRouter } from "./modules/health/health.routes.js";
 
 export interface AppDeps {
   pool: pg.Pool;
@@ -18,14 +29,15 @@ export interface AppDeps {
   routers?: express.Router[];
 }
 
+/** The composition root: builds repositories, then services, then middleware and controllers, then routes (T23). */
 export function buildApp(deps: AppDeps): express.Express {
   const app = express();
   app.disable("x-powered-by");
   // Number of trusted proxy hops: req.ip comes only from hops those proxies added (spec 4.3, client IP).
   app.set("trust proxy", deps.config.TRUST_PROXY);
-  app.use(httpLogger(deps.logger));
+  app.use(requestLogger(deps.logger));
   // /health is mounted before body parsing and any future authentication.
-  app.use(healthRouter(deps.pool));
+  app.use(healthRouter(createHealthController({ repo: createHealthRepository(deps.pool) })));
   app.use(jsonBody());
   const db = createDb(deps.pool);
   const throttle = {
@@ -34,25 +46,34 @@ export function buildApp(deps: AppDeps): express.Express {
     ipMaxFailures: deps.config.LOGIN_IP_MAX_FAILURES,
     ipWindowSeconds: deps.config.LOGIN_IP_WINDOW_SECONDS,
   };
+  const operatorAuthService = createOperatorAuthService({
+    db,
+    repo: createOperatorRepository(),
+    lifetimes: {
+      idleTimeoutSeconds: deps.config.OPERATOR_SESSION_IDLE_SECONDS,
+      absoluteLifetimeSeconds: deps.config.OPERATOR_SESSION_ABSOLUTE_SECONDS,
+    },
+    throttle,
+  });
+  const requireOperator = createRequireOperator(operatorAuthService);
+  const tenantAuthService = createTenantAuthService({
+    db,
+    repo: createTenantRepository(),
+    lifetimes: {
+      idleTimeoutSeconds: deps.config.TENANT_SESSION_IDLE_SECONDS,
+      absoluteLifetimeSeconds: deps.config.TENANT_SESSION_ABSOLUTE_SECONDS,
+    },
+    throttle,
+  });
+  const requireUser = createRequireUser(tenantAuthService);
   app.use(
     operatorAuthRouter(
-      db,
-      {
-        idleTimeoutSeconds: deps.config.OPERATOR_SESSION_IDLE_SECONDS,
-        absoluteLifetimeSeconds: deps.config.OPERATOR_SESSION_ABSOLUTE_SECONDS,
-      },
-      throttle,
+      createOperatorAuthController({ service: operatorAuthService }),
+      requireOperator,
     ),
   );
   app.use(
-    tenantAuthRouter(
-      db,
-      {
-        idleTimeoutSeconds: deps.config.TENANT_SESSION_IDLE_SECONDS,
-        absoluteLifetimeSeconds: deps.config.TENANT_SESSION_ABSOLUTE_SECONDS,
-      },
-      throttle,
-    ),
+    tenantAuthRouter(createTenantAuthController({ service: tenantAuthService }), requireUser),
   );
   for (const router of deps.routers ?? []) {
     app.use(router);

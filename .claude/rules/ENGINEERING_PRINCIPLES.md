@@ -14,7 +14,7 @@
 - Do not introduce abstractions, design patterns, frameworks, dependencies, services, or infrastructure without a clear reason.
 - Avoid speculative generalization: do not design for hypothetical future requirements unless the cost of not preparing for them is demonstrably significant.
 - Prefer straightforward, maintainable code over clever or unnecessarily generic solutions.
-- Consider operational complexity, debugging difficulty, deployment requirements, maintenance burden, and learning cost—not just implementation effort.
+- Consider operational complexity, debugging difficulty, deployment requirements, maintenance burden, and learning cost, not just implementation effort.
 - Apply YAGNI (You Aren't Gonna Need It) where appropriate, without sacrificing necessary correctness, security, or maintainability.
 
 ## 3. Justify Every Significant Engineering Decision

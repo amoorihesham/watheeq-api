@@ -1,60 +1,27 @@
 import { eq } from "drizzle-orm";
-import pg from "pg";
-import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type AuditContext, audit } from "../src/audit/index.js";
-import { createDb, createPool, type Tx } from "../src/db/pool.js";
+import { createDb, type Tx } from "../src/db/pool.js";
 import { auditLog, users } from "../src/db/schema/index.js";
 import { withTenantTx } from "../src/db/tenant-tx.js";
-import { createLogger } from "../src/logging/logger.js";
-
-/** Drizzle wraps driver errors; the PostgreSQL message is on `cause`. */
-async function rejectionText(promise: Promise<unknown>): Promise<string> {
-  try {
-    await promise;
-  } catch (err) {
-    const cause = err instanceof Error ? err.cause : undefined;
-    return `${String(err)} | ${String(cause)}`;
-  }
-  throw new Error("expected the promise to reject");
-}
+import { connectAsAdmin, connectAsApp, rejectionText, seedTenant } from "./helpers/db.js";
 
 describe("audit log (real PostgreSQL, connected as watheeq_app)", () => {
-  const appPool = createPool(inject("databaseUrl"), createLogger("silent"));
+  const appPool = connectAsApp();
   const db = createDb(appPool);
-  const adminPool = new pg.Pool({ connectionString: inject("adminDatabaseUrl"), max: 1 });
+  const adminPool = connectAsAdmin(1);
 
   let alNoor = "";
   let alRashid = "";
   let saraId = "";
   let adminUserId = "";
 
-  const seed = async (name: string, emails: string[]): Promise<{ id: string; ids: string[] }> => {
-    const client = await adminPool.connect();
-    try {
-      await client.query("begin");
-      const t = await client.query<{ id: string }>(
-        "insert into tenants (name) values ($1) returning id",
-        [name],
-      );
-      const id = t.rows[0]?.id ?? "";
-      await client.query("select set_config('app.tenant_id', $1, true)", [id]);
-      const ids: string[] = [];
-      for (const email of emails) {
-        const u = await client.query<{ id: string }>(
-          "insert into users (tenant_id, email, password_hash) values ($1, $2, 'x') returning id",
-          [id, email],
-        );
-        ids.push(u.rows[0]?.id ?? "");
-      }
-      await client.query("commit");
-      return { id, ids };
-    } catch (err) {
-      await client.query("rollback");
-      throw err;
-    } finally {
-      client.release();
-    }
-  };
+  const seed = (name: string, emails: string[]) =>
+    seedTenant(
+      adminPool,
+      name,
+      emails.map((email) => ({ email })),
+    );
 
   const ctx = (): AuditContext => ({
     actor: { type: "user", id: adminUserId },
@@ -77,8 +44,8 @@ describe("audit log (real PostgreSQL, connected as watheeq_app)", () => {
   beforeAll(async () => {
     const noor = await seed("Al-Noor", ["audit-sara@alnoor.test", "audit-omar@alnoor.test"]);
     alNoor = noor.id;
-    saraId = noor.ids[0] ?? "";
-    adminUserId = noor.ids[1] ?? "";
+    saraId = noor.userIds[0] ?? "";
+    adminUserId = noor.userIds[1] ?? "";
     alRashid = (await seed("Al-Rashid", ["audit-khalid@alrashid.test"])).id;
   });
 

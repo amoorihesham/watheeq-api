@@ -1,61 +1,32 @@
 import { eq, sql } from "drizzle-orm";
-import pg from "pg";
-import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
-import { createDb, createPool } from "../src/db/pool.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createDb } from "../src/db/pool.js";
 import { tenants, users } from "../src/db/schema/index.js";
 import { withTenantTx } from "../src/db/tenant-tx.js";
-import { createLogger } from "../src/logging/logger.js";
+import { connectAsAdmin, connectAsApp, rejectionText, seedTenant } from "./helpers/db.js";
 
 const NO_CONTEXT = /tenant context is not set/;
 
-/** Drizzle wraps driver errors; the PostgreSQL message is on `cause`. */
-async function rejectionText(promise: Promise<unknown>): Promise<string> {
-  try {
-    await promise;
-  } catch (err) {
-    const cause = err instanceof Error ? err.cause : undefined;
-    return `${String(err)} | ${String(cause)}`;
-  }
-  throw new Error("expected the promise to reject");
-}
-
 describe("tenant isolation (real PostgreSQL, connected as watheeq_app)", () => {
   // A single connection forces every query onto the same pooled connection (criterion 4).
-  const appPool = createPool(inject("databaseUrl"), createLogger("silent"));
+  const appPool = connectAsApp();
   appPool.options.max = 1;
   const db = createDb(appPool);
-  const adminPool = new pg.Pool({ connectionString: inject("adminDatabaseUrl"), max: 1 });
+  const adminPool = connectAsAdmin(1);
 
   let alNoor = "";
   let alRashid = "";
 
   beforeAll(async () => {
     // Fixtures use the superuser connection: FORCE RLS applies to the owner role too, and tenants has no INSERT policy.
-    const seed = async (name: string, emails: string[]): Promise<string> => {
-      const client = await adminPool.connect();
-      try {
-        await client.query("begin");
-        const t = await client.query<{ id: string }>(
-          "insert into tenants (name) values ($1) returning id",
-          [name],
-        );
-        const id = t.rows[0]?.id ?? "";
-        await client.query("select set_config('app.tenant_id', $1, true)", [id]);
-        for (const email of emails) {
-          await client.query(
-            "insert into users (tenant_id, email, password_hash) values ($1, $2, 'x')",
-            [id, email],
-          );
-        }
-        await client.query("commit");
-        return id;
-      } catch (err) {
-        await client.query("rollback");
-        throw err;
-      } finally {
-        client.release();
-      }
-    };
+    const seed = async (name: string, emails: string[]): Promise<string> =>
+      (
+        await seedTenant(
+          adminPool,
+          name,
+          emails.map((email) => ({ email })),
+        )
+      ).id;
     alNoor = await seed("Al-Noor", ["sara@alnoor.test", "omar@alnoor.test"]);
     alRashid = await seed("Al-Rashid", ["khalid@alrashid.test"]);
   });

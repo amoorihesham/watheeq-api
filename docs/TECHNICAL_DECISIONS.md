@@ -1,9 +1,9 @@
 # Technical Decisions
 
-## Watheeq — Legal Affairs Management System
+## Watheeq - Legal Affairs Management System
 
-**Status:** Approved (2026-10-17). T1-T22 implemented in Phase 0 (`docs/specs/phase-0-foundations.md`), which holds the full design and the smaller decisions P0.1-P0.27.
-**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1–D15).
+**Status:** Approved (2026-10-17). T1-T22 implemented in Phase 0 (`docs/specs/phase-0-foundations.md`), which holds the full design and the smaller decisions P0.1-P0.27. T23 implemented in Phase 0.5 (`docs/specs/phase-0.5-refactor.md`), which holds the full design and the decisions 0.5-1 to 0.5-5.
+**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D15).
 
 ---
 
@@ -41,14 +41,15 @@
 | T20 | **Operators are created only by the `operator:create` CLI**, connecting as `watheeq_owner`; the runtime role cannot insert or delete operators (P0.16, P0.20) | A compromised application cannot mint accounts with access to every tenant | Bootstrap HTTP endpoint; seeded migration |
 | T21 | **Error responses are `{error:{code, requestId, details?}}` with no human-readable message** (P0.12) | Clients localize from codes (Arabic and English); no server wording can leak internals | Message field in responses |
 | T22 | **Toolchain:** Node 24 LTS (pinned through pnpm `devEngines`), pnpm, ESM, `tsx`, tsup, Biome, Vitest with Testcontainers, PostgreSQL 18, Drizzle with hand-written SQL for RLS, grants and functions; argon2id via `@node-rs/argon2` (P0.13, P0.19) | Owner's choices; tests need nothing started by hand; policies have one owner (hand-written SQL) | ESLint + Prettier; `tsc` or tsdown builds; Drizzle-managed policies |
+| T23 | **Layered feature modules:** routes → controller → service → repository, each written as a factory function and composed once in `app.ts`. Features live in `src/modules/<feature>/`, all Express middleware in `src/middleware/`, and infrastructure stays in `db`, `http`, `logging`, `config`, `audit`. Dependencies point downward only; services own transactions and throw `AppError`, and repositories take an executor (`Db \| Tx`) and never open transactions (0.5-1 to 0.5-3) | Business rules and transactions get a home that is neither HTTP nor SQL, so a service can combine repository calls and `audit(tx, ...)` in one transaction (T8, T15). A layer that would only pass calls through is omitted (health has no service) | Repositories opening their own transactions; classes with constructor injection; keeping features beside infrastructure |
 
 ---
 
 ### Deferred Technical Decisions
 
-- **Background job runner** — decided in Phase 7 (escalation checks).
+- **Background job runner** - decided in Phase 7 (escalation checks).
 - **Hosting provider in KSA**: decided at deployment; Docker keeps options open. The chosen managed PostgreSQL must offer version 18 and allow an administrator to create a `NOLOGIN BYPASSRLS` role (`watheeq_auth`, T13).
-- **Enterprise SSO, MFA for operators** — after the MVP.
+- **Enterprise SSO, MFA for operators** - after the MVP.
 
 ---
 

@@ -1,6 +1,6 @@
 # MVP Scope
 
-## Watheeq — Legal Affairs Management System
+## Watheeq - Legal Affairs Management System
 
 **Status:** Agreed scope baseline (last updated 2026-10-17). Nothing described here is implemented yet.
 **Relationship to other docs:** `PRODUCT_VISION.md` describes the long-term product. This document defines what the first release must do. When they differ, this document governs the MVP.
@@ -9,7 +9,7 @@
 
 ### 1. MVP Goal
 
-A platform operator can create a tenant and assign it a subscription plan; the tenant can configure its organization and legal department; and one legal request can be carried end-to-end from submission to completion or rejection — with SLA tracking, escalation, in-app notifications, and an auditable history.
+A platform operator can create a tenant and assign it a subscription plan; the tenant can configure its organization and legal department; and one legal request can be carried end-to-end from submission to completion or rejection - with SLA tracking, escalation, in-app notifications, and an auditable history.
 
 ---
 
@@ -66,7 +66,7 @@ Renewal by the operator returns the tenant to Active.
 
 #### 3.2 Organization Configuration (Tenant Admin)
 
-- **Organization structure:** a fixed three-level tree — Organization → Department → Section.
+- **Organization structure:** a fixed three-level tree - Organization → Department → Section.
   - Each department and section has exactly one manager.
   - Each user belongs to exactly one unit (department or section).
   - The Legal department is a department in this tree; its manager is the Head of Legal.
@@ -88,21 +88,21 @@ Renewal by the operator returns the tenant to Active.
 
 - **Service catalog:** services offered to requesters.
 - **Legal roles:** created under the rules in 3.3.
-- **Priority levels:** priority and SLA are a single concept — a named level with a deadline in working days (e.g. _High = 5 working days_).
+- **Priority levels:** priority and SLA are a single concept - a named level with a deadline in working days (e.g. _High = 5 working days_).
 - **Workflows:** ordered, linear stages. No branching or parallel stages.
-- **Escalation settings:** tenant-level, configurable thresholds used by rules R0–R2 (see 3.7), applied equally to all priorities.
+- **Escalation settings:** tenant-level, configurable thresholds used by rules R0-R2 (see 3.7), applied equally to all priorities.
 
 #### 3.5 Request Lifecycle
 
-1. **Submission** — the requester selects a service and submits a request, choosing a priority.
-2. **Review** — legal reviews the request and may adjust its priority.
-3. **Decision** — legal accepts or rejects the request.
+1. **Submission** - the requester selects a service and submits a request, choosing a priority.
+2. **Review** - legal reviews the request and may adjust its priority.
+3. **Decision** - legal accepts or rejects the request.
    - On acceptance, an overall request owner is assigned and the SLA clock starts.
    - On acceptance, priority is **locked**. Priority changes before acceptance are audited with a reason.
-4. **Execution** — the request moves through its workflow's ordered stages.
+4. **Execution** - the request moves through its workflow's ordered stages.
    - Legal may request additional information from the requester at any point during execution.
-   - If the requester does not respond, legal may close the request as _Rejected — no response_.
-5. **Closure** — the request ends as **Completed** or **Rejected**.
+   - If the requester does not respond, legal may close the request as _Rejected - no response_.
+5. **Closure** - the request ends as **Completed** or **Rejected**.
 
 Workflow-stage assignment does not transfer overall request ownership.
 
@@ -110,7 +110,7 @@ Workflow-stage assignment does not transfer overall request ownership.
 
 - The SLA clock starts at acceptance and runs continuously in working days until closure.
 - **The clock does not pause** while awaiting requester information.
-- The closure record states: outcome, SLA deadline, actual elapsed time, met or breached, breach duration, and time spent awaiting information (informational only — it does not affect the SLA result).
+- The closure record states: outcome, SLA deadline, actual elapsed time, met or breached, breach duration, and time spent awaiting information (informational only - it does not affect the SLA result).
 
 #### 3.7 Escalation
 
@@ -118,9 +118,9 @@ Escalation is notification-only in the MVP.
 
 | Rule                    | Fires when                                                              | Notifies                                      |
 | ----------------------- | ----------------------------------------------------------------------- | --------------------------------------------- |
-| **R0 – Review overdue** | A submitted request is not accepted or rejected within _N_ working days | Head of Legal                                 |
-| **R1 – At risk**        | _X%_ of the SLA has elapsed                                             | Request owner                                 |
-| **R2 – Breached**       | The SLA deadline passes before closure                                  | Owner, owner's section manager, Head of Legal |
+| **R0 - Review overdue** | A submitted request is not accepted or rejected within _N_ working days | Head of Legal                                 |
+| **R1 - At risk**        | _X%_ of the SLA has elapsed                                             | Request owner                                 |
+| **R2 - Breached**       | The SLA deadline passes before closure                                  | Owner, owner's section manager, Head of Legal |
 
 - _N_ and _X%_ are configurable per tenant.
 - Each rule fires **at most once per request**; firing is recorded.

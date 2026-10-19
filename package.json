@@ -24,6 +24,7 @@
     "start": "node dist/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "scripts/e2e/run.sh",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint --error-on-warnings .",
     "format": "biome format --write .",

@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from "../src/auth/shared/passwords.js";
+import {
+  DUMMY_PASSWORD_HASH,
+  hashPassword,
+  verifyPassword,
+} from "../src/modules/auth/shared/passwords.js";
 import {
   generateToken,
   hashesEqual,
   hashToken,
   isWellFormedToken,
-} from "../src/auth/shared/tokens.js";
+} from "../src/modules/auth/shared/tokens.js";
 
 describe("passwords", () => {
   it("hashes with argon2id at the OWASP minimum parameters and verifies", async () => {

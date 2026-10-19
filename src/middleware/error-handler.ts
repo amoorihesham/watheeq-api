@@ -1,5 +1,5 @@
 import type { ErrorRequestHandler } from "express";
-import { AppError, type ErrorDetail } from "./errors.js";
+import { AppError, type ErrorDetail } from "../http/errors.js";
 
 interface ErrorBody {
   error: { code: string; requestId: string; details?: ErrorDetail[] };

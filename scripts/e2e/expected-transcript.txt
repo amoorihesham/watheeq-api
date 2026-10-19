@@ -1,0 +1,470 @@
+## HTTP
+
+### 01-health
+HTTP/1.1 200 OK
+Connection: keep-alive
+Content-Length: 25
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"db": "up", "status": "ok"}
+
+### 02-not-found
+HTTP/1.1 404 Not Found
+Connection: keep-alive
+Content-Length: 81
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "NOT_FOUND", "requestId": "<uuid>"}}
+
+### 03-operator-login-wrong-password
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 04-operator-login-unknown-email
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 05-operator-login-invalid-body
+HTTP/1.1 400 Bad Request
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 179
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "VALIDATION_FAILED", "details": [{"code": "too_small", "path": "email"}, {"code": "invalid_type", "path": "password"}], "requestId": "<uuid>"}}
+
+### 06-operator-login-not-json
+HTTP/1.1 415 Unsupported Media Type
+Connection: keep-alive
+Content-Length: 94
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNSUPPORTED_MEDIA_TYPE", "requestId": "<uuid>"}}
+
+### 07-operator-login-malformed-json
+HTTP/1.1 400 Bad Request
+Connection: keep-alive
+Content-Length: 89
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "VALIDATION_FAILED", "requestId": "<uuid>"}}
+
+### 08-operator-session-no-cookie
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 87
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNAUTHENTICATED", "requestId": "<uuid>"}}
+
+### 09-operator-session-garbage-cookie
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 87
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNAUTHENTICATED", "requestId": "<uuid>"}}
+
+### 10-operator-login-ok
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 142
+Content-Type: application/json; charset=utf-8
+Set-Cookie: __Host-wq_operator=<token>; Path=/; HttpOnly; Secure; SameSite=Lax
+X-Request-Id: <uuid>
+body: {"csrfToken": "<token>", "operator": {"email": "omar@watheeq.sa", "id": "<uuid>"}}
+
+### 11-operator-session-ok
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 142
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"csrfToken": "<token>", "operator": {"email": "omar@watheeq.sa", "id": "<uuid>"}}
+
+### 12-operator-logout-no-csrf
+HTTP/1.1 403 Forbidden
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 83
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "CSRF_FAILED", "requestId": "<uuid>"}}
+
+### 13-operator-logout-wrong-csrf
+HTTP/1.1 403 Forbidden
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 83
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "CSRF_FAILED", "requestId": "<uuid>"}}
+
+### 14-operator-logout-ok
+HTTP/1.1 204 No Content
+Cache-Control: no-store
+Connection: keep-alive
+Set-Cookie: __Host-wq_operator=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax
+X-Request-Id: <uuid>
+
+### 15-operator-session-after-logout
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 87
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNAUTHENTICATED", "requestId": "<uuid>"}}
+
+### 16-operator-login-again
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 142
+Content-Type: application/json; charset=utf-8
+Set-Cookie: __Host-wq_operator=<token>; Path=/; HttpOnly; Secure; SameSite=Lax
+X-Request-Id: <uuid>
+body: {"csrfToken": "<token>", "operator": {"email": "omar@watheeq.sa", "id": "<uuid>"}}
+
+### 17-tenant-login-wrong-password
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 18-tenant-login-unknown-email
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 19-tenant-login-invalid-body
+HTTP/1.1 400 Bad Request
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 179
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "VALIDATION_FAILED", "details": [{"code": "too_small", "path": "email"}, {"code": "invalid_type", "path": "password"}], "requestId": "<uuid>"}}
+
+### 20-tenant-login-not-json
+HTTP/1.1 415 Unsupported Media Type
+Connection: keep-alive
+Content-Length: 94
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNSUPPORTED_MEDIA_TYPE", "requestId": "<uuid>"}}
+
+### 21-tenant-login-malformed-json
+HTTP/1.1 400 Bad Request
+Connection: keep-alive
+Content-Length: 89
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "VALIDATION_FAILED", "requestId": "<uuid>"}}
+
+### 22-tenant-session-no-cookie
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 87
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNAUTHENTICATED", "requestId": "<uuid>"}}
+
+### 23-tenant-session-garbage-cookie
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 87
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNAUTHENTICATED", "requestId": "<uuid>"}}
+
+### 24-tenant-login-ok
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 189
+Content-Type: application/json; charset=utf-8
+Set-Cookie: __Host-wq_session=<token>; Path=/; HttpOnly; Secure; SameSite=Lax
+X-Request-Id: <uuid>
+body: {"csrfToken": "<token>", "user": {"email": "sara@alnoor.test", "id": "<uuid>", "tenantId": "<uuid>"}}
+
+### 25-tenant-session-ok
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 189
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"csrfToken": "<token>", "user": {"email": "sara@alnoor.test", "id": "<uuid>", "tenantId": "<uuid>"}}
+
+### 26-tenant-logout-no-csrf
+HTTP/1.1 403 Forbidden
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 83
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "CSRF_FAILED", "requestId": "<uuid>"}}
+
+### 27-tenant-logout-wrong-csrf
+HTTP/1.1 403 Forbidden
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 83
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "CSRF_FAILED", "requestId": "<uuid>"}}
+
+### 28-tenant-logout-ok
+HTTP/1.1 204 No Content
+Cache-Control: no-store
+Connection: keep-alive
+Set-Cookie: __Host-wq_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax
+X-Request-Id: <uuid>
+
+### 29-tenant-session-after-logout
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 87
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNAUTHENTICATED", "requestId": "<uuid>"}}
+
+### 30-tenant-login-again
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 189
+Content-Type: application/json; charset=utf-8
+Set-Cookie: __Host-wq_session=<token>; Path=/; HttpOnly; Secure; SameSite=Lax
+X-Request-Id: <uuid>
+body: {"csrfToken": "<token>", "user": {"email": "sara@alnoor.test", "id": "<uuid>", "tenantId": "<uuid>"}}
+
+### 31-cross-tenant-cookie-on-operator
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 87
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNAUTHENTICATED", "requestId": "<uuid>"}}
+
+### 32-cross-operator-cookie-on-tenant
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 87
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNAUTHENTICATED", "requestId": "<uuid>"}}
+
+### 33-operator-cookie-renamed
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 87
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "UNAUTHENTICATED", "requestId": "<uuid>"}}
+
+### 34-tenant-inactive
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 35-tenant-lock-wrong-1
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 36-tenant-lock-wrong-2
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 37-tenant-lock-wrong-3
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 38-tenant-lock-wrong-4
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 39-tenant-lock-wrong-5
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 91
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "INVALID_CREDENTIALS", "requestId": "<uuid>"}}
+
+### 40-tenant-locked-right-password
+HTTP/1.1 429 Too Many Requests
+Cache-Control: no-store
+Connection: keep-alive
+Content-Length: 89
+Content-Type: application/json; charset=utf-8
+X-Request-Id: <uuid>
+body: {"error": {"code": "TOO_MANY_ATTEMPTS", "requestId": "<uuid>"}}
+
+## CLI
+
+### cli-create.code
+exit=0
+
+### cli-create.err
+
+
+### cli-create.out
+operator created: omar@watheeq.sa (<uuid>)
+
+### cli-duplicate.code
+exit=1
+
+### cli-duplicate.err
+An operator with email omar@watheeq.sa already exists.
+
+### cli-duplicate.out
+
+
+### cli-invalid.code
+exit=1
+
+### cli-invalid.err
+Invalid email and password. The password must be 12-256 characters.
+
+### cli-invalid.out
+
+
+### cli-migrate.txt
+migrations applied
+
+### cli-usage.code
+exit=1
+
+### cli-usage.err
+Usage: pnpm operator:create <email>
+Reads the password from OPERATOR_PASSWORD, or prompts for it. Never pass it as an argument.
+Requires MIGRATION_DATABASE_URL (watheeq_owner).
+
+### cli-usage.out
+
+
+## DB state
+operators|omar@watheeq.sa|0|f|t
+users|lock@alnoor.test|0|t|t
+users|off@alnoor.test|0|f|f
+users|sara@alnoor.test|0|f|t
+operator_sessions|2|1
+user_sessions|2|1
+login_ip_throttle|127.0.0.1|10
+audit_log|0
+
+## Server log
+{"env": "development", "level": 30, "msg": "listening", "port": 3999}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/health"}, "reqId": "<uuid>", "res": {"headers": {"content-length": "25", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 200}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/health"}, "reqId": "<uuid>", "res": {"headers": {"content-length": "25", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 200}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/no-such-route"}, "reqId": "<uuid>", "res": {"headers": {"content-length": "81", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 404}}
+{"level": 40, "msg": "operator login failed", "reason": "wrong_password", "reqId": "<uuid>", "subjectId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "55", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 40, "msg": "operator login failed", "reason": "unknown_email", "reqId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "59", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "12", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "179", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 400}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "7", "content-type": "application/x-www-form-urlencoded", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"content-length": "94", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 415}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "9", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"content-length": "89", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 400}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "87", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "87", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "operator logged in", "operatorId": "<uuid>", "reqId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "67", "content-type": "application/json", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "142", "content-type": "application/json; charset=utf-8", "set-cookie": "[Redacted]", "x-request-id": "<uuid>"}, "statusCode": 200}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "142", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 200}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/logout"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "83", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 403}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0", "x-csrf-token": "[Redacted]"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/logout"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "83", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 403}}
+{"level": 30, "msg": "operator logged out", "operatorId": "<uuid>", "reqId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0", "x-csrf-token": "[Redacted]"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/logout"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "set-cookie": "[Redacted]", "x-request-id": "<uuid>"}, "statusCode": 204}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "87", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "operator logged in", "operatorId": "<uuid>", "reqId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "67", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "142", "content-type": "application/json; charset=utf-8", "set-cookie": "[Redacted]", "x-request-id": "<uuid>"}, "statusCode": 200}}
+{"level": 40, "msg": "tenant login failed", "reason": "wrong_password", "reqId": "<uuid>", "subjectId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "56", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 40, "msg": "tenant login failed", "reason": "unknown_email", "reqId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "59", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "12", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "179", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 400}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "7", "content-type": "application/x-www-form-urlencoded", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"content-length": "94", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 415}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "9", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"content-length": "89", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 400}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "87", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "87", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "tenant user logged in", "reqId": "<uuid>", "tenantId": "<uuid>", "userId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "68", "content-type": "application/json", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "189", "content-type": "application/json; charset=utf-8", "set-cookie": "[Redacted]", "x-request-id": "<uuid>"}, "statusCode": 200}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "189", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 200}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/logout"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "83", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 403}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0", "x-csrf-token": "[Redacted]"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/logout"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "83", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 403}}
+{"level": 30, "msg": "tenant user logged out", "reqId": "<uuid>", "tenantId": "<uuid>", "userId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0", "x-csrf-token": "[Redacted]"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/logout"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "set-cookie": "[Redacted]", "x-request-id": "<uuid>"}, "statusCode": 204}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "87", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "tenant user logged in", "reqId": "<uuid>", "tenantId": "<uuid>", "userId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "68", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "189", "content-type": "application/json; charset=utf-8", "set-cookie": "[Redacted]", "x-request-id": "<uuid>"}, "statusCode": 200}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "87", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "87", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "cookie": "[Redacted]", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "GET", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/operator/auth/session"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "87", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 40, "msg": "tenant login failed", "reason": "inactive", "reqId": "<uuid>", "subjectId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "67", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 40, "msg": "tenant login failed", "reason": "wrong_password", "reqId": "<uuid>", "subjectId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "56", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 40, "msg": "tenant login failed", "reason": "wrong_password", "reqId": "<uuid>", "subjectId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "56", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 40, "msg": "tenant login failed", "reason": "wrong_password", "reqId": "<uuid>", "subjectId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "56", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 40, "msg": "tenant login failed", "reason": "wrong_password", "reqId": "<uuid>", "subjectId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "56", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 40, "msg": "tenant login failed", "reason": "wrong_password", "reqId": "<uuid>", "subjectId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "56", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "91", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 401}}
+{"level": 40, "msg": "tenant login throttled", "reason": "account_locked", "reqId": "<uuid>", "subjectId": "<uuid>"}
+{"level": 30, "msg": "request completed", "req": {"headers": {"accept": "*/*", "content-length": "68", "content-type": "application/json", "host": "127.0.0.1:3999", "user-agent": "curl/8.22.0"}, "id": "<uuid>", "method": "POST", "params": {}, "query": {}, "remoteAddress": "::ffff:127.0.0.1", "url": "/auth/login"}, "reqId": "<uuid>", "res": {"headers": {"cache-control": "no-store", "content-length": "89", "content-type": "application/json; charset=utf-8", "x-request-id": "<uuid>"}, "statusCode": 429}}
+{"level": 30, "msg": "shutting down", "signal": "SIGTERM"}
