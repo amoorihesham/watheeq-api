@@ -6,6 +6,7 @@ import { LAST_SEEN_RESOLUTION_MS } from "../../../middleware/session-auth.js";
 import { csrfTokenFor } from "../shared/csrf.js";
 import type { LoginThrottleSettings } from "../shared/ip-throttle.js";
 import { checkCredentials } from "../shared/login.js";
+import type { LoginRequest } from "../shared/login-request.js";
 import { hashPassword } from "../shared/passwords.js";
 import { generateToken, hashToken } from "../shared/tokens.js";
 import { createOperatorRepository, type OperatorRepository } from "./operator.repository.js";
@@ -18,16 +19,6 @@ export const MAX_PASSWORD_LENGTH = 256;
 export interface OperatorSessionLifetimes {
   idleTimeoutSeconds: number;
   absoluteLifetimeSeconds: number;
-}
-
-export interface OperatorLoginInput {
-  /** Already normalized (trimmed, lower-cased). */
-  email: string;
-  password: string;
-  ip: string;
-  userAgent: string | undefined;
-  /** Hash of the session cookie the browser presented, if it was well formed. */
-  presentedTokenHash: Buffer | undefined;
 }
 
 export interface OperatorAuthServiceDeps {
@@ -45,7 +36,7 @@ export function createOperatorAuthService({
 }: OperatorAuthServiceDeps) {
   return {
     /** Checks the credentials and, on success, swaps the presented session for a new one. Throws `AppError` otherwise. */
-    async login(input: OperatorLoginInput, log: Logger) {
+    async login(input: LoginRequest, log: Logger) {
       const operator = await checkCredentials(db, throttle, {
         realm: "operator",
         ip: input.ip,
