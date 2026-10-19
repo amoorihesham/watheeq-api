@@ -2,12 +2,17 @@ import { createHash } from "node:crypto";
 import pg from "pg";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
-import { buildApp } from "../src/app.js";
-import { OPERATOR_COOKIE } from "../src/auth/operator/operator-auth.routes.js";
-import { hashPassword } from "../src/auth/shared/passwords.js";
-import { TENANT_COOKIE } from "../src/auth/tenant/tenant-auth.routes.js";
-import { createPool } from "../src/db/pool.js";
-import { testConfig } from "./helpers/config.js";
+import { testApp } from "./helpers/app.js";
+import {
+  hashPassword,
+  type LoginResult,
+  OPERATOR_COOKIE,
+  realmClient,
+  TENANT_COOKIE,
+  TENANT_REALM,
+  userSessionRow,
+} from "./helpers/auth.js";
+import { connectAsAdmin, connectAsApp, seedTenant, seedUser } from "./helpers/db.js";
 import { captureLogs } from "./helpers/log-capture.js";
 
 const SARA_EMAIL = "sara.auth@alnoor.test";
@@ -16,65 +21,33 @@ const KHALID_EMAIL = "khalid.auth@alrashid.test";
 const KHALID_PASSWORD = "khalid correct horse battery";
 
 const capture = captureLogs();
-const pool = createPool(inject("databaseUrl"), capture.logger);
-const admin = new pg.Pool({ connectionString: inject("adminDatabaseUrl"), max: 2 });
-const app = buildApp({ pool, logger: capture.logger, config: testConfig() });
+const pool = connectAsApp(capture.logger);
+const admin = connectAsAdmin();
+const app = testApp(pool, capture.logger);
 
-interface LoginResult {
-  status: number;
-  body: { error: { code: string; requestId: string }; csrfToken: string; user: unknown };
-  token: string;
-  csrf: string;
-  setCookie: string;
-}
-
-async function login(email: string, password: string, cookie?: string): Promise<LoginResult> {
-  const req = request(app).post("/auth/login");
-  if (cookie) {
-    req.set("Cookie", `${TENANT_COOKIE}=${cookie}`);
-  }
-  const res = await req.send({ email, password });
-  const setCookie = ((res.headers["set-cookie"] as unknown as string[] | undefined) ?? [])[0] ?? "";
-  const token = new RegExp(`^${TENANT_COOKIE}=([^;]*)`).exec(setCookie)?.[1] ?? "";
-  return { status: res.status, body: res.body, token, csrf: res.body.csrfToken, setCookie };
-}
-
-const authed = (token: string) => `${TENANT_COOKIE}=${token}`;
-
-async function sessionRow(token: string) {
-  const { rows } = await admin.query(
-    `SELECT id, encode(token_hash, 'hex') AS token_hash, tenant_id, last_seen_at, revoked_at
-       FROM user_sessions WHERE token_hash = sha256($1::bytea)`,
-    [Buffer.from(token)],
-  );
-  return rows[0];
-}
+const { login, authed } = realmClient(app, TENANT_REALM);
+const sessionRow = (token: string) => userSessionRow(admin, token);
 
 let alNoor = "";
 let alRashid = "";
 
-/** Fixtures go in through the superuser: there is no tenant or user creation API yet, and FORCE RLS applies to the owner role. */
-async function seedTenant(name: string, users: [string, string][]): Promise<string> {
-  const { rows } = await admin.query("INSERT INTO tenants (name) VALUES ($1) RETURNING id", [name]);
-  const id = rows[0].id as string;
-  for (const [email, password] of users) {
-    await admin.query("INSERT INTO users (tenant_id, email, password_hash) VALUES ($1, $2, $3)", [
-      id,
-      email,
-      await hashPassword(password),
-    ]);
-  }
-  return id;
-}
-
 beforeAll(async () => {
-  alNoor = await seedTenant("Al-Noor", [[SARA_EMAIL, SARA_PASSWORD]]);
-  alRashid = await seedTenant("Al-Rashid", [[KHALID_EMAIL, KHALID_PASSWORD]]);
+  alNoor = (
+    await seedTenant(admin, "Al-Noor", [
+      { email: SARA_EMAIL, passwordHash: await hashPassword(SARA_PASSWORD) },
+    ])
+  ).id;
+  alRashid = (
+    await seedTenant(admin, "Al-Rashid", [
+      { email: KHALID_EMAIL, passwordHash: await hashPassword(KHALID_PASSWORD) },
+    ])
+  ).id;
   const hash = await hashPassword("some other password 123");
-  await admin.query(
-    "INSERT INTO users (tenant_id, email, password_hash, is_active) VALUES ($2, 'inactive@alnoor.test', $1, false)",
-    [hash, alNoor],
-  );
+  await seedUser(admin, alNoor, {
+    email: "inactive@alnoor.test",
+    passwordHash: hash,
+    isActive: false,
+  });
 });
 
 afterAll(async () => {

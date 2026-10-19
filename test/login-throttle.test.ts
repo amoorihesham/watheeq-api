@@ -1,24 +1,19 @@
-import pg from "pg";
+import type express from "express";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
-import { buildApp } from "../src/app.js";
-import { hashPassword } from "../src/auth/shared/passwords.js";
-import { createPool } from "../src/db/pool.js";
-import { testConfig } from "./helpers/config.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { testApp } from "./helpers/app.js";
+import { hashPassword } from "./helpers/auth.js";
+import { connectAsAdmin, connectAsApp, seedOperator, seedTenant, seedUser } from "./helpers/db.js";
 import { captureLogs } from "./helpers/log-capture.js";
 
 const PASSWORD = "throttle correct horse battery";
 
 const capture = captureLogs();
-const pool = createPool(inject("databaseUrl"), capture.logger);
-const admin = new pg.Pool({ connectionString: inject("adminDatabaseUrl"), max: 2 });
+const pool = connectAsApp(capture.logger);
+const admin = connectAsAdmin();
 // The test client plays the reverse proxy: with TRUST_PROXY=1 the client IP is the last X-Forwarded-For entry.
-const proxied = buildApp({
-  pool,
-  logger: capture.logger,
-  config: testConfig({ TRUST_PROXY: "1" }),
-});
-const direct = buildApp({ pool, logger: capture.logger, config: testConfig() });
+const proxied = testApp(pool, capture.logger, { config: { TRUST_PROXY: "1" } });
+const direct = testApp(pool, capture.logger);
 
 let tenantId = "";
 let hash = "";
@@ -27,10 +22,7 @@ let ipCounter = 0;
 
 beforeAll(async () => {
   hash = await hashPassword(PASSWORD);
-  const { rows } = await admin.query(
-    "INSERT INTO tenants (name) VALUES ('Throttle Co') RETURNING id",
-  );
-  tenantId = rows[0].id;
+  tenantId = (await seedTenant(admin, "Throttle Co")).id;
 });
 
 afterAll(async () => {
@@ -57,11 +49,7 @@ const realms: Realm[] = [
     loginPath: "/auth/login",
     table: "users",
     createAccount: async (email) => {
-      await admin.query("INSERT INTO users (tenant_id, email, password_hash) VALUES ($1, $2, $3)", [
-        tenantId,
-        email,
-        hash,
-      ]);
+      await seedUser(admin, tenantId, { email, passwordHash: hash });
     },
   },
   {
@@ -69,10 +57,7 @@ const realms: Realm[] = [
     loginPath: "/operator/auth/login",
     table: "operators",
     createAccount: async (email) => {
-      await admin.query("INSERT INTO operators (email, password_hash) VALUES ($1, $2)", [
-        email,
-        hash,
-      ]);
+      await seedOperator(admin, { email, passwordHash: hash });
     },
   },
 ];
@@ -89,7 +74,7 @@ function attempt(
   email: string,
   password: string,
   forwardedFor: string,
-  app: ReturnType<typeof buildApp> = proxied,
+  app: express.Express = proxied,
 ) {
   return request(app)
     .post(realm.loginPath)

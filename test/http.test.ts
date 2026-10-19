@@ -1,15 +1,14 @@
 import express from "express";
 import request from "supertest";
-import { afterAll, describe, expect, inject, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { buildApp } from "../src/app.js";
-import { createPool } from "../src/db/pool.js";
 import { validate } from "../src/http/validate.js";
-import { testConfig } from "./helpers/config.js";
+import { testApp } from "./helpers/app.js";
+import { connectAsApp } from "./helpers/db.js";
 import { captureLogs } from "./helpers/log-capture.js";
 
 const capture = captureLogs();
-const pool = createPool(inject("databaseUrl"), capture.logger);
+const pool = connectAsApp(capture.logger);
 
 // Test-only routes; production code ships no debug routes.
 const testRouter = express.Router();
@@ -28,7 +27,7 @@ testRouter.get("/async-boom", async () => {
   throw new Error("async secret detail");
 });
 
-const app = buildApp({ pool, logger: capture.logger, config: testConfig(), routers: [testRouter] });
+const app = testApp(pool, capture.logger, { routers: [testRouter] });
 
 afterAll(async () => {
   await pool.end();
@@ -205,9 +204,7 @@ describe("request logging", () => {
       res.setHeader("Set-Cookie", "sid=supersecretsession; HttpOnly");
       res.json({});
     });
-    await request(
-      buildApp({ pool, logger: local.logger, config: testConfig(), routers: [cookieRouter] }),
-    ).get("/cookie");
+    await request(testApp(pool, local.logger, { routers: [cookieRouter] })).get("/cookie");
     const text = JSON.stringify(local.lines());
     expect(text).toContain("[Redacted]");
     expect(text).not.toContain("supersecretsession");

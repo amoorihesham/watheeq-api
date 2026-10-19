@@ -4,11 +4,15 @@ import { promisify } from "node:util";
 import pg from "pg";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
-import { buildApp } from "../src/app.js";
-import { OPERATOR_COOKIE } from "../src/auth/operator/operator-auth.routes.js";
-import { hashPassword } from "../src/auth/shared/passwords.js";
-import { createPool } from "../src/db/pool.js";
-import { testConfig } from "./helpers/config.js";
+import { testApp } from "./helpers/app.js";
+import {
+  hashPassword,
+  type LoginResult,
+  OPERATOR_REALM,
+  operatorSessionRow,
+  realmClient,
+} from "./helpers/auth.js";
+import { connectAsAdmin, connectAsApp, seedOperator } from "./helpers/db.js";
 import { captureLogs } from "./helpers/log-capture.js";
 
 const run = promisify(execFile);
@@ -17,9 +21,9 @@ const OMAR_EMAIL = "omar@watheeq.sa";
 const OMAR_PASSWORD = "correct horse battery staple";
 
 const capture = captureLogs();
-const pool = createPool(inject("databaseUrl"), capture.logger);
-const admin = new pg.Pool({ connectionString: inject("adminDatabaseUrl"), max: 2 });
-const app = buildApp({ pool, logger: capture.logger, config: testConfig() });
+const pool = connectAsApp(capture.logger);
+const admin = connectAsAdmin();
+const app = testApp(pool, capture.logger);
 
 async function runCli(
   args: string[],
@@ -44,35 +48,8 @@ async function runCli(
   }
 }
 
-interface LoginResult {
-  status: number;
-  body: { error: { code: string; requestId: string }; csrfToken: string; operator: unknown };
-  token: string;
-  csrf: string;
-  setCookie: string;
-}
-
-async function login(email: string, password: string, cookie?: string): Promise<LoginResult> {
-  const req = request(app).post("/operator/auth/login");
-  if (cookie) {
-    req.set("Cookie", `${OPERATOR_COOKIE}=${cookie}`);
-  }
-  const res = await req.send({ email, password });
-  const setCookie = ((res.headers["set-cookie"] as unknown as string[] | undefined) ?? [])[0] ?? "";
-  const token = new RegExp(`^${OPERATOR_COOKIE}=([^;]*)`).exec(setCookie)?.[1] ?? "";
-  return { status: res.status, body: res.body, token, csrf: res.body.csrfToken, setCookie };
-}
-
-const authed = (token: string) => `${OPERATOR_COOKIE}=${token}`;
-
-async function sessionRow(token: string) {
-  const { rows } = await admin.query(
-    `SELECT id, encode(token_hash, 'hex') AS token_hash, last_seen_at, revoked_at, xmin::text AS xmin
-       FROM operator_sessions WHERE token_hash = sha256($1::bytea)`,
-    [Buffer.from(token)],
-  );
-  return rows[0];
-}
+const { login, authed } = realmClient(app, OPERATOR_REALM);
+const sessionRow = (token: string) => operatorSessionRow(admin, token);
 
 beforeAll(async () => {
   // Criterion 1: Omar is created by the real CLI, not by a test fixture.
@@ -80,10 +57,7 @@ beforeAll(async () => {
   expect(created.stderr).toBe("");
   expect(created.code).toBe(0);
   const hash = await hashPassword("some other password 123");
-  await admin.query(
-    "INSERT INTO operators (email, password_hash, is_active) VALUES ('inactive@watheeq.sa', $1, false)",
-    [hash],
-  );
+  await seedOperator(admin, { email: "inactive@watheeq.sa", passwordHash: hash, isActive: false });
 });
 
 afterAll(async () => {
