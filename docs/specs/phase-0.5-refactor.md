@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                          |
 | ---------------------- | -------------------------------------------------------------- |
-| **Status**             | In Implementation                                              |
+| **Status**             | Implemented                                                    |
 | **Approved by / date** | _Amr - 19/10/2026 - 18:06 pm_                                  |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`)                             |
 | **Related decisions**  | Technical T3, T8, T9, T15, T21; Phase 0 module structure (4.4) |
@@ -174,7 +174,8 @@ Steps run in order, one at a time, with a review stop after each.
 ## 8. Test Plan
 
 - **Existing integration suite (real PostgreSQL):** the main proof for R0.5.1-R0.5.4 and R0.5.6. It runs unchanged in assertions after every step.
-- **Test inventory:** `vitest list` before and after every step, to prove no test was lost or renamed (R0.5.4).
+- **Test inventory:** the full names of every test (file, describe, and test) from the Vitest JSON reporter, before and after every step, to prove no test was lost or renamed (R0.5.4).
+  `vitest list` was not used because it does not expand the per-realm test loops (140 of 152 tests).
 - **E2E transcript:** the baseline from step 0.5.1, replayed after steps 0.5.2-0.5.5 against a running server, compared on status codes, header names and flags, and body shapes (R0.5.1).
 - **Review:** layering rules (R0.5.5) and the atomic-group list (R0.5.2) are checked by reading the diff in each step.
 
@@ -207,3 +208,6 @@ Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented.
 | ---------- | -------------------------------------------------------- | ------------------------------------- |
 | 2026-10-17 | Initial draft                                            | Refactor before Phase 1, as requested |
 | 2026-10-19 | Open questions 1-6 resolved with the recommended options | Owner accepted the draft              |
+| 2026-10-19 | Test inventory taken from the Vitest JSON reporter instead of `vitest list` | `vitest list` undercounts parameterized tests |
+| 2026-10-19 | After review: the CLI owns the owner-role pool and passes a `Db` to `createOperator`; `ResolvedSession` and `LAST_SEEN_RESOLUTION_MS` moved to `modules/auth/shared/session.ts` | Services do not open connections, and repositories do not depend on `middleware/` |
+| 2026-10-19 | Phase implemented: every step verified against the test inventory, the assertion diff, and the E2E transcript | Decisions promoted to T23 |
