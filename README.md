@@ -192,7 +192,6 @@ Three PostgreSQL roles are used, so the application cannot bypass Row-Level Secu
 | `pnpm build`       | Builds `dist/` with tsup.                                         |
 | `pnpm start`       | Runs the build output (`node dist/main.js`).                      |
 | `pnpm test`        | Runs Vitest. Testcontainers starts PostgreSQL 18 by itself.       |
-| `pnpm e2e`         | Runs the real server and CLI against a throwaway PostgreSQL 18 container and compares the normalized exchanges, database state, and logs with `scripts/e2e/expected-transcript.txt`. Needs Docker and Python 3. `pnpm e2e --update` rewrites the expected transcript after an intended behavior change. |
 | `pnpm typecheck`   | Runs `tsc --noEmit`.                                              |
 | `pnpm lint`        | Runs the Biome linter, failing on warnings.                       |
 | `pnpm check`       | Runs Biome lint, format, and import checks without writing.       |
