@@ -1,9 +1,9 @@
 # Technical Decisions
 
-## Watheeq — Legal Affairs Management System
+## Watheeq - Legal Affairs Management System
 
 **Status:** Approved (2026-10-17). T1-T22 implemented in Phase 0 (`docs/specs/phase-0-foundations.md`), which holds the full design and the smaller decisions P0.1-P0.27. T23 implemented in Phase 0.5 (`docs/specs/phase-0.5-refactor.md`), which holds the full design and the decisions 0.5-1 to 0.5-5.
-**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1–D15).
+**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D15).
 
 ---
 
@@ -47,9 +47,9 @@
 
 ### Deferred Technical Decisions
 
-- **Background job runner** — decided in Phase 7 (escalation checks).
+- **Background job runner** - decided in Phase 7 (escalation checks).
 - **Hosting provider in KSA**: decided at deployment; Docker keeps options open. The chosen managed PostgreSQL must offer version 18 and allow an administrator to create a `NOLOGIN BYPASSRLS` role (`watheeq_auth`, T13).
-- **Enterprise SSO, MFA for operators** — after the MVP.
+- **Enterprise SSO, MFA for operators** - after the MVP.
 
 ---
 

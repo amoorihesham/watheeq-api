@@ -1,6 +1,6 @@
 # Roadmap and Status
 
-## Watheeq — Legal Affairs Management System
+## Watheeq - Legal Affairs Management System
 
 **Last updated:** 2026-10-19
 
@@ -22,7 +22,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 
 | #   | Phase                           | Delivers                                                                          | Depends on | Status      |
 | --- | ------------------------------- | --------------------------------------------------------------------------------- | ---------- | ----------- |
-| 0   | Technical foundations           | Skeleton, cross-cutting basics, tenant isolation, audit, authentication           | —          | Implemented |
+| 0   | Technical foundations           | Skeleton, cross-cutting basics, tenant isolation, audit, authentication           | -          | Implemented |
 | 0.5 | Layered architecture refactor   | Routes → controller → service → repository, central middleware, shared test helpers | 0          | In Implementation |
 | 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user-limit enforcement | 0.5        | Not started |
 | 2   | Org structure & users           | Department/section tree, managers, membership                                     | 1          | Not started |
@@ -30,7 +30,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 4   | Working calendar                | Working days, holidays, working-day deadline calculation                          | 1          | Not started |
 | 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                  | 3, 4       | Not started |
 | 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure                | 5          | Not started |
-| 7   | Escalation & notifications      | Background deadline checks, R0–R2, in-app notifications                           | 6          | Not started |
+| 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                           | 6          | Not started |
 
 Audit is cross-cutting: built in Phase 0, used by every later phase.
 
