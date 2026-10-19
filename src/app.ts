@@ -17,6 +17,8 @@ import { createTenantRepository } from "./modules/auth/tenant/tenant.repository.
 import { createTenantAuthController } from "./modules/auth/tenant/tenant-auth.controller.js";
 import { tenantAuthRouter } from "./modules/auth/tenant/tenant-auth.routes.js";
 import { createTenantAuthService } from "./modules/auth/tenant/tenant-auth.service.js";
+import { createHealthController } from "./modules/health/health.controller.js";
+import { createHealthRepository } from "./modules/health/health.repository.js";
 import { healthRouter } from "./modules/health/health.routes.js";
 
 export interface AppDeps {
@@ -27,6 +29,7 @@ export interface AppDeps {
   routers?: express.Router[];
 }
 
+/** The composition root: builds repositories, then services, then middleware and controllers, then routes (T23). */
 export function buildApp(deps: AppDeps): express.Express {
   const app = express();
   app.disable("x-powered-by");
@@ -34,7 +37,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.set("trust proxy", deps.config.TRUST_PROXY);
   app.use(requestLogger(deps.logger));
   // /health is mounted before body parsing and any future authentication.
-  app.use(healthRouter(deps.pool));
+  app.use(healthRouter(createHealthController({ repo: createHealthRepository(deps.pool) })));
   app.use(jsonBody());
   const db = createDb(deps.pool);
   const throttle = {
