@@ -9,7 +9,10 @@ import { notFoundHandler } from "./middleware/not-found.js";
 import { requestLogger } from "./middleware/request-logger.js";
 import { createRequireOperator } from "./middleware/require-operator.js";
 import { createRequireUser } from "./middleware/require-user.js";
+import { createOperatorRepository } from "./modules/auth/operator/operator.repository.js";
+import { createOperatorAuthController } from "./modules/auth/operator/operator-auth.controller.js";
 import { operatorAuthRouter } from "./modules/auth/operator/operator-auth.routes.js";
+import { createOperatorAuthService } from "./modules/auth/operator/operator-auth.service.js";
 import { tenantAuthRouter } from "./modules/auth/tenant/tenant-auth.routes.js";
 import { healthRouter } from "./modules/health/health.routes.js";
 
@@ -37,17 +40,27 @@ export function buildApp(deps: AppDeps): express.Express {
     ipMaxFailures: deps.config.LOGIN_IP_MAX_FAILURES,
     ipWindowSeconds: deps.config.LOGIN_IP_WINDOW_SECONDS,
   };
-  const operatorLifetimes = {
-    idleTimeoutSeconds: deps.config.OPERATOR_SESSION_IDLE_SECONDS,
-    absoluteLifetimeSeconds: deps.config.OPERATOR_SESSION_ABSOLUTE_SECONDS,
-  };
   const tenantLifetimes = {
     idleTimeoutSeconds: deps.config.TENANT_SESSION_IDLE_SECONDS,
     absoluteLifetimeSeconds: deps.config.TENANT_SESSION_ABSOLUTE_SECONDS,
   };
-  const requireOperator = createRequireOperator(db, operatorLifetimes);
+  const operatorAuthService = createOperatorAuthService({
+    db,
+    repo: createOperatorRepository(),
+    lifetimes: {
+      idleTimeoutSeconds: deps.config.OPERATOR_SESSION_IDLE_SECONDS,
+      absoluteLifetimeSeconds: deps.config.OPERATOR_SESSION_ABSOLUTE_SECONDS,
+    },
+    throttle,
+  });
+  const requireOperator = createRequireOperator(operatorAuthService);
   const requireUser = createRequireUser(db, tenantLifetimes);
-  app.use(operatorAuthRouter(db, operatorLifetimes, throttle, requireOperator));
+  app.use(
+    operatorAuthRouter(
+      createOperatorAuthController({ service: operatorAuthService }),
+      requireOperator,
+    ),
+  );
   app.use(tenantAuthRouter(db, tenantLifetimes, throttle, requireUser));
   for (const router of deps.routers ?? []) {
     app.use(router);
