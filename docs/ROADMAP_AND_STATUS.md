@@ -2,7 +2,7 @@
 
 ## Watheeq — Legal Affairs Management System
 
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-19
 
 ### Current Status
 
@@ -11,7 +11,8 @@
   Delivered: skeleton, validated config, standard errors, request IDs and logging, tenant isolation with forced RLS, append-only audit, operator and tenant authentication with sessions, CSRF, and login throttling.
 - **Known open items:** the hosting provider must support PostgreSQL 18 and the `watheeq_auth` role (`TECHNICAL_DECISIONS.md`, deferred decisions).
   Phase 1 must decide how tenants are created, since the runtime role can only read `tenants`, and how platform-level (operator) actions are audited.
-- **Next action:** draft the Phase 1 spec (`docs/specs/phase-1-*.md`), when requested.
+- **Phase 0.5 (layered architecture refactor) approved and in implementation** (`docs/specs/phase-0.5-refactor.md`): behavior-preserving restructuring into routes → controller → service → repository before Phase 1.
+- **Next action:** implement Phase 0.5 step by step (current: step 0.5.1).
 
 ---
 
@@ -22,7 +23,8 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | #   | Phase                           | Delivers                                                                          | Depends on | Status      |
 | --- | ------------------------------- | --------------------------------------------------------------------------------- | ---------- | ----------- |
 | 0   | Technical foundations           | Skeleton, cross-cutting basics, tenant isolation, audit, authentication           | —          | Implemented |
-| 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user-limit enforcement | 0          | Not started |
+| 0.5 | Layered architecture refactor   | Routes → controller → service → repository, central middleware, shared test helpers | 0          | In Implementation |
+| 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user-limit enforcement | 0.5        | Not started |
 | 2   | Org structure & users           | Department/section tree, managers, membership                                     | 1          | Not started |
 | 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                         | 2          | Not started |
 | 4   | Working calendar                | Working days, holidays, working-day deadline calculation                          | 1          | Not started |
