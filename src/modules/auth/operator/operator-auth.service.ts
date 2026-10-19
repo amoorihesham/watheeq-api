@@ -1,13 +1,12 @@
-import pg from "pg";
 import { z } from "zod";
-import { createDb, type Db } from "../../../db/pool.js";
+import type { Db } from "../../../db/pool.js";
 import type { Logger } from "../../../logging/logger.js";
-import { LAST_SEEN_RESOLUTION_MS } from "../../../middleware/session-auth.js";
 import { csrfTokenFor } from "../shared/csrf.js";
 import type { LoginThrottleSettings } from "../shared/ip-throttle.js";
 import { checkCredentials } from "../shared/login.js";
 import type { LoginRequest } from "../shared/login-request.js";
 import { hashPassword } from "../shared/passwords.js";
+import { LAST_SEEN_RESOLUTION_MS } from "../shared/session.js";
 import { generateToken, hashToken } from "../shared/tokens.js";
 import { createOperatorRepository, type OperatorRepository } from "./operator.repository.js";
 
@@ -96,12 +95,11 @@ const createOperatorInput = z.object({
 export class CreateOperatorError extends Error {}
 
 /**
- * Inserts an operator. The connection must be the owner role: watheeq_app has no INSERT on operators,
- * so a compromised application cannot create operators.
- * It opens its own single-connection pool, so it is not part of the service the running app builds.
+ * Inserts an operator. `ownerDb` must connect as the owner role: watheeq_app has no INSERT on operators,
+ * so a compromised application cannot create operators. That is why this is not part of the service the running app builds.
  */
 export async function createOperator(
-  ownerConnectionString: string,
+  ownerDb: Db,
   rawEmail: string,
   password: string,
 ): Promise<{ id: string; email: string }> {
@@ -114,17 +112,12 @@ export async function createOperator(
   }
   const passwordHash = await hashPassword(parsed.data.password);
 
-  const pool = new pg.Pool({ connectionString: ownerConnectionString, max: 1 });
-  try {
-    const operator = await createOperatorRepository().insert(createDb(pool), {
-      email: parsed.data.email,
-      passwordHash,
-    });
-    if (!operator) {
-      throw new CreateOperatorError(`An operator with email ${parsed.data.email} already exists.`);
-    }
-    return operator;
-  } finally {
-    await pool.end();
+  const operator = await createOperatorRepository().insert(ownerDb, {
+    email: parsed.data.email,
+    passwordHash,
+  });
+  if (!operator) {
+    throw new CreateOperatorError(`An operator with email ${parsed.data.email} already exists.`);
   }
+  return operator;
 }

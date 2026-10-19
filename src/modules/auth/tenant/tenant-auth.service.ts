@@ -1,11 +1,11 @@
 import type { Db } from "../../../db/pool.js";
 import { withTenantTx } from "../../../db/tenant-tx.js";
 import type { Logger } from "../../../logging/logger.js";
-import { LAST_SEEN_RESOLUTION_MS } from "../../../middleware/session-auth.js";
 import { csrfTokenFor } from "../shared/csrf.js";
 import type { LoginThrottleSettings } from "../shared/ip-throttle.js";
 import { checkCredentials } from "../shared/login.js";
 import type { LoginRequest } from "../shared/login-request.js";
+import { LAST_SEEN_RESOLUTION_MS } from "../shared/session.js";
 import { generateToken, hashToken } from "../shared/tokens.js";
 import type { TenantRepository } from "./tenant.repository.js";
 

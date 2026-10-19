@@ -2,16 +2,8 @@ import type { Request, RequestHandler } from "express";
 import { AppError } from "../http/errors.js";
 import { readCookie } from "../modules/auth/shared/cookies.js";
 import { CSRF_HEADER, csrfTokenMatches, isUnsafeMethod } from "../modules/auth/shared/csrf.js";
+import { LAST_SEEN_RESOLUTION_MS, type ResolvedSession } from "../modules/auth/shared/session.js";
 import { hashToken, isWellFormedToken } from "../modules/auth/shared/tokens.js";
-
-/** `last_seen_at` is rewritten at most once per minute per session (spec 4.3, "Request authentication"). */
-export const LAST_SEEN_RESOLUTION_MS = 60_000;
-
-export interface ResolvedSession<P> {
-  sessionId: string;
-  lastSeenAt: Date;
-  principal: P;
-}
 
 /** What differs per realm: the cookie, the session lookup, and where the result is attached. */
 export interface SessionAuthOptions<P> {

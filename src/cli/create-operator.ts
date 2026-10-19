@@ -1,3 +1,5 @@
+import pg from "pg";
+import { createDb } from "../db/pool.js";
 import {
   CreateOperatorError,
   createOperator,
@@ -74,8 +76,18 @@ async function readPassword(): Promise<string> {
   return first;
 }
 
+/** Opens a single owner-role connection for this one insert and always closes it. */
+async function createWithOwnerConnection(ownerUrl: string, rawEmail: string) {
+  const pool = new pg.Pool({ connectionString: ownerUrl, max: 1 });
+  try {
+    return await createOperator(createDb(pool), rawEmail, await readPassword());
+  } finally {
+    await pool.end();
+  }
+}
+
 try {
-  const operator = await createOperator(url, email, await readPassword());
+  const operator = await createWithOwnerConnection(url, email);
   console.log(`operator created: ${operator.email} (${operator.id})`);
 } catch (err) {
   if (err instanceof CreateOperatorError) {
