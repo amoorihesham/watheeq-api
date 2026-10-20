@@ -18,7 +18,7 @@ describe("tenant isolation (real PostgreSQL, connected as watheeq_app)", () => {
   let alRashid = "";
 
   beforeAll(async () => {
-    // Fixtures use the superuser connection: FORCE RLS applies to the owner role too, and tenants has no INSERT policy.
+    // Fixtures use the superuser connection: FORCE RLS applies to the owner role too, and only a platform transaction may insert tenants.
     const seed = async (name: string, emails: string[]): Promise<string> =>
       (
         await seedTenant(

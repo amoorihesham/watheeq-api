@@ -78,6 +78,20 @@
       "when": 1792193818499,
       "tag": "0010_auth_lookup_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792509516347,
+      "tag": "0011_audit_log_platform_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792509516794,
+      "tag": "0012_platform_access",
+      "breakpoints": true
     }
   ]
 }

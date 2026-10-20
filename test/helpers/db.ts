@@ -33,7 +33,7 @@ export interface SeedUser {
 
 /**
  * Inserts a tenant and its users in one transaction through the superuser.
- * Fixtures go in this way: there is no tenant or user creation API yet, and tenants has no INSERT policy.
+ * Fixtures go in this way so tests can seed any tenant without depending on the operator API under test.
  * Returns the tenant id and the user ids in the order given.
  */
 export async function seedTenant(
