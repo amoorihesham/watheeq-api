@@ -13,7 +13,7 @@
   Phase 1 must decide how tenants are created, since the runtime role can only read `tenants`, and how platform-level (operator) actions are audited.
 - **Phase 0.5 (layered architecture refactor) implemented** (`docs/specs/phase-0.5-refactor.md`): behavior-preserving restructuring into routes → controller → service → repository, central middleware, and shared test helpers.
   Its convention is T23 in `TECHNICAL_DECISIONS.md`.
-- **Next action:** draft the Phase 1 spec (`docs/specs/phase-1-*.md`), when requested.
+- **Next action:** review the Phase 1 draft spec (`docs/specs/phase-1-platform-subscriptions.md`) (open questions Q1-Q6 resolved; awaiting approval).
 
 ---
 
@@ -25,7 +25,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | --- | ------------------------------- | --------------------------------------------------------------------------------- | ---------- | ----------- |
 | 0   | Technical foundations           | Skeleton, cross-cutting basics, tenant isolation, audit, authentication           | -          | Implemented |
 | 0.5 | Layered architecture refactor   | Routes → controller → service → repository, central middleware, shared test helpers | 0          | Implemented |
-| 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user-limit enforcement | 0.5        | Not started |
+| 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user-limit enforcement | 0.5        | Spec Draft  |
 | 2   | Org structure & users           | Department/section tree, managers, membership                                     | 1          | Not started |
 | 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                         | 2          | Not started |
 | 4   | Working calendar                | Working days, holidays, working-day deadline calculation                          | 1          | Not started |

@@ -178,6 +178,14 @@ Apply these considerations proportionally to the feature and its risks. Do not i
 - Avoid duplicating the same authoritative information across multiple documents without a clear ownership rule.
 - Keep implementation status, known limitations, unresolved decisions, and next steps accurate.
 
+## 13a. Code Comments
+
+- Do not write a comment when the code is clear and obvious on its own.
+- Never restate what the code does; good names and simple structure come first.
+- Write a comment only for what the code cannot say: why a non-obvious choice was made, a constraint or pitfall that is easy to break (for example, an RLS or concurrency subtlety), or a reference to the spec decision behind it.
+- Keep such comments short. Long rationale belongs in the spec, and the comment points to it.
+- When editing code, remove existing comments that have become obvious or outdated.
+
 ## 14. Review the Design Before Moving Forward
 
 Before finalizing a design or implementation step, ask:
