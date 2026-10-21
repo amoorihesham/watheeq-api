@@ -2,10 +2,13 @@
 const UNIQUE_VIOLATION = "23505";
 
 /**
- * True if the error is a PostgreSQL unique-constraint violation.
+ * The constraint name of a PostgreSQL unique violation, or undefined for any other error.
  * Drizzle wraps the driver error and keeps the PostgreSQL error as `cause`.
  */
-export function isUniqueViolation(err: unknown): boolean {
-  const pgError = (err as { cause?: unknown } | null | undefined)?.cause ?? err;
-  return (pgError as { code?: string } | null | undefined)?.code === UNIQUE_VIOLATION;
+export function uniqueViolationConstraint(err: unknown): string | undefined {
+  const pgError = ((err as { cause?: unknown } | null | undefined)?.cause ?? err) as
+    | { code?: string; constraint?: string }
+    | null
+    | undefined;
+  return pgError?.code === UNIQUE_VIOLATION ? pgError.constraint : undefined;
 }

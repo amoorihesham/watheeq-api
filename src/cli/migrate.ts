@@ -1,9 +1,9 @@
 import { runMigrations } from "../db/migrate.js";
 
-// Reads the URL directly: validated config (step 0.2) is for the running app, not this tool.
-const url = process.env.MIGRATION_DATABASE_URL;
+// Reads the URL directly: validated config is for the running app, not this tool.
+const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error("MIGRATION_DATABASE_URL is required (connect as watheeq_owner).");
+  console.error("DATABASE_URL is required.");
   process.exit(1);
 }
 

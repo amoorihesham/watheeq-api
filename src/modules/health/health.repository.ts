@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { HEALTH_TIMEOUT_MS } from "../../db/pool.js";
+import { HEALTH_TIMEOUT_MS } from "@/db/pool.js";
 
 /** Takes the pool (not an executor): the ping needs a deadline and must not wait for a free connection. */
 export function createHealthRepository(pool: pg.Pool) {
@@ -20,5 +20,3 @@ export function createHealthRepository(pool: pg.Pool) {
     },
   };
 }
-
-export type HealthRepository = ReturnType<typeof createHealthRepository>;

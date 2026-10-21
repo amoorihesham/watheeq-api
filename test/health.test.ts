@@ -3,11 +3,11 @@ import { afterAll, describe, expect, it } from "vitest";
 import { createPool } from "../src/db/pool.js";
 import { createLogger } from "../src/logging/logger.js";
 import { testApp } from "./helpers/app.js";
-import { connectAsApp } from "./helpers/db.js";
+import { connectToTestDb } from "./helpers/db.js";
 
 describe("GET /health", () => {
   const logger = createLogger("silent");
-  const upPool = connectAsApp(logger);
+  const upPool = connectToTestDb(logger);
   // Port 1 is reserved and nothing listens on it, so connections are refused.
   const downPool = createPool("postgres://watheeq:watheeq@127.0.0.1:1/watheeq", logger);
 

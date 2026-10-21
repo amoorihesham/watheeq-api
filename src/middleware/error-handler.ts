@@ -1,5 +1,5 @@
 import type { ErrorRequestHandler } from "express";
-import { AppError, type ErrorDetail } from "../http/errors.js";
+import { AppError, type ErrorDetail, fromDatabaseError } from "../http/errors.js";
 
 interface ErrorBody {
   error: { code: string; requestId: string; details?: ErrorDetail[] };
@@ -31,7 +31,8 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     next(err);
     return;
   }
-  const known = err instanceof AppError ? err : fromBodyParserError(err);
+  const known =
+    err instanceof AppError ? err : (fromBodyParserError(err) ?? fromDatabaseError(err));
   const resolved = known ?? new AppError("INTERNAL");
   if (!known) {
     // pino-http logs the response line at error level and serializes `res.err` with its stack.

@@ -7,13 +7,13 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 const parsed = parseConfig(process.env);
 if (!parsed.ok) {
-  // The configured log level is unknown here, so use the default level.
   createLogger("info").fatal(parsed.message);
   process.exit(1);
 }
-const config = parsed.config;
 
+const config = parsed.config;
 const logger = createLogger(config.LOG_LEVEL);
+
 const pool = createPool(config.DATABASE_URL, logger);
 const server = buildApp({ pool, logger, config }).listen(config.PORT, () => {
   logger.info({ port: config.PORT, env: config.NODE_ENV }, "listening");

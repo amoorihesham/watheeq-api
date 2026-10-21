@@ -1,16 +1,11 @@
-import pg from "pg";
+import type pg from "pg";
 import { inject } from "vitest";
 import { createPool } from "../../src/db/pool.js";
 import { createLogger, type Logger } from "../../src/logging/logger.js";
 
-/** A pool connected as the runtime role (`watheeq_app`), as the application connects. */
-export function connectAsApp(logger: Logger = createLogger("silent")): pg.Pool {
+/** A pool connected to the test database, as the application connects. */
+export function connectToTestDb(logger: Logger = createLogger("silent")): pg.Pool {
   return createPool(inject("databaseUrl"), logger);
-}
-
-/** A pool connected as the container superuser, for fixtures only: it bypasses RLS, which FORCE applies to the owner role. */
-export function connectAsAdmin(max = 2): pg.Pool {
-  return new pg.Pool({ connectionString: inject("adminDatabaseUrl"), max });
 }
 
 /** Drizzle wraps driver errors; the PostgreSQL message is on `cause`. */
@@ -26,33 +21,55 @@ export async function rejectionText(promise: Promise<unknown>): Promise<string> 
 
 export interface SeedUser {
   email: string;
+  /** Defaults to the part of the email before the @. */
+  userName?: string;
   /** Defaults to a placeholder that no password verifies against. */
   passwordHash?: string;
   isActive?: boolean;
+  role?: "user" | "operator";
+}
+
+/** Inserts one user. Returns the user id. */
+export async function seedUser(db: pg.Pool | pg.PoolClient, user: SeedUser): Promise<string> {
+  const { rows } = await db.query<{ id: string }>(
+    "insert into users (email, user_name, password_hash, is_active, role) values ($1, $2, $3, $4, $5) returning id",
+    [
+      user.email,
+      user.userName ?? user.email.split("@")[0],
+      user.passwordHash ?? "x",
+      user.isActive ?? true,
+      user.role ?? "user",
+    ],
+  );
+  return rows[0]?.id ?? "";
 }
 
 /**
- * Inserts a tenant and its users in one transaction through the superuser.
- * Fixtures go in this way so tests can seed any tenant without depending on the operator API under test.
- * Returns the tenant id and the user ids in the order given.
+ * Inserts a tenant whose owner is the first user, with every user as a member, in one transaction.
+ * The owner's membership role is `admin`; the others are `member`.
  */
 export async function seedTenant(
-  admin: pg.Pool,
-  name: string,
-  users: SeedUser[] = [],
+  pool: pg.Pool,
+  slug: string,
+  members: SeedUser[],
 ): Promise<{ id: string; userIds: string[] }> {
-  const client = await admin.connect();
+  const client = await pool.connect();
   try {
     await client.query("begin");
-    const t = await client.query<{ id: string }>(
-      "insert into tenants (name) values ($1) returning id",
-      [name],
-    );
-    const id = t.rows[0]?.id ?? "";
-    await client.query("select set_config('app.tenant_id', $1, true)", [id]);
     const userIds: string[] = [];
-    for (const user of users) {
-      userIds.push(await insertUser(client, id, user));
+    for (const member of members) {
+      userIds.push(await seedUser(client, member));
+    }
+    const { rows } = await client.query<{ id: string }>(
+      "insert into tenants (name, slug, owner_id) values ($1, $1, $2) returning id",
+      [slug, userIds[0] ?? null],
+    );
+    const id = rows[0]?.id ?? "";
+    for (const [index, userId] of userIds.entries()) {
+      await client.query(
+        "insert into tenant_members (tenant_id, user_id, role) values ($1, $2, $3)",
+        [id, userId, index === 0 ? "admin" : "member"],
+      );
     }
     await client.query("commit");
     return { id, userIds };
@@ -62,30 +79,4 @@ export async function seedTenant(
   } finally {
     client.release();
   }
-}
-
-/** Inserts one user into an existing tenant through the superuser. Returns the user id. */
-export function seedUser(admin: pg.Pool, tenantId: string, user: SeedUser): Promise<string> {
-  return insertUser(admin, tenantId, user);
-}
-
-/** Inserts one operator through the superuser. Returns the operator id. */
-export async function seedOperator(admin: pg.Pool, operator: SeedUser): Promise<string> {
-  const { rows } = await admin.query<{ id: string }>(
-    "insert into operators (email, password_hash, is_active) values ($1, $2, $3) returning id",
-    [operator.email, operator.passwordHash ?? "x", operator.isActive ?? true],
-  );
-  return rows[0]?.id ?? "";
-}
-
-async function insertUser(
-  db: pg.Pool | pg.PoolClient,
-  tenantId: string,
-  user: SeedUser,
-): Promise<string> {
-  const { rows } = await db.query<{ id: string }>(
-    "insert into users (tenant_id, email, password_hash, is_active) values ($1, $2, $3, $4) returning id",
-    [tenantId, user.email, user.passwordHash ?? "x", user.isActive ?? true],
-  );
-  return rows[0]?.id ?? "";
 }

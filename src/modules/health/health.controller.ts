@@ -1,8 +1,8 @@
 import type express from "express";
-import type { HealthRepository } from "./health.repository.js";
+import type { HealthRepositoryType } from "./health.types.js";
 
 /** No service layer: there is no business rule between the request and the database ping. */
-export function createHealthController({ repo }: { repo: HealthRepository }) {
+export function createHealthController({ repo }: { repo: HealthRepositoryType }) {
   return {
     health: (async (_req, res) => {
       if (await repo.isDbUp()) {
@@ -13,5 +13,3 @@ export function createHealthController({ repo }: { repo: HealthRepository }) {
     }) satisfies express.RequestHandler,
   };
 }
-
-export type HealthController = ReturnType<typeof createHealthController>;

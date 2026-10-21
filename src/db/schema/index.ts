@@ -1,6 +1,5 @@
 export { auditLog } from "./audit-log.js";
-export { loginIpThrottle } from "./login-ip-throttle.js";
-export { operatorSessions, operators } from "./operators.js";
+export { refreshTokens } from "./refresh-tokens.js";
+export { tenantMemberRoles, tenantMembers } from "./tenant-members.js";
 export { tenants } from "./tenants.js";
-export { userSessions } from "./user-sessions.js";
-export { users } from "./users.js";
+export { userRoles, users } from "./users.js";

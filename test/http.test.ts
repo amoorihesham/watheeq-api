@@ -4,11 +4,11 @@ import { afterAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { validate } from "../src/http/validate.js";
 import { testApp } from "./helpers/app.js";
-import { connectAsApp } from "./helpers/db.js";
+import { connectToTestDb } from "./helpers/db.js";
 import { captureLogs } from "./helpers/log-capture.js";
 
 const capture = captureLogs();
-const pool = connectAsApp(capture.logger);
+const pool = connectToTestDb(capture.logger);
 
 // Test-only routes; production code ships no debug routes.
 const testRouter = express.Router();
@@ -21,6 +21,20 @@ testRouter.post("/validated", (req, res) => {
 });
 testRouter.get("/boom", () => {
   throw new TypeError("secret internal detail");
+});
+testRouter.post("/duplicate-email", async (_req, res) => {
+  const insert =
+    "insert into users (email, user_name, password_hash) values ('dup@alnoor.test', 'Dup', 'x') on conflict do nothing";
+  await pool.query(insert);
+  await pool.query(
+    "insert into users (email, user_name, password_hash) values ('dup@alnoor.test', 'Dup', 'x')",
+  );
+  res.json({});
+});
+testRouter.post("/duplicate-slug", async (_req, res) => {
+  await pool.query("insert into tenants (name, slug) values ('A', 'dup') on conflict do nothing");
+  await pool.query("insert into tenants (name, slug) values ('B', 'dup')");
+  res.json({});
 });
 testRouter.get("/async-boom", async () => {
   await Promise.resolve();
@@ -119,6 +133,20 @@ describe("standard error shape", () => {
       .find((line) => line.reqId === res.headers["x-request-id"] && line.err);
     const err = logged?.err as { stack?: string } | undefined;
     expect(err?.stack).toContain("secret internal detail");
+  });
+
+  it("translates a mapped unique violation centrally (users_email_unique to 409 EMAIL_TAKEN)", async () => {
+    const res = await request(app).post("/duplicate-email");
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      error: { code: "EMAIL_TAKEN", requestId: res.headers["x-request-id"] },
+    });
+  });
+
+  it("returns 500 INTERNAL for a unique violation that has no mapping", async () => {
+    const res = await request(app).post("/duplicate-slug");
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe("INTERNAL");
   });
 
   it("handles errors thrown from async handlers", async () => {

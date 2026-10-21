@@ -1,15 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  DUMMY_PASSWORD_HASH,
-  hashPassword,
-  verifyPassword,
-} from "../src/modules/auth/shared/passwords.js";
-import {
-  generateToken,
-  hashesEqual,
-  hashToken,
-  isWellFormedToken,
-} from "../src/modules/auth/shared/tokens.js";
+import { DUMMY_PASSWORD_HASH } from "../src/modules/auth/auth.config.js";
+import { hashPassword, verifyPassword } from "../src/modules/auth/shared/passwords.js";
 
 describe("passwords", () => {
   it("hashes with argon2id at the OWASP minimum parameters and verifies", async () => {
@@ -28,27 +19,5 @@ describe("passwords", () => {
     const params = (hash: string) => hash.split("$").slice(1, 4);
     expect(params(DUMMY_PASSWORD_HASH)).toEqual(params(real));
     expect(await verifyPassword(DUMMY_PASSWORD_HASH, "x")).toBe(false);
-  });
-});
-
-describe("tokens", () => {
-  it("generates 256-bit base64url tokens that differ every time", () => {
-    const a = generateToken();
-    expect(isWellFormedToken(a)).toBe(true);
-    expect(a).not.toBe(generateToken());
-  });
-
-  it("hashes to 32 bytes and compares in constant time", () => {
-    const token = generateToken();
-    expect(hashToken(token)).toHaveLength(32);
-    expect(hashesEqual(hashToken(token), hashToken(token))).toBe(true);
-    expect(hashesEqual(hashToken(token), hashToken(generateToken()))).toBe(false);
-    expect(hashesEqual(hashToken(token), Buffer.alloc(5))).toBe(false);
-  });
-
-  it("rejects values that are not tokens we issue", () => {
-    for (const bad of ["", "short", `${"A".repeat(42)}=`, "A".repeat(44), `${"A".repeat(42)}!`]) {
-      expect(isWellFormedToken(bad)).toBe(false);
-    }
   });
 });

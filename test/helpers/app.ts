@@ -21,6 +21,8 @@ export function testApp(
     pool,
     logger,
     config: testConfig(options.config),
-    ...(options.routers ? { routers: options.routers } : {}),
+    ...(options.routers
+      ? { routers: options.routers.map((router) => ({ prefix: "/", router })) }
+      : {}),
   });
 }

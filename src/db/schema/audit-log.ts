@@ -6,7 +6,7 @@ export const auditLog = pgTable(
   "audit_log",
   {
     id: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
-    // Null marks a platform-level entry (Phase 1 spec, P1.11).
+    // Null marks a platform-level entry (Phase 0 spec, P0.2).
     tenantId: uuid("tenant_id").references(() => tenants.id),
     // The transaction start time, so entries of one transaction share a timestamp.
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
@@ -21,7 +21,6 @@ export const auditLog = pgTable(
   },
   (t) => [
     // Reading one tenant's history in time order is a range scan on this index.
-    // It also serves the RLS filter on tenant_id.
     index("audit_log_tenant_occurred_idx").on(t.tenantId, t.occurredAt),
     index("audit_log_platform_occurred_idx").on(t.occurredAt).where(sql`${t.tenantId} is null`),
     check("audit_log_actor_type", sql`${t.actorType} in ('user', 'operator', 'system')`),

@@ -10,8 +10,7 @@ export function createPool(connectionString: string, logger: Logger): pg.Pool {
     connectionString,
     connectionTimeoutMillis: HEALTH_TIMEOUT_MS,
   });
-  // An idle client can fail (for example when PostgreSQL restarts).
-  // Without a listener, Node would treat that as an uncaught exception and exit.
+
   pool.on("error", (err) => {
     logger.error({ err }, "idle database client error");
   });
@@ -24,3 +23,4 @@ export function createDb(pool: pg.Pool) {
 
 export type Db = ReturnType<typeof createDb>;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type Executor = Db | Tx;
