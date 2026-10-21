@@ -178,7 +178,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D13 | Expiry: grace period (new submissions blocked, in-progress requests workable), then read-only | Keeps legal records accessible and lets in-flight requests close fairly against their SLA.             |
 | D14 | Subscriptions copy plan terms at assignment; plan edits apply to new subscriptions only       | Prevents plan edits from silently changing existing customers' terms.                                  |
 | D15 | Downgrade below current user count creates an over-limit state, not removal                   | Avoids destructive automatic changes to a tenant's users.                                              |
-| D16 | The first Tenant Admin verifies their email after the tenant is created                       | Confirms the address belongs to the customer before it controls the tenant. Adds one email provider dependency (must keep data in KSA); notifications stay in-app only (D10). |
+| D16 | The first Tenant Admin verifies their email after the tenant is created, setting their own password through the link; until then they cannot log in | Confirms the address belongs to the customer before it controls the tenant. Adds one email provider dependency (must keep data in KSA); notifications stay in-app only (D10). |
 | D17 | Plans carry price, payment period (monthly or yearly), and discount; subscriptions copy them and may add a customer discount; no minimum term | Records the commercial terms agreed offline, per customer, without payment integration (D11). |
 
 ---
@@ -198,7 +198,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 2. Who a workflow stage is assigned to (a legal role, a specific person, or chosen by the owner).
 3. Deadline calculation precision (end of working day vs. exact time) and whether calendar changes affect already-accepted requests.
 4. Whether a requester can withdraw a request.
-5. Length of the grace period, and whether it is a platform-wide setting or defined per plan.
+5. ~~Length of the grace period, and whether it is a platform-wide setting or defined per plan.~~ Resolved in Phase 1: defined per plan (`grace_days`, 0-365) and copied into each subscription.
 6. In the read-only state, whether SLA clocks and escalations for still-open requests continue, stop, or are marked as affected by the subscription state.
-7. Whether the operator can suspend a tenant independently of its subscription (e.g. for abuse or contract disputes).
+7. ~~Whether the operator can suspend a tenant independently of its subscription (e.g. for abuse or contract disputes).~~ Resolved in Phase 1: deferred; ending a subscription early (a past end date, with a reason) covers the MVP.
 8. The exact list of notification-triggering events.

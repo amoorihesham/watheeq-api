@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                   |
 | ---------------------- | ----------------------------------------------------------------------- |
-| **Status**             | In Implementation (all steps verified; awaiting owner review)                                             |
+| **Status**             | Implemented |
 | **Approved by / date** | _ِAmr - 21/10/2026 - 17:15 pm_                                          |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`) |
 | **Related decisions**  | MVP 3.1, 3.9, D11-D17; Technical T2, T4, T5, T7, T8, T11, T13, T14      |
@@ -456,7 +456,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P1.23 | The Tenant Admin sees every field of the tenant's subscription, including pricing and both discounts.                                                                                                                         | Owner decision: the customer sees exactly the terms they agreed to.                                                                                                              |
 | P1.24 | Lists ordered by name use `lower(name) COLLATE "und-x-icu"` (helper `byName` in `src/db/order.ts`). | Found in step 1.4: the server's default collation (glibc `en_US`) ignores spaces, so `SC Professional` sorted after `Schema Unique` and the order would differ between local Docker and the KSA host. The ICU root collation is the same everywhere, handles Arabic and English, and matches `Intl.Collator("und")` for clients. Needs PostgreSQL built with ICU. |
 
-Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is implemented.
+Promoted on 2026-10-21: P1.4-P1.6, P1.18-P1.20, and P1.24 to `TECHNICAL_DECISIONS.md` as T15-T20; Q3 and Q5 resolve `MVP_SCOPE.md` open questions 5 and 7; P1.15-P1.17 refine D16. Decisions not promoted are detail that stays authoritative here.
 
 ## 11. Change Log
 
@@ -479,3 +479,4 @@ Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is im
 | 2026-10-21 | Step 1.4 implemented and verified: `PUT /operator/tenants/:tenantId/subscription` (copies the plan's current terms, keeps or replaces the customer discount, optional reason, seat lock, `subscription.changed` with before and after). Name ordering pinned to the ICU root collation (P1.24, proposed for owner approval). | Acceptance criteria met. |
 | 2026-10-21 | Step 1.5 verified: `assertSeatAvailable` tested as Phase 2's add and reactivate paths will use it, on real connections with controlled interleavings (last seat, reactivation, downgrade over-limit, downgrade racing an addition, tenant isolation). No production code was needed; the seat lock in subscription changes landed in step 1.4. | Acceptance criteria met; each concurrency test is shown to fail when the lock is removed. |
 | 2026-10-21 | Step 1.6 implemented and verified: `subscriptionGuard` (Read-only refuses unsafe methods; reads the subscription on every request), `requireActiveSubscription`, `GET /subscription`, and `subscription: {state, endDate, graceEndsOn}` in `/auth/me` (null for operators). The guard reads `req.auth` directly so the subscriptions module does not import auth's index. | Acceptance criteria met. |
+| 2026-10-21 | All six steps verified; status set to `Implemented`; decisions promoted (T15-T20, MVP open questions 5 and 7, D16). | Phase 1 complete. |
