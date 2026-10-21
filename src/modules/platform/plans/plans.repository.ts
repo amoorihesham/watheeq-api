@@ -1,4 +1,5 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import { plans } from "@/db/schema/index.js";
 import type { NewPlanType, PlanChangesType, PlanType } from "./plans.types.js";
@@ -10,10 +11,7 @@ export function createPlansRepository() {
     },
 
     list(db: Executor): Promise<PlanType[]> {
-      return db
-        .select()
-        .from(plans)
-        .orderBy(asc(sql`lower(${plans.name})`));
+      return db.select().from(plans).orderBy(byName(plans.name));
     },
 
     findById(db: Executor, planId: string): Promise<PlanType[]> {

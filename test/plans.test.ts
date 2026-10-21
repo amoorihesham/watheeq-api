@@ -136,7 +136,9 @@ describe("list and view plans", () => {
     const res = await as(omar).get("/operator/plans");
     expect(res.status).toBe(200);
     const names: string[] = res.body.plans.map((p: { name: string }) => p.name);
-    const sorted = [...names].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    const sorted = [...names].sort((a, b) =>
+      new Intl.Collator("und").compare(a.toLowerCase(), b.toLowerCase()),
+    );
     expect(names).toEqual(sorted);
   });
 

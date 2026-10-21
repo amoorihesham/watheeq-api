@@ -25,6 +25,11 @@ export function createTenantsRouter({ db, config, emailSender }: TenantsRouterDe
   router.post("/", requirePlatformPermission("platform.tenant.create"), controller.create);
   router.get("/", requirePlatformPermission("platform.tenant.view"), controller.list);
   router.get("/:tenantId", requirePlatformPermission("platform.tenant.view"), controller.get);
+  router.put(
+    "/:tenantId/subscription",
+    requirePlatformPermission("platform.subscription.update"),
+    controller.changeSubscription,
+  );
   router.post(
     "/:tenantId/admin/resend-verification",
     requirePlatformPermission("platform.tenant.create"),

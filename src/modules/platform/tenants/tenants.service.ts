@@ -17,8 +17,14 @@ import {
   toUsage,
 } from "@/modules/subscriptions/index.js";
 import { createPlansRepository } from "../plans/plans.repository.js";
-import { createTenantRequestSchema, tenantIdSchema } from "./tenants.schemas.js";
+import {
+  changeSubscriptionRequestSchema,
+  createTenantRequestSchema,
+  tenantIdSchema,
+} from "./tenants.schemas.js";
 import type {
+  ChangeSubscriptionRequestType,
+  ChangeSubscriptionResponseType,
   CreateTenantRequestType,
   CreateTenantResponseType,
   TenantDetailType,
@@ -73,7 +79,7 @@ export function createTenantsService({
     ): Promise<CreateTenantResponseType> {
       const body = validate(createTenantRequestSchema, input);
       const { admin, token, response } = await withTx(db, async (tx) => {
-        const [{ today = "" } = {}] = await subscriptionsRepo.today(tx);
+        const today = (await subscriptionsRepo.today(tx)).rows[0]?.today ?? "";
         if (body.subscription.startDate > today) {
           throw new AppError("VALIDATION_FAILED", [
             { path: "subscription.startDate", code: "in_future" },
@@ -170,6 +176,64 @@ export function createTenantsService({
         throw new AppError("NOT_FOUND");
       }
       return toDetail(row);
+    },
+
+    /**
+     * Sets the tenant's plan, period, and customer discount (R1.6). The plan's current terms are copied again
+     * (D14); an omitted customer discount keeps the current one. The seat lock makes concurrent changes, and a
+     * change racing a user creation, run one after the other (R1.5).
+     */
+    changeSubscription(
+      tenantId: string,
+      input: ChangeSubscriptionRequestType,
+      context: AuditContextType,
+    ): Promise<ChangeSubscriptionResponseType> {
+      const id = existingTenantId(tenantId);
+      const body = validate(changeSubscriptionRequestSchema, input);
+      return withTx(db, async (tx) => {
+        const today = (await subscriptionsRepo.today(tx)).rows[0]?.today ?? "";
+        if (body.startDate > today) {
+          throw new AppError("VALIDATION_FAILED", [{ path: "startDate", code: "in_future" }]);
+        }
+        const [plan] = await plansRepo.findById(tx, body.planId);
+        if (!plan) {
+          throw new AppError("VALIDATION_FAILED", [{ path: "planId", code: "unknown_plan" }]);
+        }
+        await subscriptionsRepo.lockSeats(tx, id);
+        const [before] = await subscriptionsRepo.findByTenantId(tx, id);
+        if (!before) {
+          throw new AppError("NOT_FOUND");
+        }
+        const [after] = await subscriptionsRepo.update(tx, id, {
+          planId: plan.id,
+          planName: plan.name,
+          userLimit: plan.userLimit,
+          graceDays: plan.graceDays,
+          priceHalalas: plan.priceHalalas,
+          paymentPeriod: plan.paymentPeriod,
+          planDiscountPercent: plan.discountPercent,
+          customerDiscountPercent: body.customerDiscountPercent ?? before.customerDiscountPercent,
+          startDate: body.startDate,
+          endDate: body.endDate,
+        });
+        if (!after) {
+          throw new Error("update returned no row");
+        }
+        const [usage] = await subscriptionsRepo.countActiveMembers(tx, id);
+        await writeAuditEntry(tx, {
+          tenantId: id,
+          ...context,
+          action: "subscription.changed",
+          resourceType: "subscription",
+          resourceId: id,
+          ...(body.reason ? { reason: body.reason } : {}),
+          details: { before, after },
+        });
+        return {
+          subscription: toSubscriptionView(after, today),
+          usage: toUsage(usage?.activeUsers ?? 0, after.userLimit),
+        };
+      });
     },
 
     /**

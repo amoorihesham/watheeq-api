@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import { subscriptions, tenantMembers, tenants, users } from "@/db/schema/index.js";
 import { riyadhToday } from "@/modules/subscriptions/index.js";
@@ -33,7 +34,7 @@ export function createTenantsRepository() {
         .select(detailColumns)
         .from(tenants)
         .innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
-        .orderBy(sql`lower(${tenants.name})`);
+        .orderBy(byName(tenants.name));
     },
 
     findById(db: Executor, tenantId: string) {

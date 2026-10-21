@@ -6,7 +6,10 @@ import type { EmailSenderType } from "@/email/index.js";
 import type { SubscriptionViewType, UsageType } from "@/modules/subscriptions/index.js";
 import type { createTenantsController } from "./tenants.controller.js";
 import type { createTenantsRepository } from "./tenants.repository.js";
-import type { createTenantRequestSchema } from "./tenants.schemas.js";
+import type {
+  changeSubscriptionRequestSchema,
+  createTenantRequestSchema,
+} from "./tenants.schemas.js";
 import type { createTenantsService } from "./tenants.service.js";
 
 export type TenantType = typeof tenants.$inferSelect;
@@ -25,6 +28,12 @@ export interface TenantOwnerType {
 }
 
 export type CreateTenantRequestType = z.input<typeof createTenantRequestSchema>;
+export type ChangeSubscriptionRequestType = z.input<typeof changeSubscriptionRequestSchema>;
+
+export interface ChangeSubscriptionResponseType {
+  subscription: SubscriptionViewType;
+  usage: UsageType;
+}
 
 export interface CreateTenantResponseType {
   tenant: TenantType;

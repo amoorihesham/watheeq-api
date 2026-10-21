@@ -408,7 +408,7 @@ describe("list and view tenants (R1.7)", () => {
       (t: { tenant: { name: string } }) => t.tenant.name,
     );
     expect(names).toEqual(
-      [...names].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())),
+      [...names].sort((a, b) => new Intl.Collator("und").compare(a.toLowerCase(), b.toLowerCase())),
     );
   });
 

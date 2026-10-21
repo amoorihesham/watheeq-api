@@ -2,7 +2,11 @@ import { and, count, eq, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import { subscriptions, tenantMembers, users } from "@/db/schema/index.js";
 import { SUBSCRIPTION_TIME_ZONE } from "./subscriptions.config.js";
-import type { NewSubscriptionType, SubscriptionRowType } from "./subscriptions.types.js";
+import type {
+  NewSubscriptionType,
+  SubscriptionChangesType,
+  SubscriptionRowType,
+} from "./subscriptions.types.js";
 
 /** The calendar date in Saudi Arabia of a timestamp expression, as `YYYY-MM-DD`. */
 export const riyadhDateOf = (timestamp: SQL) =>
@@ -17,8 +21,24 @@ export function createSubscriptionsRepository() {
       return db.insert(subscriptions).values(values).returning();
     },
 
-    today(db: Executor): Promise<{ today: string }[]> {
-      return db.execute<{ today: string }>(sql`select ${riyadhToday} as today`).then((r) => r.rows);
+    today(db: Executor) {
+      return db.execute<{ today: string }>(sql`select ${riyadhToday} as today`);
+    },
+
+    findByTenantId(db: Executor, tenantId: string): Promise<SubscriptionRowType[]> {
+      return db.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantId));
+    },
+
+    update(
+      db: Executor,
+      tenantId: string,
+      values: SubscriptionChangesType,
+    ): Promise<SubscriptionRowType[]> {
+      return db
+        .update(subscriptions)
+        .set({ ...values, updatedAt: sql`now()` })
+        .where(eq(subscriptions.tenantId, tenantId))
+        .returning();
     },
 
     /**

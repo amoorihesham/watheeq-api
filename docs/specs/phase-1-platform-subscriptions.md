@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                   |
 | ---------------------- | ----------------------------------------------------------------------- |
-| **Status**             | In Implementation (step 1.4 next)                                            |
+| **Status**             | In Implementation (step 1.5 next)                                            |
 | **Approved by / date** | _ِAmr - 21/10/2026 - 17:15 pm_                                          |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`) |
 | **Related decisions**  | MVP 3.1, 3.9, D11-D17; Technical T2, T4, T5, T7, T8, T11, T13, T14      |
@@ -454,6 +454,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P1.21 | There is no minimum subscription term.                                                                                                                                                                                        | Owner decision: pilots and short terms are allowed; the date checks stay `end_date >= start_date`.                                                                               |
 | P1.22 | The price is per payment period; the payment period gives the amount its unit and never recalculates it; no term total is computed.                                                                                           | Owner decision: Watheeq charges nothing (D11), so it shows the agreed rate and leaves odd terms (a 3-month pilot on a yearly plan) to offline billing, without pro-rating rules. |
 | P1.23 | The Tenant Admin sees every field of the tenant's subscription, including pricing and both discounts.                                                                                                                         | Owner decision: the customer sees exactly the terms they agreed to.                                                                                                              |
+| P1.24 | Lists ordered by name use `lower(name) COLLATE "und-x-icu"` (helper `byName` in `src/db/order.ts`). | Found in step 1.4: the server's default collation (glibc `en_US`) ignores spaces, so `SC Professional` sorted after `Schema Unique` and the order would differ between local Docker and the KSA host. The ICU root collation is the same everywhere, handles Arabic and English, and matches `Intl.Collator("und")` for clients. Needs PostgreSQL built with ICU. |
 
 Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is implemented.
 
@@ -475,3 +476,4 @@ Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is im
 | 2026-10-21 | Step 1.1 implemented and verified: platform permission list in `platform.config.ts`, `platformPermissionsOf`, `requirePlatformPermission` (also refuses tenant users on its own). | Acceptance criteria met. |
 | 2026-10-21 | Step 1.2 implemented and verified: `plans` table (migration `0001_plans`), plan CRUD under `/operator/plans`, platform-level audit, `PLAN_NAME_TAKEN` via the constraint map; `auditContextOf(req)` in the auth module builds the audit actor and request ID. | Acceptance criteria met. |
 | 2026-10-21 | Step 1.3 implemented and verified: migration `0002`, tenants module (create, list, detail, resend), `/auth/verify`, login refuses unverified users, `email/` SMTP sender with Mailpit, subscriptions module shared functions (state, price, seats). Verify uses a conditional `UPDATE` instead of `FOR UPDATE` (same guarantee); a failed resend email returns 500. | Acceptance criteria met; two mechanism details recorded. |
+| 2026-10-21 | Step 1.4 implemented and verified: `PUT /operator/tenants/:tenantId/subscription` (copies the plan's current terms, keeps or replaces the customer discount, optional reason, seat lock, `subscription.changed` with before and after). Name ordering pinned to the ICU root collation (P1.24, proposed for owner approval). | Acceptance criteria met. |

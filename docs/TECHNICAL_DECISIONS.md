@@ -60,5 +60,5 @@ Each item below is a known, accepted gap for the MVP stage, with the trigger tha
 ### Deferred Technical Decisions
 
 - **Background job runner:** decided in Phase 7 (escalation checks).
-- **Hosting provider in KSA:** decided at deployment; Docker keeps options open. The managed PostgreSQL must offer version 18.
+- **Hosting provider in KSA:** decided at deployment; Docker keeps options open. The managed PostgreSQL must offer version 18, built with ICU (the `und-x-icu` collation orders names; Phase 1 spec, P1.24).
 - **Email provider for verification emails** (MVP D16): must keep data in KSA and accept SMTP; until then Mailpit serves local development (Phase 1 spec, P1.18). Must be chosen before production.

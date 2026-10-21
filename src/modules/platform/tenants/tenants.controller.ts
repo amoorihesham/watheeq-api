@@ -1,6 +1,7 @@
 import type { RequestHandler } from "express";
 import { auditContextOf } from "@/modules/auth/index.js";
 import type {
+  ChangeSubscriptionResponseType,
   CreateTenantResponseType,
   GetTenantResponseType,
   ListTenantsResponseType,
@@ -22,6 +23,15 @@ export function createTenantsController({ service }: { service: TenantsServiceTy
     get: (async (req, res) => {
       const detail = await service.get(String(req.params.tenantId));
       res.status(200).json(detail satisfies GetTenantResponseType);
+    }) satisfies RequestHandler,
+
+    changeSubscription: (async (req, res) => {
+      const changed = await service.changeSubscription(
+        String(req.params.tenantId),
+        req.body,
+        auditContextOf(req),
+      );
+      res.status(200).json(changed satisfies ChangeSubscriptionResponseType);
     }) satisfies RequestHandler,
 
     resendVerification: (async (req, res) => {

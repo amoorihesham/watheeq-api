@@ -5,6 +5,7 @@ export type SubscriptionStateType = (typeof SUBSCRIPTION_STATES)[number];
 
 export type SubscriptionRowType = typeof subscriptions.$inferSelect;
 export type NewSubscriptionType = typeof subscriptions.$inferInsert;
+export type SubscriptionChangesType = Omit<NewSubscriptionType, "tenantId" | "updatedAt">;
 
 export interface PricingInputType {
   priceHalalas: number;

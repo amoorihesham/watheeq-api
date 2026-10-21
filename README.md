@@ -84,6 +84,7 @@ Operator routes require an operator's access token and each declares a platform 
 | `POST /operator/tenants` | `platform.tenant.create` | 201 `{tenant, subscription, admin}`; creates the tenant, its subscription, and the first Tenant Admin, and emails the admin a verification link. 409 `EMAIL_TAKEN` or `SLUG_TAKEN` |
 | `GET /operator/tenants` | `platform.tenant.view` | 200 `{tenants:[{tenant, subscription, usage}]}`, ordered by name |
 | `GET /operator/tenants/:tenantId` | `platform.tenant.view` | 200 `{tenant, subscription, usage}`; 404 |
+| `PUT /operator/tenants/:tenantId/subscription` | `platform.subscription.update` | 200 `{subscription, usage}`. Body `{planId, startDate, endDate, customerDiscountPercent?, reason?}`: renews, extends, changes plan, or ends early (a past end date). Copies the plan's current terms; an omitted customer discount is kept |
 | `POST /operator/tenants/:tenantId/admin/resend-verification` | `platform.tenant.create` | 204; older links stop working. 409 `ALREADY_VERIFIED` |
 
 A plan is `{name, userLimit, graceDays, priceHalalas, paymentPeriod, discountPercent}`: the price is in halalas per payment period (`monthly` or `yearly`), and the discount is a percentage with up to two decimals.

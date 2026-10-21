@@ -11,6 +11,7 @@ export {
 export type {
   NewSubscriptionType,
   PricingType,
+  SubscriptionChangesType,
   SubscriptionRowType,
   SubscriptionStateType,
   SubscriptionViewType,
