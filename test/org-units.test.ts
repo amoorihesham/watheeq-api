@@ -192,13 +192,14 @@ describe("the tree (R2.15)", () => {
         {
           id: finance,
           name: "Finance",
+          managers: [],
           memberCount: 0,
           sections: [
-            { id: budgeting, name: "budgeting", memberCount: 0 },
-            { id: procurement, name: "Procurement", memberCount: 1 },
+            { id: budgeting, name: "budgeting", managers: [], memberCount: 0 },
+            { id: procurement, name: "Procurement", managers: [], memberCount: 1 },
           ],
         },
-        { id: legal, name: "legal", memberCount: 0, sections: [] },
+        { id: legal, name: "legal", managers: [], memberCount: 0, sections: [] },
       ],
     });
   });

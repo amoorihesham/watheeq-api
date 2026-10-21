@@ -115,7 +115,7 @@ export function createAuthService({
       const { token, password } = validate(verifyEmailRequestSchema, input);
       const passwordHash = await hashPassword(password);
       await withTx(db, async (tx) => {
-        const [link] = await repo.consumeEmailVerification(tx, hashToken(token));
+        const [link] = await repo.consumePasswordToken(tx, hashToken(token), "invitation");
         if (!link) {
           throw new AppError("VERIFICATION_INVALID");
         }

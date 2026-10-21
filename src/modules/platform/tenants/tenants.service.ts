@@ -5,11 +5,7 @@ import type { EmailSenderType } from "@/email/index.js";
 import { AppError } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
-import {
-  insertPendingUser,
-  issueEmailVerification,
-  verificationEmail,
-} from "@/modules/auth/index.js";
+import { insertPendingUser, issuePasswordToken, verificationEmail } from "@/modules/auth/index.js";
 import {
   assertSeatAvailable,
   createSubscriptionsRepository,
@@ -118,9 +114,10 @@ export function createTenantsService({
         }
         await assertSeatAvailable(tx, tenant.id);
         await repo.insertAdminMember(tx, tenant.id, admin.id);
-        const token = await issueEmailVerification(
+        const token = await issuePasswordToken(
           tx,
           admin.id,
+          "invitation",
           settings.verificationTokenTtlSeconds,
         );
 
@@ -250,9 +247,10 @@ export function createTenantsService({
         if (owner.emailVerifiedAt) {
           throw new AppError("ALREADY_VERIFIED");
         }
-        const token = await issueEmailVerification(
+        const token = await issuePasswordToken(
           tx,
           owner.id,
+          "invitation",
           settings.verificationTokenTtlSeconds,
         );
         await writeAuditEntry(tx, {

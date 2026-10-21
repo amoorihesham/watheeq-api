@@ -43,14 +43,18 @@ export function createOrgService({ db, repo }: { db: Db; repo: OrgRepositoryType
 
   return {
     async tree(tenantId: string): Promise<GetOrgTreeResponseType> {
-      const [units, counts] = await Promise.all([
+      const [units, counts, managers] = await Promise.all([
         repo.listUnits(db, tenantId),
         repo.countMembersByUnit(db, tenantId),
+        repo.listManagers(db, tenantId),
       ]);
       const memberCount = new Map(counts.map((row) => [row.unitId, row.memberCount]));
       const node = (unit: OrgUnitType) => ({
         id: unit.id,
         name: unit.name,
+        managers: managers
+          .filter((manager) => manager.unitId === unit.id)
+          .map(({ id, userName }) => ({ id, userName })),
         memberCount: memberCount.get(unit.id) ?? 0,
       });
       return {

@@ -14,6 +14,7 @@ import { createHealthRouter } from "./modules/health/health.routes.js";
 import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
 import { createSubscriptionsRouter } from "./modules/subscriptions/index.js";
+import { createUsersRouter } from "./modules/users/index.js";
 
 export interface AppDeps {
   pool: pg.Pool;
@@ -43,6 +44,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/operator/tenants", createTenantsRouter({ db, config, emailSender }));
   app.use("/subscription", createSubscriptionsRouter({ db, config }));
   app.use("/org-units", createOrgRouter({ db, config }));
+  app.use("/users", createUsersRouter({ db, config, emailSender }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

@@ -1,10 +1,10 @@
 import type { Tx } from "@/db/pool.js";
 import type { EmailMessageType } from "@/email/index.js";
 import { createAuthRepository } from "../auth.repository.js";
-import type { PendingUserType, UserSummaryType } from "../auth.types.js";
+import type { PasswordTokenPurposeType, PendingUserType, UserSummaryType } from "../auth.types.js";
 import { generateOpaqueToken, hashToken } from "./tokens.js";
 
-// Used by the tenants module to onboard a first Tenant Admin; auth keeps ownership of users and links (P1.15).
+// Used by the tenants and users modules to onboard users; auth keeps ownership of credentials and links (P1.15).
 const repo = createAuthRepository();
 
 /** Inserts a tenant user who has no password until they verify their email. */
@@ -21,20 +21,28 @@ export async function insertPendingUser(tx: Tx, user: PendingUserType): Promise<
   return row;
 }
 
-/** Retires the user's older links and issues a new one. Returns the raw token, which only the email carries. */
-export async function issueEmailVerification(
+/** Retires the user's older links of this purpose and issues a new one. Returns the raw token, which only the email carries. */
+export async function issuePasswordToken(
   tx: Tx,
   userId: string,
+  purpose: PasswordTokenPurposeType,
   ttlSeconds: number,
 ): Promise<string> {
-  await repo.retireEmailVerifications(tx, userId);
+  await repo.retirePasswordTokens(tx, userId, purpose);
   const token = generateOpaqueToken();
-  await repo.insertEmailVerification(tx, {
+  await repo.insertPasswordToken(tx, {
     userId,
+    purpose,
     tokenHash: hashToken(token),
     expiresAt: new Date(Date.now() + ttlSeconds * 1000),
   });
   return token;
+}
+
+/** For a deactivated user: no emailed link works any more, and every session is signed out at its next refresh. */
+export async function endUserAccess(tx: Tx, userId: string): Promise<void> {
+  await repo.retirePasswordTokens(tx, userId);
+  await repo.revokeUserRefreshTokens(tx, userId);
 }
 
 export function verificationEmail(
@@ -54,6 +62,32 @@ export function verificationEmail(
       "",
       `Hello ${user.userName},`,
       "To activate your Watheeq account and choose your password, open this link:",
+      link.toString(),
+      "",
+      "If you did not expect this email, you can ignore it.",
+    ].join("\n"),
+  };
+}
+
+/** The email an invited user receives; the link is the same `/verify-email` page as the first Tenant Admin's (P2.5). */
+export function invitationEmail(
+  user: { email: string; userName: string },
+  invitedBy: { userName: string; tenantName: string },
+  token: string,
+  appBaseUrl: string,
+): EmailMessageType {
+  const link = new URL("/verify-email", appBaseUrl);
+  link.searchParams.set("token", token);
+  return {
+    to: user.email,
+    subject: `دعوة للانضمام إلى ${invitedBy.tenantName} في وثيق | Join ${invitedBy.tenantName} on Watheeq`,
+    text: [
+      `مرحبا ${user.userName}،`,
+      `دعاك ${invitedBy.userName} للانضمام إلى ${invitedBy.tenantName} في وثيق. لتفعيل حسابك واختيار كلمة المرور، افتح الرابط التالي:`,
+      link.toString(),
+      "",
+      `Hello ${user.userName},`,
+      `${invitedBy.userName} invited you to join ${invitedBy.tenantName} on Watheeq. To activate your account and choose your password, open this link:`,
       link.toString(),
       "",
       "If you did not expect this email, you can ignore it.",

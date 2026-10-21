@@ -17,7 +17,7 @@
   Its main decisions are T15-T20 in `TECHNICAL_DECISIONS.md`.
 - **Known open items:** the KSA hosting provider must offer PostgreSQL 18 with ICU, and an SMTP email provider must be chosen before production (`TECHNICAL_DECISIONS.md`, deferred decisions).
 - **Phase 2 (org structure and users) in implementation** (`docs/specs/phase-2-org-structure-users.md`): spec approved 2026-10-21.
-- **Next action:** Phase 2 step 2.3 (users and managers).
+- **Next action:** Phase 2 step 2.4 (passwords).
 
 ---
 

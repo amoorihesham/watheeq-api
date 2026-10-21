@@ -152,14 +152,14 @@ describe("create a tenant (R1.3, R1.14)", () => {
     expect(message?.text).toContain(`${TEST_APP_BASE_URL}/verify-email?token=`);
     const token = email.lastTokenFor("sara@tenants-alnoor.test");
     const { rows } = await pool.query(
-      "select token_hash, used_at, expires_at - created_at as ttl from email_verifications where token_hash = $1",
+      "select token_hash, used_at, expires_at - created_at as ttl from password_tokens where token_hash = $1",
       [hashOf(token)],
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].used_at).toBeNull();
     expect(rows[0].ttl.hours ?? rows[0].ttl.days * 24).toBeGreaterThanOrEqual(71);
     const stored = await pool.query(
-      "select count(*)::int as n from email_verifications where token_hash = $1",
+      "select count(*)::int as n from password_tokens where token_hash = $1",
       [token],
     );
     expect(stored.rows[0].n).toBe(0);
@@ -271,10 +271,9 @@ describe("verify email and log in (R1.4)", () => {
     const res = await verify(token, "short");
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_FAILED");
-    const { rows } = await pool.query(
-      "select used_at from email_verifications where token_hash = $1",
-      [hashOf(token)],
-    );
+    const { rows } = await pool.query("select used_at from password_tokens where token_hash = $1", [
+      hashOf(token),
+    ]);
     expect(rows[0].used_at).toBeNull();
   });
 
@@ -314,7 +313,7 @@ describe("verify email and log in (R1.4)", () => {
     await createTenant("tn-al-expired", "expired@tenants-alnoor.test");
     const token = email.lastTokenFor("expired@tenants-alnoor.test");
     await pool.query(
-      "update email_verifications set expires_at = now() - interval '1 second' where token_hash = $1",
+      "update password_tokens set expires_at = now() - interval '1 second' where token_hash = $1",
       [hashOf(token)],
     );
     expect((await verify(token)).body.error.code).toBe("VERIFICATION_INVALID");

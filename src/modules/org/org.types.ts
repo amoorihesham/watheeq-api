@@ -33,6 +33,8 @@ export type UnitChangesType = z.output<typeof updateUnitRequestSchema>;
 export interface SectionNodeType {
   id: string;
   name: string;
+  /** Active members with the manager flag; zero or more, all equal (P2.12). */
+  managers: { id: string; userName: string }[];
   memberCount: number;
 }
 

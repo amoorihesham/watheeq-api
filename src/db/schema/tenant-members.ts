@@ -1,4 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
+  boolean,
+  check,
   foreignKey,
   index,
   pgEnum,
@@ -27,6 +30,8 @@ export const tenantMembers = pgTable(
     role: tenantMemberRoles().notNull().default("member"),
     // Null: directly under the organization (Phase 2 spec, P2.13).
     unitId: uuid("unit_id"),
+    // Managers are members of the unit they manage, so the flag lives on the membership (Phase 2 spec, P2.3).
+    isManager: boolean("is_manager").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -40,5 +45,6 @@ export const tenantMembers = pgTable(
       foreignColumns: [orgUnits.tenantId, orgUnits.id],
     }),
     index("tenant_members_unit_idx").on(t.tenantId, t.unitId),
+    check("tenant_members_manager_has_unit", sql`not ${t.isManager} or ${t.unitId} is not null`),
   ],
 );

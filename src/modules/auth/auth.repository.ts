@@ -1,7 +1,7 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import {
-  emailVerifications,
+  passwordTokens,
   refreshTokens,
   subscriptions,
   tenantMembers,
@@ -10,9 +10,10 @@ import {
 import { riyadhToday } from "@/modules/subscriptions/index.js";
 import type {
   AccountType,
-  NewEmailVerificationType,
+  NewPasswordTokenType,
   NewRefreshTokenType,
   NewUserType,
+  PasswordTokenPurposeType,
   UserSummaryType,
 } from "./auth.types.js";
 
@@ -96,34 +97,53 @@ export function createAuthRepository() {
         .where(eq(subscriptions.tenantId, tenantId));
     },
 
-    insertEmailVerification(db: Executor, values: NewEmailVerificationType) {
-      return db.insert(emailVerifications).values(values);
+    insertPasswordToken(db: Executor, values: NewPasswordTokenType) {
+      return db.insert(passwordTokens).values(values);
     },
 
-    /** Marks every unused link of the user as used, so only the next one issued works. */
-    retireEmailVerifications(db: Executor, userId: string) {
+    /** Marks the user's unused links as used (of one purpose, or all), so none of them works any more. */
+    retirePasswordTokens(db: Executor, userId: string, purpose?: PasswordTokenPurposeType) {
       return db
-        .update(emailVerifications)
-        .set({ usedAt: sql`now()` })
-        .where(and(eq(emailVerifications.userId, userId), isNull(emailVerifications.usedAt)));
-    },
-
-    /**
-     * Uses a valid link and returns its user in one statement. Of two concurrent submissions of the same link,
-     * only one matches `used_at IS NULL`, so only one gets a row back.
-     */
-    consumeEmailVerification(db: Executor, tokenHash: string): Promise<{ userId: string }[]> {
-      return db
-        .update(emailVerifications)
+        .update(passwordTokens)
         .set({ usedAt: sql`now()` })
         .where(
           and(
-            eq(emailVerifications.tokenHash, tokenHash),
-            isNull(emailVerifications.usedAt),
-            gt(emailVerifications.expiresAt, sql`now()`),
+            eq(passwordTokens.userId, userId),
+            isNull(passwordTokens.usedAt),
+            purpose ? eq(passwordTokens.purpose, purpose) : undefined,
+          ),
+        );
+    },
+
+    /**
+     * Uses a valid link of the given purpose and returns its user in one statement. Of two concurrent submissions
+     * of the same link, only one matches `used_at IS NULL`, so only one gets a row back.
+     */
+    consumePasswordToken(
+      db: Executor,
+      tokenHash: string,
+      purpose: PasswordTokenPurposeType,
+    ): Promise<{ userId: string }[]> {
+      return db
+        .update(passwordTokens)
+        .set({ usedAt: sql`now()` })
+        .where(
+          and(
+            eq(passwordTokens.tokenHash, tokenHash),
+            eq(passwordTokens.purpose, purpose),
+            isNull(passwordTokens.usedAt),
+            gt(passwordTokens.expiresAt, sql`now()`),
           ),
         )
-        .returning({ userId: emailVerifications.userId });
+        .returning({ userId: passwordTokens.userId });
+    },
+
+    /** Revokes every live refresh token of the user, signing out all their sessions. */
+    revokeUserRefreshTokens(db: Executor, userId: string) {
+      return db
+        .update(refreshTokens)
+        .set({ revokedAt: sql`now()` })
+        .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
     },
 
     setVerifiedPassword(db: Executor, userId: string, passwordHash: string) {

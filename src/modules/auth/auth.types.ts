@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
+import type { passwordTokenPurposes } from "@/db/schema/password-tokens.js";
 import type { tenantMemberRoles } from "@/db/schema/tenant-members.js";
 import type { userRoles } from "@/db/schema/users.js";
 import type { SubscriptionStatusType } from "@/modules/subscriptions/index.js";
@@ -74,8 +75,11 @@ export interface MeResponseType {
   subscription: SubscriptionStatusType | null;
 }
 
-export interface NewEmailVerificationType {
+export type PasswordTokenPurposeType = (typeof passwordTokenPurposes.enumValues)[number];
+
+export interface NewPasswordTokenType {
   userId: string;
+  purpose: PasswordTokenPurposeType;
   tokenHash: string;
   expiresAt: Date;
 }

@@ -198,14 +198,19 @@ describe("the user limit (R1.12)", () => {
       locked();
       await holding;
     });
-    await isLocked;
-
-    const started = Date.now();
-    await add(alRashid, "ul-iso-rashid");
-    expect(Date.now() - started).toBeLessThan(250);
-
-    release();
-    await noorTx;
+    try {
+      await isLocked;
+      // Al-Noor's lock is held until release(), so Al-Rashid finishing at all proves it never waited for it.
+      // The bound turns a wrongly shared lock into a clear failure instead of a hang.
+      const outcome = await Promise.race([
+        add(alRashid, "ul-iso-rashid").then(() => "added"),
+        new Promise((resolve) => setTimeout(resolve, 5000, "blocked")),
+      ]);
+      expect(outcome).toBe("added");
+    } finally {
+      release();
+      await noorTx;
+    }
   });
 });
 

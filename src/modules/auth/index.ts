@@ -4,6 +4,7 @@ export { emailSchema, userNameSchema } from "./auth.schemas.js";
 export { createOperator } from "./auth.service.js";
 export type {
   AuthUserType,
+  PasswordTokenPurposeType,
   TenantClaimType,
   TenantMemberRoleType,
   UserRoleType,
@@ -11,8 +12,10 @@ export type {
 export { auditContextOf } from "./shared/audit-context.js";
 export { authenticate, principalOf, requireRole } from "./shared/middlewares.js";
 export {
+  endUserAccess,
   insertPendingUser,
-  issueEmailVerification,
+  invitationEmail,
+  issuePasswordToken,
   verificationEmail,
 } from "./shared/onboarding.js";
 export { hashPassword, verifyPassword } from "./shared/passwords.js";

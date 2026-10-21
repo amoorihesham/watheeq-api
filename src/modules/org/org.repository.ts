@@ -1,7 +1,7 @@
 import { and, count, eq, sql } from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
-import { orgUnits, tenantMembers } from "@/db/schema/index.js";
+import { orgUnits, tenantMembers, users } from "@/db/schema/index.js";
 import type { NewOrgUnitType, OrgUnitType, UnitChangesType } from "./org.types.js";
 
 const unitColumns = {
@@ -40,6 +40,25 @@ export function createOrgRepository() {
         .from(tenantMembers)
         .where(eq(tenantMembers.tenantId, tenantId))
         .groupBy(tenantMembers.unitId);
+    },
+
+    /** Active managers of every unit, ordered by name (P2.3). */
+    listManagers(
+      db: Executor,
+      tenantId: string,
+    ): Promise<{ unitId: string | null; id: string; userName: string }[]> {
+      return db
+        .select({ unitId: tenantMembers.unitId, id: users.id, userName: users.userName })
+        .from(tenantMembers)
+        .innerJoin(users, eq(users.id, tenantMembers.userId))
+        .where(
+          and(
+            eq(tenantMembers.tenantId, tenantId),
+            eq(tenantMembers.isManager, true),
+            eq(users.isActive, true),
+          ),
+        )
+        .orderBy(byName(users.userName), users.id);
     },
 
     findById(db: Executor, tenantId: string, unitId: string): Promise<OrgUnitType[]> {
