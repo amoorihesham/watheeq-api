@@ -3,6 +3,7 @@ import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
+import { toSubscriptionStatus } from "@/modules/subscriptions/index.js";
 import { DUMMY_PASSWORD_HASH } from "./auth.config.js";
 import { createAuthRepository } from "./auth.repository.js";
 import {
@@ -18,6 +19,7 @@ import type {
   AuthUserType,
   CreateOperatorRequestType,
   LoginRequestType,
+  MeResponseType,
   UserSummaryType,
   VerifyEmailRequestType,
 } from "./auth.types.js";
@@ -133,12 +135,18 @@ export function createAuthService({
       });
     },
 
-    async me(user: AuthUserType): Promise<AuthUserType> {
+    async me(user: AuthUserType): Promise<MeResponseType> {
       const [account] = await repo.findAccountById(db, user.id);
       if (!account) {
         throw new AppError("UNAUTHENTICATED");
       }
-      return toAuthUser(account);
+      const [status] = account.tenantId
+        ? await repo.findSubscriptionStatus(db, account.tenantId)
+        : [];
+      return {
+        user: toAuthUser(account),
+        subscription: status ? toSubscriptionStatus(status, status.today) : null,
+      };
     },
   };
 }

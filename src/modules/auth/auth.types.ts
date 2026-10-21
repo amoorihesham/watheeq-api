@@ -3,6 +3,7 @@ import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { tenantMemberRoles } from "@/db/schema/tenant-members.js";
 import type { userRoles } from "@/db/schema/users.js";
+import type { SubscriptionStatusType } from "@/modules/subscriptions/index.js";
 import type { createAuthController } from "./auth.controller.js";
 import type { createAuthRepository } from "./auth.repository.js";
 import type {
@@ -67,7 +68,11 @@ export interface LoginResponseType {
   user: AuthUserType;
 }
 export type RefreshResponseType = LoginResponseType;
-export type MeResponseType = LoginResponseType;
+export interface MeResponseType {
+  user: AuthUserType;
+  /** Null for an operator. Lets the client explain why actions are disabled in Grace or Read-only (R1.11). */
+  subscription: SubscriptionStatusType | null;
+}
 
 export interface NewEmailVerificationType {
   userId: string;

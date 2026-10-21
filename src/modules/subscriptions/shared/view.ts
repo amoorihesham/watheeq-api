@@ -1,5 +1,6 @@
 import type {
   SubscriptionRowType,
+  SubscriptionStatusType,
   SubscriptionViewType,
   UsageType,
 } from "../subscriptions.types.js";
@@ -23,6 +24,17 @@ export function toSubscriptionView(row: SubscriptionRowType, today: string): Sub
       customerDiscountPercent: row.customerDiscountPercent,
       effectivePriceHalalas: effectivePrice(row),
     },
+  };
+}
+
+export function toSubscriptionStatus(
+  row: { endDate: string; graceDays: number },
+  today: string,
+): SubscriptionStatusType {
+  return {
+    state: subscriptionState(row, today),
+    endDate: row.endDate,
+    graceEndsOn: addDays(row.endDate, row.graceDays),
   };
 }
 

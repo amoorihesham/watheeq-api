@@ -55,7 +55,7 @@ export function createAuthController({
     }) satisfies RequestHandler,
 
     me: (async (req, res) => {
-      res.status(200).json({ user: await service.me(principalOf(req)) } satisfies MeResponseType);
+      res.status(200).json((await service.me(principalOf(req))) satisfies MeResponseType);
     }) satisfies RequestHandler,
   };
 }

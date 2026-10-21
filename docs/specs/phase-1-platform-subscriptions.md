@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                   |
 | ---------------------- | ----------------------------------------------------------------------- |
-| **Status**             | In Implementation (step 1.6 next)                                            |
+| **Status**             | In Implementation (all steps verified; awaiting owner review)                                             |
 | **Approved by / date** | _ِAmr - 21/10/2026 - 17:15 pm_                                          |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`) |
 | **Related decisions**  | MVP 3.1, 3.9, D11-D17; Technical T2, T4, T5, T7, T8, T11, T13, T14      |
@@ -478,3 +478,4 @@ Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is im
 | 2026-10-21 | Step 1.3 implemented and verified: migration `0002`, tenants module (create, list, detail, resend), `/auth/verify`, login refuses unverified users, `email/` SMTP sender with Mailpit, subscriptions module shared functions (state, price, seats). Verify uses a conditional `UPDATE` instead of `FOR UPDATE` (same guarantee); a failed resend email returns 500. | Acceptance criteria met; two mechanism details recorded. |
 | 2026-10-21 | Step 1.4 implemented and verified: `PUT /operator/tenants/:tenantId/subscription` (copies the plan's current terms, keeps or replaces the customer discount, optional reason, seat lock, `subscription.changed` with before and after). Name ordering pinned to the ICU root collation (P1.24, proposed for owner approval). | Acceptance criteria met. |
 | 2026-10-21 | Step 1.5 verified: `assertSeatAvailable` tested as Phase 2's add and reactivate paths will use it, on real connections with controlled interleavings (last seat, reactivation, downgrade over-limit, downgrade racing an addition, tenant isolation). No production code was needed; the seat lock in subscription changes landed in step 1.4. | Acceptance criteria met; each concurrency test is shown to fail when the lock is removed. |
+| 2026-10-21 | Step 1.6 implemented and verified: `subscriptionGuard` (Read-only refuses unsafe methods; reads the subscription on every request), `requireActiveSubscription`, `GET /subscription`, and `subscription: {state, endDate, graceEndsOn}` in `/auth/me` (null for operators). The guard reads `req.auth` directly so the subscriptions module does not import auth's index. | Acceptance criteria met. |

@@ -14,7 +14,7 @@
   `modules/auth/` is the reference example of the per-module file rules (Phase 0.5 spec), which every later module follows.
   A post-implementation refactor added `users.user_name`, the final access-token payload (`tenant: {id, roleId, roleName, permissions}`), module-owned composition in each routes file, and `<Name>Type` naming. The baseline migration was regenerated, so a local database migrated earlier must be recreated (`docker compose down -v`).
 - **Phase 1 (platform, plans & subscriptions):** spec approved 2026-10-21; implementation in progress, one step at a time.
-- **Next action:** owner review of Phase 1 step 1.5 (user-limit enforcement), then step 1.6 (tenant-side state and enforcement), the last Phase 1 step.
+- **Next action:** owner review of Phase 1 step 1.6 (tenant-side state and enforcement), the last Phase 1 step; then Phase 1 close-out (status `Implemented`, decisions promoted).
 
 ---
 

@@ -61,7 +61,7 @@ If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` an
 | `POST /auth/login`   | `{email, password}`   | 200 `{user:{id, email, userName, role, tenant}}` and both cookies. 401 `INVALID_CREDENTIALS` for any failure. |
 | `POST /auth/refresh` | `wq_refresh` cookie   | 200 `{user}` and new cookies; the old refresh token is revoked. 401 `UNAUTHENTICATED` (and both cookies cleared) if the token is unknown, revoked, or expired, or the user is inactive. |
 | `POST /auth/logout`  | nothing               | 204; the refresh token is revoked and both cookies are cleared. |
-| `GET /auth/me`       | `wq_access` cookie    | 200 `{user}`. 401 `UNAUTHENTICATED`. |
+| `GET /auth/me`       | `wq_access` cookie    | 200 `{user, subscription}`: `subscription` is `{state, endDate, graceEndsOn}` for a tenant user and `null` for an operator. 401 `UNAUTHENTICATED`. |
 
 - `wq_access` holds a 30-minute JWT (`Path=/`); `wq_refresh` holds a 7-day random token (`Path=/auth`). Both are `HttpOnly`, `Secure`, `SameSite=Lax`.
   Browsers treat `http://localhost` as secure; `curl` also sends `Secure` cookies to `localhost`.
@@ -93,6 +93,18 @@ A subscription shows `state` (`active`, `grace`, or `read_only`, derived from to
 
 The first Tenant Admin has no password until they open the emailed link, which posts `{token, password}` to `POST /auth/verify` (204; 400 `VERIFICATION_INVALID` for an unknown, used, replaced, or expired link).
 Until then their login returns the same 401 as an unknown email. The full design is in `docs/specs/phase-1-platform-subscriptions.md`.
+
+## Tenant API
+
+| Endpoint | Who | Result |
+| -------- | --- | ------ |
+| `GET /subscription` | a tenant user | 200 `{subscription, usage}`: every field of the tenant's subscription, including pricing (permission `subscription.view` is enforced from Phase 3) |
+
+Every tenant route is mounted behind `authenticate()`, `requireRole("user")`, and `subscriptionGuard(db)` from `src/modules/subscriptions/`:
+
+- In **Read-only**, `POST`, `PUT`, `PATCH`, and `DELETE` return 403 `SUBSCRIPTION_READ_ONLY`; reads still work. `/auth/*` is not behind the guard, so users can always log in, refresh, and log out.
+- Routes that need **Active** add `requireActiveSubscription()`, which returns 403 `SUBSCRIPTION_NOT_ACTIVE` in Grace and Read-only.
+- The guard reads the subscription on every request, so a renewal takes effect immediately.
 
 ## Architecture in brief
 

@@ -1,6 +1,13 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
-import { emailVerifications, refreshTokens, tenantMembers, users } from "@/db/schema/index.js";
+import {
+  emailVerifications,
+  refreshTokens,
+  subscriptions,
+  tenantMembers,
+  users,
+} from "@/db/schema/index.js";
+import { riyadhToday } from "@/modules/subscriptions/index.js";
 import type {
   AccountType,
   NewEmailVerificationType,
@@ -73,6 +80,20 @@ export function createAuthRepository() {
         .update(refreshTokens)
         .set({ revokedAt: sql`now()` })
         .where(and(eq(refreshTokens.tokenHash, tokenHash), isNull(refreshTokens.revokedAt)));
+    },
+
+    findSubscriptionStatus(
+      db: Executor,
+      tenantId: string,
+    ): Promise<{ endDate: string; graceDays: number; today: string }[]> {
+      return db
+        .select({
+          endDate: subscriptions.endDate,
+          graceDays: subscriptions.graceDays,
+          today: riyadhToday,
+        })
+        .from(subscriptions)
+        .where(eq(subscriptions.tenantId, tenantId));
     },
 
     insertEmailVerification(db: Executor, values: NewEmailVerificationType) {
