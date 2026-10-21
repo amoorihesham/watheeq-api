@@ -16,8 +16,9 @@
 - **Phase 1 (platform, plans & subscriptions) implemented** (`docs/specs/phase-1-platform-subscriptions.md`): plans with price, payment period, and discount; tenant creation with the first Tenant Admin, who verifies their email and sets a password (Mailpit locally); subscriptions with copied terms, customer discount, and derived Active / Grace / Read-only state; subscription changes; the user limit under a per-tenant lock; the Read-only guard and `GET /subscription`.
   Its main decisions are T15-T20 in `TECHNICAL_DECISIONS.md`.
 - **Known open items:** the KSA hosting provider must offer PostgreSQL 18 with ICU, and an SMTP email provider must be chosen before production (`TECHNICAL_DECISIONS.md`, deferred decisions).
-- **Phase 2 (org structure and users) in implementation** (`docs/specs/phase-2-org-structure-users.md`): spec approved 2026-10-21.
-- **Next action:** owner review of Phase 2 step 2.4 (passwords), then Phase 2 close-out (status `Implemented`, decisions promoted).
+- **Phase 2 (org structure & users) implemented** (`docs/specs/phase-2-org-structure-users.md`): departments and sections under the organization, zero or more managers per unit, users invited by email (they set their own password), edit, deactivate and reactivate with owner and self protections, password change and reset, and tenant permissions declared on every route (interim role table until Phase 3).
+  Its main decisions are D18-D20 in `MVP_SCOPE.md` and T21-T24 in `TECHNICAL_DECISIONS.md`. Migration `0004` replaces `email_verifications` with `password_tokens`, so pending verification links in a local database must be resent.
+- **Next action:** draft the Phase 3 spec (roles and authorization) when the owner asks.
 
 ---
 
@@ -30,7 +31,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 0   | Technical foundations           | Skeleton, cross-cutting basics, tenant data model, audit, JWT authentication                | -          | Implemented |
 | 0.5 | Layered architecture            | Routes → controller → service → repository convention, central middleware, test helpers   | 0          | Implemented                             |
 | 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user limit, email verification | 0, 0.5     | Implemented                                    |
-| 2   | Org structure & users           | Department/section tree, managers, membership                                               | 1          | In Implementation                       |
+| 2   | Org structure & users           | Department/section tree, managers, membership                                               | 1          | Implemented                             |
 | 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                                   | 2          | Not started                             |
 | 4   | Working calendar                | Working days, holidays, working-day deadline calculation                                    | 1          | Not started                             |
 | 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | Not started                             |

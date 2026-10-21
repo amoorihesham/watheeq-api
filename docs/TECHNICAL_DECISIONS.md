@@ -3,7 +3,7 @@
 ## Watheeq - Legal Affairs Management System
 
 **Status:** Revised 2026-10-21 to match the simplified MVP codebase.
-The full design for T1-T13 is in `docs/specs/phase-0-foundations.md`, T14 in `docs/specs/phase-0.5-refactor.md`, and T15-T20 in `docs/specs/phase-1-platform-subscriptions.md`.
+The full design for T1-T13 is in `docs/specs/phase-0-foundations.md`, T14 in `docs/specs/phase-0.5-refactor.md`, T15-T20 in `docs/specs/phase-1-platform-subscriptions.md`, and T21-T24 in `docs/specs/phase-2-org-structure-users.md`.
 **Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D17).
 
 **Guiding rule:** for the MVP, choose the simplest design that is correct for the current requirements.
@@ -44,6 +44,10 @@ Hardening that the MVP does not need yet is listed under "Deferred hardening" an
 | T18 | **Money is stored as integer halalas** (SAR, excluding VAT), and the effective price applies the plan discount then the customer discount with integer arithmetic, rounded half up, computed never stored (Phase 1, P1.19, P1.20) | No floating-point error reaches an amount; stacked discounts never exceed 100%; one function gives every screen the same price | `numeric` amounts; additive discounts |
 | T19 | **Email goes through an `EmailSenderType` interface with one SMTP sender (`nodemailer`);** Mailpit is the local development SMTP server (Phase 1, P1.18) | Real email locally from day one; choosing the KSA provider becomes a configuration change; tests use a fake | Provider SDK; logging emails instead of sending |
 | T20 | **Lists ordered by name use `lower(name) COLLATE "und-x-icu"`** through `byName` in `src/db/order.ts` (Phase 1, P1.24) | The same order on every server whatever its locale, for Arabic and English; matches `Intl.Collator("und")` in clients | The server's default collation; `COLLATE "C"` |
+| T21 | **One `org_units` table with an immutable `kind` (`department`, `section`); links between tenant rows use composite foreign keys that include `tenant_id`** (a section's parent, a member's unit); the manager role is `tenant_members.is_manager` (Phase 2, P2.1-P2.3) | One foreign key from a member to their unit; the database refuses a cross-tenant link even if a query forgets the filter; a manager can never sit outside their unit | Separate `departments` and `sections` tables; `org_units.manager_id` |
+| T22 | **Foreign-key violations join the central error map, mapped only on the side that writes into a row that just disappeared** (400 `unknown_unit`); a delete that must find its row empty locks it first (`FOR UPDATE`) (Phase 2, P2.4) | Repositories keep never catching; the concurrency loser gets a meaningful error; the self-referencing key cannot be told apart by table | Telling the two sides apart by the error's table; catching in services |
+| T23 | **Emailed links live in `password_tokens` with a `purpose` (`invitation`, 72 hours; `reset`, 1 hour), stored hashed, single use, retired by a newer link or a deactivation; a reset request answers 204 before looking up the account; a password change or reset signs out the user's other sessions** (Phase 2, P2.5-P2.8) | One table and one consuming `UPDATE` for both links; no account enumeration by response or timing; a stolen session does not survive a password change | Separate tables per link; signed self-contained links (cannot be single use or retired) |
+| T24 | **Tenant routes declare a permission through `requireTenantPermission`**, which reads the token's `permissions`; while the token's `roleId` is null (until Phase 3) it falls back to an interim table by membership role (Phase 2, P2.9) | Routes are written once against their final permission; Phase 3 changes only where permissions come from | Role-name checks in each route |
 
 ---
 
@@ -56,6 +60,7 @@ Each item below is a known, accepted gap for the MVP stage, with the trigger tha
 | Row-Level Security for tenant isolation | Application-level `tenant_id` filters (T2), covered by isolation tests | Before the first production tenant with sensitive data, or when the number of tenant-data queries makes review unreliable |
 | Database-enforced append-only audit (no `UPDATE`/`DELETE` grants) | No code path updates or deletes audit rows | Together with dedicated database roles |
 | Login throttling (per account and per IP) | None | Before production exposure |
+| Rate limiting of password-reset requests (per email and per IP) | Every request gets the same 204; only real, active, verified users are emailed, and only the newest link works | Before production exposure, together with login throttling |
 | Refresh-token reuse detection (revoke all of a user's tokens when a revoked token is replayed) | A revoked token is simply rejected | Before production exposure |
 | CSRF tokens | `SameSite=Lax` cookies and a same-origin deployment | If the API is served from a different site than the web app, or before production exposure |
 | Separate operator identity realm | `users.role = 'operator'` (T4) | When operator roles or stricter operator policies are needed |

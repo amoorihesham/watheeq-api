@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Status:** Agreed scope baseline (last updated 2026-10-21). Nothing described here is implemented yet.
+**Status:** Agreed scope baseline (last updated 2026-10-21). Implementation progress is tracked in `ROADMAP_AND_STATUS.md`.
 **Relationship to other docs:** `PRODUCT_VISION.md` describes the long-term product. This document defines what the first release must do. When they differ, this document governs the MVP.
 
 ---
@@ -19,7 +19,7 @@ A platform operator can create a tenant and assign it a subscription plan; the t
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Platform Operator** | Operates the platform; exists outside any tenant. Manages plans, creates tenants and their first Tenant Admin, and manages tenant subscriptions. |
 | **Tenant Admin**      | Configures the organization: structure, users, roles, working calendar. Can view the tenant's subscription and usage.                            |
-| **Head of Legal**     | Manager of the Legal department. Configures legal operations.                                                                                    |
+| **Head of Legal**     | Holds the legal-operations permissions through their role (D20). Configures legal operations.                                                   |
 | **Legal Staff**       | Members of the Legal department who own requests and complete workflow stages.                                                                   |
 | **Requester**         | Any employee who submits a legal request and responds to information requests.                                                                   |
 
@@ -69,10 +69,10 @@ Renewal by the operator returns the tenant to Active.
 
 #### 3.2 Organization Configuration (Tenant Admin)
 
-- **Organization structure:** a fixed three-level tree - Organization → Department → Section.
-  - Each department and section has exactly one manager.
-  - Each user belongs to exactly one unit (department or section).
-  - The Legal department is a department in this tree; its manager is the Head of Legal.
+- **Organization structure:** departments and sections under the organization (the tenant itself): a department sits directly under the organization, and a section sits under a department.
+  - Each department and section has zero or more managers, all equal; a manager is a member of the unit they manage (D18).
+  - Each user belongs to at most one unit (department or section); a user with no unit sits directly under the organization (D19).
+  - The department that handles legal affairs is an ordinary department; legal responsibilities come from permissions, not from the structure (D20).
 - **Users:** create and manage users within the tenant, subject to the subscription's user limit (3.1).
 - **Roles:** create and manage roles (see 3.3).
 - **Working calendar:** working days and holidays, used for all SLA calculations.
@@ -121,13 +121,13 @@ Escalation is notification-only in the MVP.
 
 | Rule                    | Fires when                                                              | Notifies                                      |
 | ----------------------- | ----------------------------------------------------------------------- | --------------------------------------------- |
-| **R0 - Review overdue** | A submitted request is not accepted or rejected within _N_ working days | Head of Legal                                 |
+| **R0 - Review overdue** | A submitted request is not accepted or rejected within _N_ working days | Users who may review requests across the organization |
 | **R1 - At risk**        | _X%_ of the SLA has elapsed                                             | Request owner                                 |
-| **R2 - Breached**       | The SLA deadline passes before closure                                  | Owner, owner's section manager, Head of Legal |
+| **R2 - Breached**       | The SLA deadline passes before closure                                  | Owner, the managers of the owner's section and department |
 
 - _N_ and _X%_ are configurable per tenant.
 - Each rule fires **at most once per request**; firing is recorded.
-- Escalation chain inside Legal: section manager → Head of Legal. If a level is missing (no section manager, or the owner is that manager / the Head of Legal), it is skipped.
+- Escalation chain: the managers of the owner's section, then the managers of the owner's department (D20). Every active manager of a level is notified. A level with no manager, or whose only manager is the owner, is skipped.
 
 #### 3.8 Notifications
 
@@ -165,7 +165,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | --- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | D1  | One role per user; scope derived from org structure                                           | Single authorization model; role defines _what_, structure defines _where_.                            |
 | D2  | Create/edit/assign roles only with permissions you hold; no self role change                  | Prevents privilege escalation.                                                                         |
-| D3  | Fixed 3-level org tree; no positions                                                          | Sufficient for MVP; positions add no MVP behavior.                                                     |
+| D3  | Fixed org tree: departments under the organization, sections under departments; no positions | Sufficient for MVP; positions add no MVP behavior.                                                     |
 | D4  | Priority = SLA level, in working days                                                         | One concept instead of two.                                                                            |
 | D5  | Requester sets priority; legal may adjust until acceptance; locked after                      | Prevents post-acceptance changes that would hide SLA breaches.                                         |
 | D6  | Linear workflow stages                                                                        | Simplest correct workflow model.                                                                       |
@@ -180,13 +180,16 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D15 | Downgrade below current user count creates an over-limit state, not removal                   | Avoids destructive automatic changes to a tenant's users.                                              |
 | D16 | The first Tenant Admin verifies their email after the tenant is created, setting their own password through the link; until then they cannot log in | Confirms the address belongs to the customer before it controls the tenant. Adds one email provider dependency (must keep data in KSA); notifications stay in-app only (D10). |
 | D17 | Plans carry price, payment period (monthly or yearly), and discount; subscriptions copy them and may add a customer discount; no minimum term | Records the commercial terms agreed offline, per customer, without payment integration (D11). |
+| D18 | A department or section has zero or more managers, all equal; a manager is a member of the unit they manage | Real units are often run by more than one person; a unit exists before anyone can manage it, and managers leave. Replaces "exactly one manager" (Phase 2 spec, P2.12). |
+| D19 | A user belongs to at most one unit; a user with no unit sits directly under the organization | The first Tenant Admin exists before any unit, and some people (a CEO, an IT admin) belong to no department (Phase 2 spec, P2.13). |
+| D20 | No department is marked as Legal; legal responsibilities (configuring legal operations, reviewing and owning requests, receiving R0) are permissions; escalation climbs the owner's own units | Authorization stays with roles (D1), and organization administration and legal operations stay separable (Phase 2 spec, P2.14). |
 
 ---
 
 ### 6. Known Limitations (Accepted)
 
 - Time spent awaiting requester information counts against the legal team's SLA.
-- The organization structure is limited to three levels.
+- The organization structure is limited to departments and sections.
 - Users only see escalations and subscription warnings when they open the application.
 - Subscription renewals depend on the operator acting manually.
 
