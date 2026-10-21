@@ -4,7 +4,7 @@
 
 **Status:** Revised 2026-10-21 to match the simplified MVP codebase.
 The full design for T1-T13 is in `docs/specs/phase-0-foundations.md`, and T14 in `docs/specs/phase-0.5-refactor.md`.
-**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D16).
+**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D17).
 
 **Guiding rule:** for the MVP, choose the simplest design that is correct for the current requirements.
 Hardening that the MVP does not need yet is listed under "Deferred hardening" and added when the product grows.

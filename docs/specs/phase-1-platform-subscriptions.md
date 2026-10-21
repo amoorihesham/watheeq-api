@@ -1,11 +1,11 @@
 # Phase 1 Spec: Platform, Plans & Subscriptions
 
-| Field                  | Value                                                                        |
-| ---------------------- | ---------------------------------------------------------------------------- |
-| **Status**             | Draft                                                                        |
-| **Approved by / date** | _(set by the project owner only)_                                            |
-| **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`)      |
-| **Related decisions**  | MVP 3.1, 3.9, D11-D16; Technical T2, T4, T5, T7, T8, T11, T13, T14           |
+| Field                  | Value                                                                   |
+| ---------------------- | ----------------------------------------------------------------------- |
+| **Status**             | In Implementation (step 1.1)                                            |
+| **Approved by / date** | _ِAmr - 21/10/2026 - 17:15 pm_                                          |
+| **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`) |
+| **Related decisions**  | MVP 3.1, 3.9, D11-D17; Technical T2, T4, T5, T7, T8, T11, T13, T14      |
 
 ---
 
@@ -43,24 +43,26 @@ Example people: **Omar**, a platform operator; **Sara**, the first Tenant Admin 
 Example plans: **Basic** (10 users, 14 grace days) and **Professional** (50 users, 30 grace days).
 All dates are calendar dates in Saudi Arabia (`Asia/Riyadh`).
 
-| ID    | Requirement | Example |
-| ----- | ----------- | ------- |
-| R1.1  | An operator can create, list, view, and edit plans. A plan has a unique name, a user limit of at least 1, and a grace period in days. | _Omar creates "Basic" with 10 users and 14 grace days. A second plan named "basic" is rejected with 409 `PLAN_NAME_TAKEN`._ |
-| R1.2  | Editing a plan never changes existing subscriptions. | _Omar edits Basic to 8 users. Al-Noor's limit stays 10; a tenant assigned Basic afterwards gets 8._ |
-| R1.3  | An operator creates a tenant, its subscription, its first Tenant Admin, and the admin's membership in one atomic action. | _Omar creates Al-Noor on Basic with admin `sara@alnoor.sa`. If that email already belongs to a user, nothing is created._ |
-| R1.4  | The first Tenant Admin verifies their email and sets their own password through the verification link; until then they cannot log in. The operator can resend the link, which invalidates older links. | _Sara receives an email, follows the link, chooses her password, and can then log in. Omar never sees a password. Before verifying, Sara's login attempts get 401._ |
-| R1.5  | Every tenant always has exactly one subscription. | _Two operators change Al-Noor's subscription at the same moment: the changes run one after the other; Al-Noor never has two or none._ |
-| R1.6  | An operator can renew, extend, change, or end a subscription by setting its plan and period; the previous terms are recorded in the audit log. | _Omar moves Al-Noor to Professional ending 2028-10-31. The audit log has `subscription.changed` with the old and new terms._ |
-| R1.7  | The state is derived from today's date in Saudi Arabia: Active through the end date, Grace for the copied number of grace days after it, Read-only after that. | _End 2027-10-31, 14 grace days: Active on 2027-10-31, Grace 2027-11-01 to 2027-11-14, Read-only from 2027-11-15._ |
-| R1.8  | Renewal returns a tenant to Active immediately. | _Al-Noor is Read-only; Omar sets a later end date; Sara's next request is treated as Active._ |
-| R1.9  | In Read-only, tenant users can still log in, log out, refresh, and read, but every other state-changing tenant request is rejected. | _Any `POST`, `PUT`, `PATCH`, or `DELETE` on a tenant route other than auth returns 403 `SUBSCRIPTION_READ_ONLY`._ |
-| R1.10 | Routes can declare that they need an Active subscription; in Grace those routes are rejected. | _In Grace, Khalid's submission returns 403 `SUBSCRIPTION_NOT_ACTIVE`._ |
-| R1.11 | Every tenant user can see the subscription state; Tenant Admins can see plan, period, limit, and usage. | _`GET /auth/me` tells Sara's browser the tenant is in Grace; `GET /subscription` shows "Basic, 7 of 10 users"._ |
-| R1.12 | Adding an active member beyond the user limit is rejected, including under concurrent creation. | _Al-Noor has 9 of 10 users; two admins add a user at the same moment: one succeeds, the other gets 409 `USER_LIMIT_REACHED`._ |
-| R1.13 | A downgrade below the current user count is allowed; existing users keep working and new users are blocked until the count is within the limit. | _Al-Rashid has 30 users and moves to Basic (10). All 30 keep working; user 31 is rejected._ |
-| R1.14 | Every operator write is audited: plan changes as platform-level entries (no tenant), tenant creation and subscription changes as entries of that tenant, with the operator as actor. | _Omar edits Basic: `audit_log` has `plan.updated` with a null tenant._ |
-| R1.15 | Tenant users cannot call operator endpoints, and tenant endpoints only ever return the caller's tenant data. | _Sara calls `GET /operator/tenants` and gets 403 `FORBIDDEN`._ |
-| R1.16 | Every endpoint declares the permission it requires. | _`POST /operator/plans` requires `platform.plan.create`._ |
+| ID    | Requirement                                                                                                                                                                                                                                                                      | Example                                                                                                                                                             |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1.1  | An operator can create, list, view, and edit plans. A plan has a unique name, a user limit of at least 1, a grace period in days, a price in SAR per payment period, a payment period (monthly or yearly), and a discount percentage.                                            | _Omar creates "Basic": 10 users, 14 grace days, 1,000.00 SAR per month, 15% discount. A second plan named "basic" is rejected with 409 `PLAN_NAME_TAKEN`._          |
+| R1.2  | Editing a plan never changes existing subscriptions.                                                                                                                                                                                                                             | _Omar edits Basic to 8 users and 1,200 SAR. Al-Noor keeps 10 users and 1,000 SAR; a tenant assigned Basic afterwards gets 8 users and 1,200 SAR._                   |
+| R1.2a | A subscription can carry a customer discount on top of the plan discount, and shows the effective price per payment period: the plan discount applied first, then the customer discount, rounded to the nearest halala.                                                          | _Basic is 1,000 SAR/month with 15% off; Al-Noor negotiated 10%. Its effective price is 1,000 × 0.85 × 0.90 = 765.00 SAR per month._                                 |
+| R1.2b | A subscription has no minimum term: any period of at least one day is allowed.                                                                                                                                                                                                   | _Omar assigns a 3-month pilot to Al-Rashid from 2026-11-01 to 2027-01-31; it is accepted._                                                                          |
+| R1.3  | An operator creates a tenant, its subscription, its first Tenant Admin, and the admin's membership in one atomic action.                                                                                                                                                         | _Omar creates Al-Noor on Basic with admin `sara@alnoor.sa`. If that email already belongs to a user, nothing is created._                                           |
+| R1.4  | The first Tenant Admin verifies their email and sets their own password through the verification link; until then they cannot log in. The operator can resend the link, which invalidates older links.                                                                           | _Sara receives an email, follows the link, chooses her password, and can then log in. Omar never sees a password. Before verifying, Sara's login attempts get 401._ |
+| R1.5  | Every tenant always has exactly one subscription.                                                                                                                                                                                                                                | _Two operators change Al-Noor's subscription at the same moment: the changes run one after the other; Al-Noor never has two or none._                               |
+| R1.6  | An operator can renew, extend, change, or end a subscription by setting its plan and period; the previous terms are recorded in the audit log.                                                                                                                                   | _Omar moves Al-Noor to Professional ending 2028-10-31. The audit log has `subscription.changed` with the old and new terms._                                        |
+| R1.7  | The state is derived from today's date in Saudi Arabia: Active through the end date, Grace for the copied number of grace days after it, Read-only after that.                                                                                                                   | _End 2027-10-31, 14 grace days: Active on 2027-10-31, Grace 2027-11-01 to 2027-11-14, Read-only from 2027-11-15._                                                   |
+| R1.8  | Renewal returns a tenant to Active immediately.                                                                                                                                                                                                                                  | _Al-Noor is Read-only; Omar sets a later end date; Sara's next request is treated as Active._                                                                       |
+| R1.9  | In Read-only, tenant users can still log in, log out, refresh, and read, but every other state-changing tenant request is rejected.                                                                                                                                              | _Any `POST`, `PUT`, `PATCH`, or `DELETE` on a tenant route other than auth returns 403 `SUBSCRIPTION_READ_ONLY`._                                                   |
+| R1.10 | Routes can declare that they need an Active subscription; in Grace those routes are rejected.                                                                                                                                                                                    | _In Grace, Khalid's submission returns 403 `SUBSCRIPTION_NOT_ACTIVE`._                                                                                              |
+| R1.11 | Every tenant user can see the subscription state; Tenant Admins can see all of their subscription's data: plan name, start and end dates, grace period and grace end, state, user limit and usage, price, payment period, plan discount, customer discount, and effective price. | _`GET /auth/me` tells Sara's browser the tenant is in Grace; `GET /subscription` shows "Basic, 7 of 10 users, 765.00 SAR per month"._                               |
+| R1.12 | Adding an active member beyond the user limit is rejected, including under concurrent creation.                                                                                                                                                                                  | _Al-Noor has 9 of 10 users; two admins add a user at the same moment: one succeeds, the other gets 409 `USER_LIMIT_REACHED`._                                       |
+| R1.13 | A downgrade below the current user count is allowed; existing users keep working and new users are blocked until the count is within the limit.                                                                                                                                  | _Al-Rashid has 30 users and moves to Basic (10). All 30 keep working; user 31 is rejected._                                                                         |
+| R1.14 | Every operator write is audited: plan changes as platform-level entries (no tenant), tenant creation and subscription changes as entries of that tenant, with the operator as actor.                                                                                             | _Omar edits Basic: `audit_log` has `plan.updated` with a null tenant._                                                                                              |
+| R1.15 | Tenant users cannot call operator endpoints, and tenant endpoints only ever return the caller's tenant data.                                                                                                                                                                     | _Sara calls `GET /operator/tenants` and gets 403 `FORBIDDEN`._                                                                                                      |
+| R1.16 | Every endpoint declares the permission it requires.                                                                                                                                                                                                                              | _`POST /operator/plans` requires `platform.plan.create`._                                                                                                           |
 
 ## 4. Design
 
@@ -77,11 +79,11 @@ Repositories in `src/modules/platform/` may query across tenants; every other mo
 Repositories never catch (Phase 0.5, 0.5-6).
 A duplicate plan name, tenant slug, or admin email reaches the error handler as a unique violation, and the central constraint map in `src/http/errors.ts` turns it into the 409 code:
 
-| Constraint | Code |
-| ---------- | ---- |
+| Constraint                                                | Code              |
+| --------------------------------------------------------- | ----------------- |
 | `plans_name_lower_unique` (unique index on `lower(name)`) | `PLAN_NAME_TAKEN` |
-| `tenants_slug_unique` | `SLUG_TAKEN` |
-| `users_email_unique` (exists) | `EMAIL_TAKEN` |
+| `tenants_slug_unique`                                     | `SLUG_TAKEN`      |
+| `users_email_unique` (exists)                             | `EMAIL_TAKEN`     |
 
 Because tenant creation runs in one transaction, the violation also rolls back everything inserted before it (R1.3).
 
@@ -89,25 +91,50 @@ Because tenant creation runs in one transaction, the violation also rolls back e
 
 **`plans`**: platform data, no `tenant_id`.
 
-| Column       | Type          | Notes |
-| ------------ | ------------- | ----- |
-| `id`         | `uuid` PK     | |
-| `name`       | `text`        | Not null, 1-100 characters. Unique index on `lower(name)`. |
-| `user_limit` | `integer`     | Not null, check `>= 1`. |
-| `grace_days` | `integer`     | Not null, check `between 0 and 365`. |
-| `created_at`, `updated_at` | `timestamptz` | |
+| Column                     | Type                   | Notes                                                                                                                                                          |
+| -------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | `uuid` PK              |                                                                                                                                                                |
+| `name`                     | `text`                 | Not null, 1-100 characters. Unique index on `lower(name)`.                                                                                                     |
+| `user_limit`               | `integer`              | Not null, check `>= 1`.                                                                                                                                        |
+| `grace_days`               | `integer`              | Not null, check `between 0 and 365`.                                                                                                                           |
+| `price_halalas`            | `bigint`               | Not null, check `>= 0`. The price per payment period in halalas (1 SAR = 100 halalas): 1,000.00 SAR is `100000`. Whole numbers, so no floating-point rounding. |
+| `payment_period`           | `payment_periods` enum | Not null: `monthly` or `yearly`. How often the price is charged.                                                                                               |
+| `discount_percent`         | `numeric(5,2)`         | Not null, default `0`, check `between 0 and 100`. The plan's own discount, for example `15.00`.                                                                |
+| `created_at`, `updated_at` | `timestamptz`          |                                                                                                                                                                |
+
+Prices are informational: Watheeq charges nothing and issues no invoices (D11). Omar bills the customer offline, and the stored terms are the shared record of what was agreed.
+Amounts are in SAR, excluding VAT; tax and e-invoicing are outside the MVP.
 
 **`subscriptions`**: one row per tenant, updated in place.
 
-| Column       | Type      | Notes |
-| ------------ | --------- | ----- |
-| `tenant_id`  | `uuid` PK | FK to `tenants`. The primary key makes "exactly one subscription" (R1.5) a database fact. |
-| `plan_id`    | `uuid`    | FK to `plans`. Which plan the terms were copied from. |
-| `plan_name`, `user_limit`, `grace_days` | | Copied at assignment (D14). Checks `user_limit >= 1`, `grace_days >= 0`. |
-| `start_date`, `end_date` | `date` | Not null. Check `end_date >= start_date`. |
-| `updated_at` | `timestamptz` | |
+| Column                                                     | Type           | Notes                                                                                                           |
+| ---------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------- |
+| `tenant_id`                                                | `uuid` PK      | FK to `tenants`. The primary key makes "exactly one subscription" (R1.5) a database fact.                       |
+| `plan_id`                                                  | `uuid`         | FK to `plans`. Which plan the terms were copied from.                                                           |
+| `plan_name`, `user_limit`, `grace_days`                    |                | Copied at assignment (D14). Checks `user_limit >= 1`, `grace_days >= 0`.                                        |
+| `price_halalas`, `payment_period`, `plan_discount_percent` |                | Copied from the plan at assignment (D14), with the same checks.                                                 |
+| `customer_discount_percent`                                | `numeric(5,2)` | Not null, default `0`, check `between 0 and 100`. The discount negotiated for this tenant, set by the operator. |
+| `start_date`, `end_date`                                   | `date`         | Not null. Check `end_date >= start_date`.                                                                       |
+| `updated_at`                                               | `timestamptz`  |                                                                                                                 |
 
 Each change writes the old and new terms to `audit_log`, which is the history (R1.6).
+
+#### Effective price
+
+The effective price per payment period is computed, never stored, by one pure function, `effectivePrice({priceHalalas, planDiscountPercent, customerDiscountPercent})` in `subscriptions/shared/pricing.ts`:
+
+```
+effective = round_half_up(price × (1 − plan% / 100) × (1 − customer% / 100))
+```
+
+- The discounts are applied one after the other, so they can never add up to more than 100%. Example: 15% then 10% is 23.5% off in total, not 25%.
+- The arithmetic uses integers (`BigInt`): discounts are handled as hundredths of a percent (`15.00` becomes `1500`), so no floating-point error reaches the amount.
+- Rounding is to the nearest halala, halves up. Example: 999 halalas with 12.5% off is 874.125, which rounds to 874.
+- A 100% discount makes the effective price 0.
+
+The price is always per one payment period: `monthly` means the amount is charged every month, `yearly` once a year.
+The period never recalculates the amount; a cheaper yearly offer is simply a lower yearly price (Basic Yearly at 11,000 SAR instead of 12 × 1,000) or a plan discount.
+No total for the whole term is computed (P1.22). The term need not be a whole number of periods, so a 3-month pilot on a yearly plan is allowed, and Omar decides offline what to bill for it.
 
 **`users`** (changed):
 
@@ -117,23 +144,23 @@ Each change writes the old and new terms to `audit_log`, which is the history (R
 
 **`email_verifications`** (new):
 
-| Column       | Type          | Notes |
-| ------------ | ------------- | ----- |
-| `id`         | `uuid` PK     | |
-| `user_id`    | `uuid`        | FK to `users`, not null. Indexed. |
-| `token_hash` | `text`        | SHA-256 of a random 256-bit token, unique. |
+| Column       | Type          | Notes                                                                       |
+| ------------ | ------------- | --------------------------------------------------------------------------- |
+| `id`         | `uuid` PK     |                                                                             |
+| `user_id`    | `uuid`        | FK to `users`, not null. Indexed.                                           |
+| `token_hash` | `text`        | SHA-256 of a random 256-bit token, unique.                                  |
 | `expires_at` | `timestamptz` | 72 hours after creation (`VERIFICATION_TOKEN_TTL_SECONDS`, default 259200). |
-| `used_at`    | `timestamptz` | Set when verified, or when a resend replaces it. |
-| `created_at` | `timestamptz` | |
+| `used_at`    | `timestamptz` | Set when verified, or when a resend replaces it.                            |
+| `created_at` | `timestamptz` |                                                                             |
 
 Only the hash is stored, so a database leak yields no usable links.
 
-| Audit action                          | `tenant_id`       | Resource |
-| ------------------------------------- | ----------------- | -------- |
-| `plan.created`, `plan.updated`        | `NULL` (platform) | plan |
-| `tenant.created`                      | the new tenant    | tenant |
-| `user.created` (first Tenant Admin)   | the new tenant    | user |
-| `subscription.assigned` (at creation) | the tenant        | subscription |
+| Audit action                          | `tenant_id`       | Resource                                        |
+| ------------------------------------- | ----------------- | ----------------------------------------------- |
+| `plan.created`, `plan.updated`        | `NULL` (platform) | plan                                            |
+| `tenant.created`                      | the new tenant    | tenant                                          |
+| `user.created` (first Tenant Admin)   | the new tenant    | user                                            |
+| `subscription.assigned` (at creation) | the tenant        | subscription                                    |
 | `subscription.changed`                | the tenant        | subscription; `details` holds old and new terms |
 
 #### User-limit check
@@ -157,29 +184,33 @@ Over-limit after a downgrade (R1.13, D15) needs no extra state: the check runs o
 Operator routes require an operator access token and send `Cache-Control: no-store`.
 Dates are `YYYY-MM-DD` strings.
 
-| Method | Path | Who | Permission | Request | Responses |
-| ------ | ---- | --- | ---------- | ------- | --------- |
-| POST   | `/operator/plans` | operator | `platform.plan.create` | `{name, userLimit, graceDays}` | 201 `{plan}`; 400; 409 `PLAN_NAME_TAKEN` |
-| GET    | `/operator/plans` | operator | `platform.plan.view` | none | 200 `{plans:[...]}` ordered by name |
-| GET    | `/operator/plans/:planId` | operator | `platform.plan.view` | none | 200 `{plan}`; 404 |
-| PATCH  | `/operator/plans/:planId` | operator | `platform.plan.update` | any of `{name, userLimit, graceDays}` | 200 `{plan}`; 400; 404; 409 `PLAN_NAME_TAKEN` |
-| POST   | `/operator/tenants` | operator | `platform.tenant.create` | `{name, slug, admin:{email, userName}, subscription:{planId, startDate, endDate}}` | 201 `{tenant, subscription, admin:{id, email}}`; 400; 409 `EMAIL_TAKEN`, `SLUG_TAKEN` |
-| GET    | `/operator/tenants` | operator | `platform.tenant.view` | none | 200 `{tenants:[{id, name, slug, subscription:{..., state}, usage:{activeUsers, overLimit}}]}` |
-| GET    | `/operator/tenants/:tenantId` | operator | `platform.tenant.view` | none | 200 `{tenant, subscription, usage}`; 404 |
-| PUT    | `/operator/tenants/:tenantId/subscription` | operator | `platform.subscription.update` | `{planId, startDate, endDate, reason?}` | 200 `{subscription, usage}`; 400; 404 |
-| POST   | `/operator/tenants/:tenantId/admin/resend-verification` | operator | `platform.tenant.create` | none | 204; 404; 409 `ALREADY_VERIFIED` |
-| POST   | `/auth/verify` | anyone | none | `{token, password}` | 204; 400 `VALIDATION_FAILED` (password 12-256 characters); 400 `VERIFICATION_INVALID` |
-| GET    | `/subscription` | tenant user | `subscription.view` | none | 200 `{subscription:{planName, userLimit, startDate, endDate, graceEndsOn, state}, usage}` |
-| GET    | `/auth/me` | any user | none | (changed) | Tenant users' response gains `subscription:{state, endDate, graceEndsOn}` |
+| Method | Path                                                    | Who         | Permission                     | Request                                                                                                      | Responses                                                                                                                                                                                    |
+| ------ | ------------------------------------------------------- | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/operator/plans`                                       | operator    | `platform.plan.create`         | `{name, userLimit, graceDays, priceHalalas, paymentPeriod, discountPercent?}`                                | 201 `{plan}`; 400; 409 `PLAN_NAME_TAKEN`                                                                                                                                                     |
+| GET    | `/operator/plans`                                       | operator    | `platform.plan.view`           | none                                                                                                         | 200 `{plans:[...]}` ordered by name                                                                                                                                                          |
+| GET    | `/operator/plans/:planId`                               | operator    | `platform.plan.view`           | none                                                                                                         | 200 `{plan}`; 404                                                                                                                                                                            |
+| PATCH  | `/operator/plans/:planId`                               | operator    | `platform.plan.update`         | any of `{name, userLimit, graceDays, priceHalalas, paymentPeriod, discountPercent}`                          | 200 `{plan}`; 400; 404; 409 `PLAN_NAME_TAKEN`                                                                                                                                                |
+| POST   | `/operator/tenants`                                     | operator    | `platform.tenant.create`       | `{name, slug, admin:{email, userName}, subscription:{planId, startDate, endDate, customerDiscountPercent?}}` | 201 `{tenant, subscription, admin:{id, email}}`; 400; 409 `EMAIL_TAKEN`, `SLUG_TAKEN`                                                                                                        |
+| GET    | `/operator/tenants`                                     | operator    | `platform.tenant.view`         | none                                                                                                         | 200 `{tenants:[{id, name, slug, subscription:{..., state}, usage:{activeUsers, overLimit}}]}`                                                                                                |
+| GET    | `/operator/tenants/:tenantId`                           | operator    | `platform.tenant.view`         | none                                                                                                         | 200 `{tenant, subscription, usage}`; 404                                                                                                                                                     |
+| PUT    | `/operator/tenants/:tenantId/subscription`              | operator    | `platform.subscription.update` | `{planId, startDate, endDate, customerDiscountPercent?, reason?}`                                            | 200 `{subscription, usage}`; 400; 404                                                                                                                                                        |
+| POST   | `/operator/tenants/:tenantId/admin/resend-verification` | operator    | `platform.tenant.create`       | none                                                                                                         | 204; 404; 409 `ALREADY_VERIFIED`                                                                                                                                                             |
+| POST   | `/auth/verify`                                          | anyone      | none                           | `{token, password}`                                                                                          | 204; 400 `VALIDATION_FAILED` (password 12-256 characters); 400 `VERIFICATION_INVALID`                                                                                                        |
+| GET    | `/subscription`                                         | tenant user | `subscription.view`            | none                                                                                                         | 200 `{subscription:{planName, userLimit, graceDays, startDate, endDate, graceEndsOn, state, pricing}, usage:{activeUsers, userLimit, overLimit}}`: everything the subscription holds (R1.11) |
+| GET    | `/auth/me`                                              | any user    | none                           | (changed)                                                                                                    | Tenant users' response gains `subscription:{state, endDate, graceEndsOn}`                                                                                                                    |
+
+Every subscription in a response carries `pricing: {priceHalalas, paymentPeriod, planDiscountPercent, customerDiscountPercent, effectivePriceHalalas}`.
+Percentages are JSON numbers with up to two decimals (`15`, `12.5`).
+`customerDiscountPercent` defaults to `0` when omitted on create, and keeps its current value when omitted on `PUT`.
 
 #### Permissions
 
-| Permission | Allows | Held by in the MVP |
-| ---------- | ------ | ------------------ |
-| `platform.plan.view`, `platform.plan.create`, `platform.plan.update` | Plan endpoints | Every operator |
-| `platform.tenant.view`, `platform.tenant.create` | Tenant endpoints | Every operator |
-| `platform.subscription.update` | Subscription changes | Every operator |
-| `subscription.view` | `GET /subscription` (organization scope) | Tenant Admin (from Phase 3) |
+| Permission                                                           | Allows                                   | Held by in the MVP          |
+| -------------------------------------------------------------------- | ---------------------------------------- | --------------------------- |
+| `platform.plan.view`, `platform.plan.create`, `platform.plan.update` | Plan endpoints                           | Every operator              |
+| `platform.tenant.view`, `platform.tenant.create`                     | Tenant endpoints                         | Every operator              |
+| `platform.subscription.update`                                       | Subscription changes                     | Every operator              |
+| `subscription.view`                                                  | `GET /subscription` (organization scope) | Tenant Admin (from Phase 3) |
 
 The `platform.` prefix keeps operator permissions out of the tenant catalog, so a tenant role can never hold one.
 Until Phase 3, `GET /subscription` is open to any tenant user; its content is low-sensitivity.
@@ -188,21 +219,23 @@ Until Phase 3, `GET /subscription` is open to any tenant user; its content is lo
 
 - `name` (plan, tenant): trimmed, 1-100 characters. `slug`: lowercase letters, digits, and hyphens, 2-50 characters.
 - `userLimit`: integer 1-100,000. `graceDays`: integer 0-365.
-- `startDate` not after today; `endDate >= startDate`. A past `endDate` ends a subscription early.
+- `priceHalalas`: integer 0-100,000,000 (up to 1,000,000.00 SAR per period). `paymentPeriod`: `monthly` or `yearly`.
+- `discountPercent`, `customerDiscountPercent`: number 0-100 with at most two decimals; `12.345` is rejected.
+- `startDate` not after today; `endDate >= startDate`, with no minimum term (R1.2b). A past `endDate` ends a subscription early.
 - Unknown `planId`: 400 `VALIDATION_FAILED` with detail code `unknown_plan`.
 - `admin.email`: normalized (trim, lowercase), valid format. `admin.userName`: trimmed, 1-100 characters (Phase 0, P0.20).
 - Non-UUID path IDs: 404 `NOT_FOUND`.
 
 #### New error codes
 
-| HTTP | Code | When |
-| ---- | ---- | ---- |
-| 400  | `VERIFICATION_INVALID` | Unknown, expired, or used verification token. |
-| 409  | `ALREADY_VERIFIED` | Resend requested for an admin who has already verified. |
-| 403  | `SUBSCRIPTION_READ_ONLY` | Unsafe tenant request while Read-only (R1.9). |
-| 403  | `SUBSCRIPTION_NOT_ACTIVE` | Route requires Active; tenant is in Grace or Read-only (R1.10). |
-| 409  | `PLAN_NAME_TAKEN`, `EMAIL_TAKEN`, `SLUG_TAKEN` | Unique value already exists. |
-| 409  | `USER_LIMIT_REACHED` | Adding an active member would exceed the limit (R1.12). |
+| HTTP | Code                                           | When                                                            |
+| ---- | ---------------------------------------------- | --------------------------------------------------------------- |
+| 400  | `VERIFICATION_INVALID`                         | Unknown, expired, or used verification token.                   |
+| 409  | `ALREADY_VERIFIED`                             | Resend requested for an admin who has already verified.         |
+| 403  | `SUBSCRIPTION_READ_ONLY`                       | Unsafe tenant request while Read-only (R1.9).                   |
+| 403  | `SUBSCRIPTION_NOT_ACTIVE`                      | Route requires Active; tenant is in Grace or Read-only (R1.10). |
+| 409  | `PLAN_NAME_TAKEN`, `EMAIL_TAKEN`, `SLUG_TAKEN` | Unique value already exists.                                    |
+| 409  | `USER_LIMIT_REACHED`                           | Adding an active member would exceed the limit (R1.12).         |
 
 ### 4.3 Key flows and state transitions
 
@@ -255,7 +288,7 @@ The dummy-hash check runs when `password_hash` is null, so timing does not revea
 
 #### Change a subscription (operator)
 
-In one transaction: load the plan, take the tenant's seat lock, load the subscription (none → 404), update it with the plan's current terms and the new dates, and audit `subscription.changed` with the old and new terms.
+In one transaction: load the plan, take the tenant's seat lock, load the subscription (none → 404), update it with the plan's current terms (including price, payment period, and plan discount), the new dates, and the customer discount, and audit `subscription.changed` with the old and new terms.
 Renew, extend, change plan, and end early are all this one operation.
 
 #### Email delivery (P1.18)
@@ -269,14 +302,14 @@ Renew, extend, change plan, and end early are all this one operation.
 
 New configuration keys:
 
-| Key | Default | Meaning |
-| --- | ------- | ------- |
-| `SMTP_HOST`, `SMTP_PORT` | none | SMTP server. Locally Mailpit (`localhost`, `1025`). |
-| `SMTP_USER`, `SMTP_PASSWORD` | none | Optional; Mailpit needs none. |
-| `SMTP_SECURE` | `false` | TLS from the first byte (port 465 style). |
-| `EMAIL_FROM` | none | Sender address, for example `Watheeq <no-reply@watheeq.sa>`. |
-| `APP_BASE_URL` | none | Web-app origin used to build links, for example `http://localhost:5173`. |
-| `VERIFICATION_TOKEN_TTL_SECONDS` | `259200` | Verification link lifetime (72 hours). |
+| Key                              | Default  | Meaning                                                                  |
+| -------------------------------- | -------- | ------------------------------------------------------------------------ |
+| `SMTP_HOST`, `SMTP_PORT`         | none     | SMTP server. Locally Mailpit (`localhost`, `1025`).                      |
+| `SMTP_USER`, `SMTP_PASSWORD`     | none     | Optional; Mailpit needs none.                                            |
+| `SMTP_SECURE`                    | `false`  | TLS from the first byte (port 465 style).                                |
+| `EMAIL_FROM`                     | none     | Sender address, for example `Watheeq <no-reply@watheeq.sa>`.             |
+| `APP_BASE_URL`                   | none     | Web-app origin used to build links, for example `http://localhost:5173`. |
+| `VERIFICATION_TOKEN_TTL_SECONDS` | `259200` | Verification link lifetime (72 hours).                                   |
 
 #### Subscription guard (tenant routes)
 
@@ -318,23 +351,27 @@ HTTP bodies are named per the type rule, for example `CreatePlanRequestType`, `C
 
 ## 5. Edge Cases and Failure Behavior
 
-| Scenario | Expected behavior |
-| -------- | ----------------- |
-| Omar creates Al-Noor with an email that already exists. | Unique violation; full rollback; 409 `EMAIL_TAKEN`; nothing remains (R1.3). |
-| Omar double-clicks "Create tenant". | The second request hits the same email or slug and gets 409; one tenant exists. |
-| Two concurrent member additions for Al-Noor's last seat. | The seat lock serializes them; the second gets 409 `USER_LIMIT_REACHED` (R1.12). |
-| Omar downgrades Al-Noor while an admin adds a user. | Both take the seat lock; whichever runs second sees the other's result. |
-| Two operators change Al-Noor's subscription at once. | The seat lock runs them one after the other; both are audited (R1.5, R1.6). |
-| A request arrives at 23:59 Riyadh time on the end date. | `today` is computed in `Asia/Riyadh`, so the state is Active. |
-| Omar sets a start date in the future. | 400; there is no "not yet started" state. |
-| Sara (tenant user) calls an operator endpoint. | 403 `FORBIDDEN` from `requireRole('operator')` (R1.15). |
-| Al-Noor is Read-only; Sara logs in, logs out, or opens `GET /subscription`. | Allowed. |
-| The verification email fails to send after the tenant is created. | The tenant exists; the failure is logged; Omar resends. |
-| Sara uses a verification link twice, or after it expires. | 400 `VERIFICATION_INVALID`. |
-| Sara double-clicks the verify button. | The row lock serializes the two requests; the first sets the password, the second gets 400 `VERIFICATION_INVALID`. |
-| Omar resends; Sara then opens the first, older email. | The older row was marked used at resend; 400 `VERIFICATION_INVALID`. |
-| Sara tries to log in before verifying. | 401 `INVALID_CREDENTIALS`, identical to a wrong password. |
-| `GET /operator/tenants/not-a-uuid`. | 404 `NOT_FOUND`. |
+| Scenario                                                                    | Expected behavior                                                                                                  |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Omar creates Al-Noor with an email that already exists.                     | Unique violation; full rollback; 409 `EMAIL_TAKEN`; nothing remains (R1.3).                                        |
+| Omar double-clicks "Create tenant".                                         | The second request hits the same email or slug and gets 409; one tenant exists.                                    |
+| Two concurrent member additions for Al-Noor's last seat.                    | The seat lock serializes them; the second gets 409 `USER_LIMIT_REACHED` (R1.12).                                   |
+| Omar downgrades Al-Noor while an admin adds a user.                         | Both take the seat lock; whichever runs second sees the other's result.                                            |
+| Two operators change Al-Noor's subscription at once.                        | The seat lock runs them one after the other; both are audited (R1.5, R1.6).                                        |
+| A request arrives at 23:59 Riyadh time on the end date.                     | `today` is computed in `Asia/Riyadh`, so the state is Active.                                                      |
+| Omar sets a start date in the future.                                       | 400; there is no "not yet started" state.                                                                          |
+| Sara (tenant user) calls an operator endpoint.                              | 403 `FORBIDDEN` from `requireRole('operator')` (R1.15).                                                            |
+| Al-Noor is Read-only; Sara logs in, logs out, or opens `GET /subscription`. | Allowed.                                                                                                           |
+| The verification email fails to send after the tenant is created.           | The tenant exists; the failure is logged; Omar resends.                                                            |
+| Sara uses a verification link twice, or after it expires.                   | 400 `VERIFICATION_INVALID`.                                                                                        |
+| Sara double-clicks the verify button.                                       | The row lock serializes the two requests; the first sets the password, the second gets 400 `VERIFICATION_INVALID`. |
+| Omar resends; Sara then opens the first, older email.                       | The older row was marked used at resend; 400 `VERIFICATION_INVALID`.                                               |
+| Sara tries to log in before verifying.                                      | 401 `INVALID_CREDENTIALS`, identical to a wrong password.                                                          |
+| `GET /operator/tenants/not-a-uuid`.                                         | 404 `NOT_FOUND`.                                                                                                   |
+| Omar raises Basic from 1,000 to 1,200 SAR while Al-Noor is on Basic.        | Al-Noor keeps 1,000 SAR until Omar changes its subscription; the plan edit is a platform-level audit entry (R1.2). |
+| Omar renews Al-Noor without sending `customerDiscountPercent`.              | The current 10% customer discount is kept; the plan's current price and plan discount are copied again.            |
+| A plan with 100% discount, or a customer discount of 100%.                  | Effective price 0; allowed (for example a free pilot).                                                             |
+| `discountPercent: 12.345` or `-1` or `101`.                                 | 400 `VALIDATION_FAILED`; the database check rejects the same values as a second safeguard.                         |
 
 ## 6. Security and Authorization
 
@@ -348,14 +385,14 @@ HTTP bodies are named per the type rule, for example `CreatePlanRequestType`, `C
 
 Phase 0 steps 0.3-0.5 must be complete first.
 
-| Step | Objective | Delivers | Acceptance criteria | Verification |
-| ---- | --------- | -------- | ------------------- | ------------ |
-| 1.1 Operator permissions | Every operator route declares a permission. | `requirePlatformPermission`, platform permission list. | A route with a permission rejects a tenant user with 403 and accepts an operator; a forced-false check returns 403. | Integration tests. |
-| 1.2 Plans | Operators manage plans. | `plans` table; plan routes, controller, service, repository; audit. | R1.1: CRUD works; duplicate name (any case) 409; invalid values 400; each write leaves one platform-level audit row with before and after values. | Integration tests. |
-| 1.3 Tenants, subscriptions, verification | Operators create tenants; the first admin verifies. | `subscriptions`, `email_verifications`, `users` changes, state function, `assertSeatAvailable`, tenant routes, `/auth/verify`, resend endpoint, the `email/` SMTP sender and its configuration; Mailpit in Docker Compose (tests use a fake sender, plus one integration test against Mailpit started by Testcontainers). | R1.3, R1.4, R1.7: atomic creation; taken email or slug leaves nothing; Sara cannot log in before verifying, then verifies with a password and logs in; a used, expired, or replaced link is rejected; the list shows state and usage; the state function matches R1.7 at every boundary, including Riyadh midnight. | Unit tests for the state function; integration tests with a fake email sender. |
-| 1.4 Subscription changes | Renew, extend, change, end. | `PUT /operator/tenants/:tenantId/subscription`, audit. | R1.2, R1.5, R1.6, R1.8. | Integration tests, including concurrent changes on two connections. |
-| 1.5 User-limit enforcement | The limit holds under concurrency and after a downgrade. | Seat lock in subscription changes; tests of `assertSeatAvailable`. | R1.12, R1.13; one tenant's lock never blocks another. | Integration tests on two connections with a controlled interleaving. |
-| 1.6 Tenant-side state | Tenants see and are governed by their subscription. | Subscription guard, `requireActiveSubscription`, `GET /subscription`, state in `/auth/me`. | R1.9-R1.11. | Integration tests with dates set to reach each state. |
+| Step                                     | Objective                                                | Delivers                                                                                                                                                                                                                                                                                                                  | Acceptance criteria                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Verification                                                                   |
+| ---------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 1.1 Operator permissions                 | Every operator route declares a permission.              | `requirePlatformPermission`, platform permission list.                                                                                                                                                                                                                                                                    | A route with a permission rejects a tenant user with 403 and accepts an operator; a forced-false check returns 403.                                                                                                                                                                                                                                                                                                                                                                                           | Integration tests.                                                             |
+| 1.2 Plans                                | Operators manage plans.                                  | `plans` table; plan routes, controller, service, repository; audit.                                                                                                                                                                                                                                                       | R1.1: CRUD works with price, payment period, and discount; duplicate name (any case) 409; invalid values 400, including a negative price, an unknown period, and a discount over 100 or with three decimals; each write leaves one platform-level audit row with before and after values.                                                                                                                                                                                                                     | Integration tests.                                                             |
+| 1.3 Tenants, subscriptions, verification | Operators create tenants; the first admin verifies.      | `subscriptions`, `email_verifications`, `users` changes, state function, `assertSeatAvailable`, tenant routes, `/auth/verify`, resend endpoint, the `email/` SMTP sender and its configuration; Mailpit in Docker Compose (tests use a fake sender, plus one integration test against Mailpit started by Testcontainers). | R1.3, R1.4, R1.7: atomic creation; taken email or slug leaves nothing; Sara cannot log in before verifying, then verifies with a password and logs in; a used, expired, or replaced link is rejected; the list shows state and usage; the state function matches R1.7 at every boundary, including Riyadh midnight; the subscription copies price, period, and plan discount and stores the customer discount; `effectivePrice` matches R1.2a, including stacking, half-up rounding, and 100% (R1.2a, R1.2b). | Unit tests for the state function; integration tests with a fake email sender. |
+| 1.4 Subscription changes                 | Renew, extend, change, end.                              | `PUT /operator/tenants/:tenantId/subscription`, audit.                                                                                                                                                                                                                                                                    | R1.2, R1.5, R1.6, R1.8: a change copies the plan's current price terms and keeps or replaces the customer discount; editing a plan's price afterwards changes no subscription.                                                                                                                                                                                                                                                                                                                                | Integration tests, including concurrent changes on two connections.            |
+| 1.5 User-limit enforcement               | The limit holds under concurrency and after a downgrade. | Seat lock in subscription changes; tests of `assertSeatAvailable`.                                                                                                                                                                                                                                                        | R1.12, R1.13; one tenant's lock never blocks another.                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Integration tests on two connections with a controlled interleaving.           |
+| 1.6 Tenant-side state                    | Tenants see and are governed by their subscription.      | Subscription guard, `requireActiveSubscription`, `GET /subscription`, state in `/auth/me`.                                                                                                                                                                                                                                | R1.9-R1.11.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Integration tests with dates set to reach each state.                          |
 
 Suggested rounds: 1.1; then 1.2; then 1.3; then 1.4, 1.5, and 1.6 in parallel.
 
@@ -363,67 +400,75 @@ Suggested rounds: 1.1; then 1.2; then 1.3; then 1.4, 1.5, and 1.6 in parallel.
 
 Integration tests run against real PostgreSQL; dates are controlled by writing subscription dates relative to the database's Riyadh date.
 
-| Requirement | Test | Step |
-| ----------- | ---- | ---- |
-| R1.1, R1.2 | Plan CRUD, duplicates, validation, audit; plan edits leave subscriptions unchanged. | 1.2, 1.4 |
-| R1.3, R1.4 | Atomic creation, rollback, verification, first login. | 1.3 |
-| R1.5, R1.6, R1.8 | Changes, audit of terms, concurrency, renewal from Read-only. | 1.4 |
-| R1.7 | Unit: state function at each boundary. | 1.3 |
-| R1.9-R1.11 | Guard per state, auth routes unaffected, Active-only route, responses. | 1.6 |
-| R1.12, R1.13 | Limit, concurrent last seat, reactivation, downgrade over-limit. | 1.5 |
-| R1.14 | Each operator write leaves the expected audit row and `tenant_id`. | 1.2-1.4 |
-| R1.15, R1.16 | Tenant user on operator routes; tenant endpoints with two seeded tenants; forced permission failure. | 1.1-1.6 |
+| Requirement      | Test                                                                                                 | Step     |
+| ---------------- | ---------------------------------------------------------------------------------------------------- | -------- |
+| R1.1, R1.2       | Plan CRUD, duplicates, validation, audit; plan edits leave subscriptions unchanged.                  | 1.2, 1.4 |
+| R1.3, R1.4       | Atomic creation, rollback, verification, first login.                                                | 1.3      |
+| R1.5, R1.6, R1.8 | Changes, audit of terms, concurrency, renewal from Read-only.                                        | 1.4      |
+| R1.7             | Unit: state function at each boundary.                                                               | 1.3      |
+| R1.9-R1.11       | Guard per state, auth routes unaffected, Active-only route, responses.                               | 1.6      |
+| R1.12, R1.13     | Limit, concurrent last seat, reactivation, downgrade over-limit.                                     | 1.5      |
+| R1.14            | Each operator write leaves the expected audit row and `tenant_id`.                                   | 1.2-1.4  |
+| R1.15, R1.16     | Tenant user on operator routes; tenant endpoints with two seeded tenants; forced permission failure. | 1.1-1.6  |
 
 ## 9. Open Questions
 
-| #  | Question | Options | Resolution |
-| -- | -------- | ------- | ---------- |
-| Q1 | How does the application create tenants, and how do operators read across tenants? | | **Resolved 2026-10-21:** operator routes guarded by role and permission; platform repositories query across tenants; no database platform mode (T2). |
-| Q2 | Where are operator actions audited? | | **Resolved 2026-10-20:** one `audit_log`; `tenant_id IS NULL` marks platform-level entries. |
-| Q3 | Grace period length and where it is defined. | | **Resolved 2026-10-20:** per plan, copied into the subscription. |
-| Q4 | Which users count against the limit? | | **Resolved 2026-10-20:** active users only (now: active members). |
-| Q5 | Operator suspension independent of the subscription? | | **Resolved 2026-10-20:** deferred. |
-| Q6 | How does the first Tenant Admin get a password, now that `/auth/verify` exists (MVP D16)? | | **Resolved 2026-10-21:** Sara sets her own password in the verification step (P1.15). Replaces the earlier "generated, shown once". |
-| Q7 | What happens if the verification email fails or expires? | | **Resolved 2026-10-21:** the operator can resend; older links stop working (P1.16). |
-| Q8 | Can an unverified user log in? | | **Resolved 2026-10-21:** no; 401 `INVALID_CREDENTIALS` (P1.17). |
-| Q9 | How are verification emails delivered before the email provider is chosen (deferred decision; must keep data in KSA)? Example: Omar creates Al-Noor today; Sara needs her link. | (a) **Recommended:** an `EmailSenderType` interface with two implementations: a development sender that writes the email (with the link) to the log, allowed only when `NODE_ENV` is `development` or `test`, and the real provider added when it is chosen. In production the app refuses to start without a provider. Tests use a fake that records emails. (b) Choose the provider now, as part of Phase 1. (c) Return the link to the operator in the API response until a provider exists, and Omar passes it on. | **Resolved 2026-10-21:** an `EmailSenderType` interface with one SMTP implementation (`nodemailer`); Mailpit is the SMTP server for local development, and production points the same sender at the chosen KSA provider (P1.18). |
+| #   | Question                                                                                                                                                                        | Options                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Resolution                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | How does the application create tenants, and how do operators read across tenants?                                                                                              |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **Resolved 2026-10-21:** operator routes guarded by role and permission; platform repositories query across tenants; no database platform mode (T2).                                                                             |
+| Q2  | Where are operator actions audited?                                                                                                                                             |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **Resolved 2026-10-20:** one `audit_log`; `tenant_id IS NULL` marks platform-level entries.                                                                                                                                      |
+| Q3  | Grace period length and where it is defined.                                                                                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **Resolved 2026-10-20:** per plan, copied into the subscription.                                                                                                                                                                 |
+| Q4  | Which users count against the limit?                                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **Resolved 2026-10-20:** active users only (now: active members).                                                                                                                                                                |
+| Q5  | Operator suspension independent of the subscription?                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **Resolved 2026-10-20:** deferred.                                                                                                                                                                                               |
+| Q6  | How does the first Tenant Admin get a password, now that `/auth/verify` exists (MVP D16)?                                                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **Resolved 2026-10-21:** Sara sets her own password in the verification step (P1.15). Replaces the earlier "generated, shown once".                                                                                              |
+| Q7  | What happens if the verification email fails or expires?                                                                                                                        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **Resolved 2026-10-21:** the operator can resend; older links stop working (P1.16).                                                                                                                                              |
+| Q8  | Can an unverified user log in?                                                                                                                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **Resolved 2026-10-21:** no; 401 `INVALID_CREDENTIALS` (P1.17).                                                                                                                                                                  |
+| Q9  | How are verification emails delivered before the email provider is chosen (deferred decision; must keep data in KSA)? Example: Omar creates Al-Noor today; Sara needs her link. | (a) **Recommended:** an `EmailSenderType` interface with two implementations: a development sender that writes the email (with the link) to the log, allowed only when `NODE_ENV` is `development` or `test`, and the real provider added when it is chosen. In production the app refuses to start without a provider. Tests use a fake that records emails. (b) Choose the provider now, as part of Phase 1. (c) Return the link to the operator in the API response until a provider exists, and Omar passes it on. | **Resolved 2026-10-21:** an `EmailSenderType` interface with one SMTP implementation (`nodemailer`); Mailpit is the SMTP server for local development, and production points the same sender at the chosen KSA provider (P1.18). |
 
 The spec cannot be `Approved` while a blocking open question remains.
 
 ## 10. Decisions Made in This Spec
 
-| #     | Decision | Rationale |
-| ----- | -------- | --------- |
-| P1.1  | Operator endpoints are protected by `authenticate()`, `requireRole('operator')`, and a declared platform permission; only `src/modules/platform/` queries across tenants. | Replaces the database platform mode under T2. |
-| P1.2  | `plans` is platform data without `tenant_id`. | Tenant code reads its copied terms from `subscriptions`. |
-| P1.3  | One subscription row per tenant, updated in place; the history is the audit log. | "Exactly one subscription" is a database fact. |
-| P1.4  | Subscription state is derived from dates and the database's Riyadh date, never stored. | No job before Phase 7; never stale. |
-| P1.5  | `assertSeatAvailable(tx, tenantId)` under a per-tenant advisory lock, called by every path that adds an active member; subscription changes take the same lock. | Concurrent additions cannot exceed the limit. |
-| P1.6  | Read-only blocks all unsafe tenant requests outside `/auth/*` by default; Active-only routes opt in. | Future write routes are protected without per-route effort. |
-| P1.7  | A subscription's start date is never after today; a past end date is allowed. | No "not yet started" state; ending early needs no separate feature. |
-| P1.8  | The first Tenant Admin is created as a user and a member with role `admin` (Phase 0, P0.13); Phase 3 maps `admin` to the tenant's Tenant Admin role. | Tenant-defined roles do not exist before Phase 3. |
-| P1.9  | One `audit_log` for both levels; `tenant_id IS NULL` is platform-level. | One audit history to query. |
-| P1.10 | Grace period per plan, copied into each subscription. | Consistent with D14. |
-| P1.11 | Only active members count against the limit. | Deactivating a leaver frees the seat. |
-| P1.12 | Operator suspension is deferred. | Ending a subscription early covers the MVP. |
-| P1.13 | Every route declares a permission; operator permissions use the `platform.` prefix. | Permissions explicit per resource. |
-| P1.14 | Verification tokens are random, stored as a hash, single use, and expire after 72 hours (configurable); the email is sent after commit. | A database leak yields no usable links; a rolled-back tenant never sends email. |
-| P1.15 | The first Tenant Admin is created without a password and sets it (12-256 characters) in `/auth/verify`. | Owner decision (Q6): nobody but Sara ever knows her password. |
-| P1.16 | The operator can resend the verification link; a resend invalidates every older link. Requires `platform.tenant.create`. | Owner decision (Q7): recovers from a lost or expired email without recreating the tenant. |
-| P1.17 | An unverified user cannot log in, with the same 401 as a wrong password. | Owner decision (Q8); no account enumeration. |
-| P1.18 | Email goes through an `EmailSenderType` interface with one SMTP implementation (`nodemailer`); Mailpit is the local development SMTP server and inbox; production uses the chosen KSA provider's SMTP settings. | Owner decision (Q9): real email locally from day one, and the provider choice reduces to configuration. |
+| #     | Decision                                                                                                                                                                                                                      | Rationale                                                                                                                                                                        |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1.1  | Operator endpoints are protected by `authenticate()`, `requireRole('operator')`, and a declared platform permission; only `src/modules/platform/` queries across tenants.                                                     | Replaces the database platform mode under T2.                                                                                                                                    |
+| P1.2  | `plans` is platform data without `tenant_id`.                                                                                                                                                                                 | Tenant code reads its copied terms from `subscriptions`.                                                                                                                         |
+| P1.3  | One subscription row per tenant, updated in place; the history is the audit log.                                                                                                                                              | "Exactly one subscription" is a database fact.                                                                                                                                   |
+| P1.4  | Subscription state is derived from dates and the database's Riyadh date, never stored.                                                                                                                                        | No job before Phase 7; never stale.                                                                                                                                              |
+| P1.5  | `assertSeatAvailable(tx, tenantId)` under a per-tenant advisory lock, called by every path that adds an active member; subscription changes take the same lock.                                                               | Concurrent additions cannot exceed the limit.                                                                                                                                    |
+| P1.6  | Read-only blocks all unsafe tenant requests outside `/auth/*` by default; Active-only routes opt in.                                                                                                                          | Future write routes are protected without per-route effort.                                                                                                                      |
+| P1.7  | A subscription's start date is never after today; a past end date is allowed.                                                                                                                                                 | No "not yet started" state; ending early needs no separate feature.                                                                                                              |
+| P1.8  | The first Tenant Admin is created as a user and a member with role `admin` (Phase 0, P0.13); Phase 3 maps `admin` to the tenant's Tenant Admin role.                                                                          | Tenant-defined roles do not exist before Phase 3.                                                                                                                                |
+| P1.9  | One `audit_log` for both levels; `tenant_id IS NULL` is platform-level.                                                                                                                                                       | One audit history to query.                                                                                                                                                      |
+| P1.10 | Grace period per plan, copied into each subscription.                                                                                                                                                                         | Consistent with D14.                                                                                                                                                             |
+| P1.11 | Only active members count against the limit.                                                                                                                                                                                  | Deactivating a leaver frees the seat.                                                                                                                                            |
+| P1.12 | Operator suspension is deferred.                                                                                                                                                                                              | Ending a subscription early covers the MVP.                                                                                                                                      |
+| P1.13 | Every route declares a permission; operator permissions use the `platform.` prefix.                                                                                                                                           | Permissions explicit per resource.                                                                                                                                               |
+| P1.14 | Verification tokens are random, stored as a hash, single use, and expire after 72 hours (configurable); the email is sent after commit.                                                                                       | A database leak yields no usable links; a rolled-back tenant never sends email.                                                                                                  |
+| P1.15 | The first Tenant Admin is created without a password and sets it (12-256 characters) in `/auth/verify`.                                                                                                                       | Owner decision (Q6): nobody but Sara ever knows her password.                                                                                                                    |
+| P1.16 | The operator can resend the verification link; a resend invalidates every older link. Requires `platform.tenant.create`.                                                                                                      | Owner decision (Q7): recovers from a lost or expired email without recreating the tenant.                                                                                        |
+| P1.17 | An unverified user cannot log in, with the same 401 as a wrong password.                                                                                                                                                      | Owner decision (Q8); no account enumeration.                                                                                                                                     |
+| P1.18 | Email goes through an `EmailSenderType` interface with one SMTP implementation (`nodemailer`); Mailpit is the local development SMTP server and inbox; production uses the chosen KSA provider's SMTP settings.               | Owner decision (Q9): real email locally from day one, and the provider choice reduces to configuration.                                                                          |
+| P1.19 | Plans carry a price per payment period (`price_halalas`, integer halalas, SAR, excluding VAT), a payment period (`monthly` or `yearly`), and a discount percentage; subscriptions copy all three and add a customer discount. | Owner decision: the terms Omar agrees offline are recorded with the subscription; integers avoid rounding errors; D11 still holds (nothing is charged).                          |
+| P1.20 | The effective price applies the plan discount, then the customer discount, with integer arithmetic and half-up rounding to the halala; it is computed, never stored.                                                          | Stacked discounts can never exceed 100%, and one function gives every screen the same amount.                                                                                    |
+| P1.21 | There is no minimum subscription term.                                                                                                                                                                                        | Owner decision: pilots and short terms are allowed; the date checks stay `end_date >= start_date`.                                                                               |
+| P1.22 | The price is per payment period; the payment period gives the amount its unit and never recalculates it; no term total is computed.                                                                                           | Owner decision: Watheeq charges nothing (D11), so it shows the agreed rate and leaves odd terms (a 3-month pilot on a yearly plan) to offline billing, without pro-rating rules. |
+| P1.23 | The Tenant Admin sees every field of the tenant's subscription, including pricing and both discounts.                                                                                                                         | Owner decision: the customer sees exactly the terms they agreed to.                                                                                                              |
 
 Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is implemented.
 
 ## 11. Change Log
 
-| Date       | Change | Reason |
-| ---------- | ------ | ------ |
-| 2026-10-19 | Initial draft. | Phase 1 spec requested. |
-| 2026-10-20 | Resolved Q1-Q6; simplified the data layer; added permissions per endpoint. | Owner review. |
-| 2026-10-21 | Rewritten for the simplified MVP: no RLS or platform transactions; membership through `tenant_members`; tenant `slug`; first Tenant Admin verifies email (`/auth/verify`); Q6 reopened; Q7 and Q8 added; steps renumbered; status back to Draft. | Owner simplified the codebase. |
-| 2026-10-21 | The first Tenant Admin's membership is created with role `admin` (Phase 0, P0.13). | Owner added `tenant_members.role`. |
-| 2026-10-21 | Resolved Q6-Q8: password set at verification, operator resend, no login before verification; added the verify, resend, and login-before-verification flows, `ALREADY_VERIFIED`, and P1.15-P1.17. | Owner review. |
-| 2026-10-21 | The first Tenant Admin is created with a `userName`; the guard reads `tenant.id` from the token (Phase 0, P0.18, P0.20). | Phase 0 refactor. |
-| 2026-10-21 | Aligned with the Phase 0 refactor: module layout per the per-module file rules, guard in the subscriptions module, central constraint map for 409 codes, `req.subscription` in `src/types/`; added Q9 (email delivery before a provider). | Phase 0 conventions. |
-| 2026-10-21 | Resolved Q9: SMTP sender behind `EmailSenderType`, Mailpit for local development (P1.18); added the email delivery section and configuration keys. | Owner decision. |
+| Date       | Change                                                                                                                                                                                                                                           | Reason                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| 2026-10-19 | Initial draft.                                                                                                                                                                                                                                   | Phase 1 spec requested.            |
+| 2026-10-20 | Resolved Q1-Q6; simplified the data layer; added permissions per endpoint.                                                                                                                                                                       | Owner review.                      |
+| 2026-10-21 | Rewritten for the simplified MVP: no RLS or platform transactions; membership through `tenant_members`; tenant `slug`; first Tenant Admin verifies email (`/auth/verify`); Q6 reopened; Q7 and Q8 added; steps renumbered; status back to Draft. | Owner simplified the codebase.     |
+| 2026-10-21 | The first Tenant Admin's membership is created with role `admin` (Phase 0, P0.13).                                                                                                                                                               | Owner added `tenant_members.role`. |
+| 2026-10-21 | Resolved Q6-Q8: password set at verification, operator resend, no login before verification; added the verify, resend, and login-before-verification flows, `ALREADY_VERIFIED`, and P1.15-P1.17.                                                 | Owner review.                      |
+| 2026-10-21 | The first Tenant Admin is created with a `userName`; the guard reads `tenant.id` from the token (Phase 0, P0.18, P0.20).                                                                                                                         | Phase 0 refactor.                  |
+| 2026-10-21 | Aligned with the Phase 0 refactor: module layout per the per-module file rules, guard in the subscriptions module, central constraint map for 409 codes, `req.subscription` in `src/types/`; added Q9 (email delivery before a provider).        | Phase 0 conventions.               |
+| 2026-10-21 | Resolved Q9: SMTP sender behind `EmailSenderType`, Mailpit for local development (P1.18); added the email delivery section and configuration keys.                                                                                               | Owner decision.                    |
+| 2026-10-21 | Plans gain price, payment period, and discount; subscriptions copy them and add a customer discount; effective price computed (R1.2a, P1.19, P1.20); no minimum term (R1.2b, P1.21).                                                             | Owner review.                      |
+| 2026-10-21 | Price is per payment period with no term total (P1.22); the Tenant Admin sees all subscription data (R1.11, P1.23).                                                                                                                              | Owner review.                      |
+| 2026-10-21 | Spec approved; implementation started. | Owner approval. |

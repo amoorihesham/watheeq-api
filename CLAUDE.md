@@ -34,7 +34,7 @@ Each document is authoritative for its own topic. Do not duplicate content betwe
 | Document                      | Authoritative for                                                                |
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | `docs/PRODUCT_VISION.md`      | Long-term product direction                                                      |
-| `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1-D16; open product questions |
+| `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1-D17; open product questions |
 | `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T14; deferred hardening                 |
 | `docs/ROADMAP_AND_STATUS.md`  | Phase list, phase status, next action                                            |
 | `docs/specs/phase-<N>-*.md`   | Detailed requirements, design, steps, and acceptance criteria for one phase      |

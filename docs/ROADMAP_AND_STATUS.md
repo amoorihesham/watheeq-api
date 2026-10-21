@@ -13,7 +13,8 @@
 - **Phase 0 (technical foundations) implemented** (`docs/specs/phase-0-foundations.md`): skeleton, cross-cutting basics, database baseline, audit, and JWT authentication with rotating, database-checked refresh tokens.
   `modules/auth/` is the reference example of the per-module file rules (Phase 0.5 spec), which every later module follows.
   A post-implementation refactor added `users.user_name`, the final access-token payload (`tenant: {id, roleId, roleName, permissions}`), module-owned composition in each routes file, and `<Name>Type` naming. The baseline migration was regenerated, so a local database migrated earlier must be recreated (`docker compose down -v`).
-- **Next action:** review and approve the Phase 1 spec (`docs/specs/phase-1-platform-subscriptions.md`); all its open questions (Q1-Q9) are resolved.
+- **Phase 1 (platform, plans & subscriptions):** spec approved 2026-10-21; implementation in progress, one step at a time.
+- **Next action:** owner review of Phase 1 step 1.1 (operator permissions).
 
 ---
 
@@ -25,7 +26,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | --- | ------------------------------- | ------------------------------------------------------------------------------------------- | ---------- | --------------------------------------- |
 | 0   | Technical foundations           | Skeleton, cross-cutting basics, tenant data model, audit, JWT authentication                | -          | Implemented |
 | 0.5 | Layered architecture            | Routes → controller → service → repository convention, central middleware, test helpers   | 0          | Implemented                             |
-| 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user limit, email verification | 0, 0.5     | Spec Draft                              |
+| 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user limit, email verification | 0, 0.5     | In Implementation                              |
 | 2   | Org structure & users           | Department/section tree, managers, membership                                               | 1          | Not started                             |
 | 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                                   | 2          | Not started                             |
 | 4   | Working calendar                | Working days, holidays, working-day deadline calculation                                    | 1          | Not started                             |

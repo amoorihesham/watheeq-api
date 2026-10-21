@@ -41,12 +41,14 @@ Within a tenant, what an actor can do is determined by the permissions of their 
 
 - The operator creates and edits plans.
 - In the MVP, a plan's only enforced limit is the **maximum number of users**.
+- A plan has a **price** in SAR per **payment period** (monthly or yearly) and may carry a **discount** percentage. The price is a record for offline billing; nothing is charged (D11).
 
 **Subscriptions**
 
 - The operator assigns a plan to a tenant for a defined period (start and end date). Subscriptions are managed manually by the operator; there is no payment integration.
 - A tenant has one current subscription at a time.
 - A subscription **keeps a copy of the plan's terms at the time it is assigned**. Later edits to a plan apply to new subscriptions only.
+- A subscription may carry an additional **customer discount** negotiated for that tenant. There is no minimum subscription term.
 - The operator can renew, extend, or change a tenant's subscription.
 
 **Subscription states and their effect**
@@ -177,6 +179,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D14 | Subscriptions copy plan terms at assignment; plan edits apply to new subscriptions only       | Prevents plan edits from silently changing existing customers' terms.                                  |
 | D15 | Downgrade below current user count creates an over-limit state, not removal                   | Avoids destructive automatic changes to a tenant's users.                                              |
 | D16 | The first Tenant Admin verifies their email after the tenant is created                       | Confirms the address belongs to the customer before it controls the tenant. Adds one email provider dependency (must keep data in KSA); notifications stay in-app only (D10). |
+| D17 | Plans carry price, payment period (monthly or yearly), and discount; subscriptions copy them and may add a customer discount; no minimum term | Records the commercial terms agreed offline, per customer, without payment integration (D11). |
 
 ---
 
