@@ -1,4 +1,4 @@
-import { uniqueViolationConstraint } from "../db/errors.js";
+import { foreignKeyViolationConstraint, uniqueViolationConstraint } from "../db/errors.js";
 
 /** Error codes and their HTTP statuses (Phase 0 spec, 4.2). Later phases add codes here. */
 const STATUS_BY_CODE = {
@@ -15,6 +15,8 @@ const STATUS_BY_CODE = {
   SLUG_TAKEN: 409,
   ALREADY_VERIFIED: 409,
   USER_LIMIT_REACHED: 409,
+  UNIT_NAME_TAKEN: 409,
+  UNIT_NOT_EMPTY: 409,
   PAYLOAD_TOO_LARGE: 413,
   UNSUPPORTED_MEDIA_TYPE: 415,
   INTERNAL: 500,
@@ -49,11 +51,28 @@ const CODE_BY_UNIQUE_CONSTRAINT: Record<string, ErrorCode> = {
   users_email_unique: "EMAIL_TAKEN",
   plans_name_lower_unique: "PLAN_NAME_TAKEN",
   tenants_slug_unique: "SLUG_TAKEN",
+  org_units_department_name_unique: "UNIT_NAME_TAKEN",
+  org_units_section_name_unique: "UNIT_NAME_TAKEN",
+};
+
+/**
+ * Foreign keys whose violation means a request named a unit that a concurrent request just deleted.
+ * Only the referencing side is mapped: a unit delete locks the unit before checking it is empty, so the delete
+ * itself never violates these keys (Phase 2 spec, 4.3).
+ */
+const DETAIL_BY_FOREIGN_KEY: Record<string, ErrorDetail> = {
+  org_units_parent_fk: { path: "parentId", code: "unknown_unit" },
+  tenant_members_unit_fk: { path: "unitId", code: "unknown_unit" },
 };
 
 /** The AppError for a known database error, or undefined (which the error handler turns into INTERNAL). */
 export function fromDatabaseError(err: unknown): AppError | undefined {
-  const constraint = uniqueViolationConstraint(err);
-  const code = constraint === undefined ? undefined : CODE_BY_UNIQUE_CONSTRAINT[constraint];
-  return code ? new AppError(code) : undefined;
+  const unique = uniqueViolationConstraint(err);
+  const code = unique === undefined ? undefined : CODE_BY_UNIQUE_CONSTRAINT[unique];
+  if (code) {
+    return new AppError(code);
+  }
+  const foreignKey = foreignKeyViolationConstraint(err);
+  const detail = foreignKey === undefined ? undefined : DETAIL_BY_FOREIGN_KEY[foreignKey];
+  return detail ? new AppError("VALIDATION_FAILED", [detail]) : undefined;
 }

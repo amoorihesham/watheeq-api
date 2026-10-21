@@ -83,3 +83,29 @@ export async function seedTenant(
     client.release();
   }
 }
+
+/**
+ * `seedTenant`, plus a plan and an Active subscription, so the tenant's users pass the subscription guard.
+ * The plan is named after the slug and allows `userLimit` users (default 50).
+ */
+export async function seedSubscribedTenant(
+  pool: pg.Pool,
+  slug: string,
+  members: SeedUser[],
+  userLimit = 50,
+): Promise<{ id: string; userIds: string[] }> {
+  const tenant = await seedTenant(pool, slug, members);
+  await pool.query(
+    `with plan as (
+       insert into plans (name, user_limit, grace_days, price_halalas, payment_period)
+       values ($2, $3, 14, 100000, 'monthly') returning id, name, user_limit, grace_days
+     )
+     insert into subscriptions (tenant_id, plan_id, plan_name, user_limit, grace_days, price_halalas,
+       payment_period, plan_discount_percent, start_date, end_date)
+     select $1, id, name, user_limit, grace_days, 100000, 'monthly', 0,
+       (now() at time zone 'Asia/Riyadh')::date, (now() at time zone 'Asia/Riyadh')::date + 365
+     from plan`,
+    [tenant.id, `Plan ${slug}`, userLimit],
+  );
+  return tenant;
+}

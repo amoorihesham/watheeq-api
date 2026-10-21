@@ -1,4 +1,14 @@
-import { pgEnum, pgTable, primaryKey, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  index,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { orgUnits } from "./org-units.js";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
@@ -15,11 +25,20 @@ export const tenantMembers = pgTable(
       .notNull()
       .references(() => users.id),
     role: tenantMemberRoles().notNull().default("member"),
+    // Null: directly under the organization (Phase 2 spec, P2.13).
+    unitId: uuid("unit_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.tenantId, t.userId] }),
     // One membership per user: a user belongs to exactly one tenant (T5).
     uniqueIndex("tenant_members_user_unique").on(t.userId),
+    // Includes tenant_id, so a member can only be placed in a unit of their own tenant (P2.2).
+    foreignKey({
+      name: "tenant_members_unit_fk",
+      columns: [t.tenantId, t.unitId],
+      foreignColumns: [orgUnits.tenantId, orgUnits.id],
+    }),
+    index("tenant_members_unit_idx").on(t.tenantId, t.unitId),
   ],
 );

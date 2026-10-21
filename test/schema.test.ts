@@ -25,6 +25,7 @@ describe("database baseline", () => {
     expect(rows.map((r) => r.table_name)).toEqual([
       "audit_log",
       "email_verifications",
+      "org_units",
       "plans",
       "refresh_tokens",
       "subscriptions",

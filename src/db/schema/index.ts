@@ -1,5 +1,6 @@
 export { auditLog } from "./audit-log.js";
 export { emailVerifications } from "./email-verifications.js";
+export { orgUnitKinds, orgUnits } from "./org-units.js";
 export { paymentPeriods, plans } from "./plans.js";
 export { refreshTokens } from "./refresh-tokens.js";
 export { subscriptions } from "./subscriptions.js";

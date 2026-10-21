@@ -11,6 +11,7 @@ import { notFoundHandler } from "./middleware/not-found.js";
 import { requestLogger } from "./middleware/request-logger.js";
 import { createAuthRouter } from "./modules/auth/index.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
+import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
 import { createSubscriptionsRouter } from "./modules/subscriptions/index.js";
 
@@ -41,6 +42,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/operator/plans", createPlansRouter({ db, config }));
   app.use("/operator/tenants", createTenantsRouter({ db, config, emailSender }));
   app.use("/subscription", createSubscriptionsRouter({ db, config }));
+  app.use("/org-units", createOrgRouter({ db, config }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

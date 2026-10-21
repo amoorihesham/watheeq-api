@@ -109,7 +109,7 @@ One table with a `kind` column gives one foreign key from the member to their un
 Indexes and constraints:
 
 - Unique `(tenant_id, id)`: the target of the composite foreign keys.
-- Unique index `org_units_name_unique` on `(tenant_id, parent_id, lower(name))` with `NULLS NOT DISTINCT`, so two departments (both with a null parent) cannot share a name (R2.3). Mapped to 409 `UNIT_NAME_TAKEN`.
+- Two partial unique indexes keep sibling names unique ignoring case (R2.3): `org_units_department_name_unique` on `(tenant_id, lower(name))` where `parent_id is null`, and `org_units_section_name_unique` on `(parent_id, lower(name))` where `parent_id is not null`. Both map to 409 `UNIT_NAME_TAKEN`. (Drizzle supports `NULLS NOT DISTINCT` only on plain column constraints, not on an expression index.)
 - That a section's parent is a department is checked in the service. It cannot race: `kind` never changes, and a parent that is deleted at the same moment is caught by the foreign key.
 
 **`tenant_members`** (changed):
@@ -165,14 +165,14 @@ Who may configure legal operations or review requests is a permission (Phase 3);
 Repositories never catch (Phase 0.5); `fromDatabaseError` in `src/http/errors.ts` maps known constraints.
 Phase 2 adds foreign-key violations (SQLSTATE `23503`) to the same mechanism, keyed by constraint name:
 
-| Constraint                                                           | SQLSTATE | Code                  |
-| -------------------------------------------------------------------- | -------- | --------------------- |
-| `org_units_name_unique`                                              | 23505    | 409 `UNIT_NAME_TAKEN` |
-| `org_units_parent_fk` (a delete of a unit that still has sections)   | 23503    | 409 `UNIT_NOT_EMPTY`  |
-| `tenant_members_unit_fk` (a delete of a unit that still has members) | 23503    | 409 `UNIT_NOT_EMPTY`  |
+| Constraint | SQLSTATE | Code |
+| ---------- | -------- | ---- |
+| `org_units_department_name_unique`, `org_units_section_name_unique` | 23505 | 409 `UNIT_NAME_TAKEN` |
+| `org_units_parent_fk` (a section written under a unit that was just deleted) | 23503 | 400 `VALIDATION_FAILED`, detail `{path: "parentId", code: "unknown_unit"}` |
+| `tenant_members_unit_fk` (a member placed in a unit that was just deleted) | 23503 | 400 `VALIDATION_FAILED`, detail `{path: "unitId", code: "unknown_unit"}` |
 
-The service checks these cases first, so the common path returns the code without relying on the error; the constraint is the guarantee under concurrency.
-The same foreign keys also fire when a section or member is written into a unit that was just deleted; that case is translated to 400 `VALIDATION_FAILED` with detail `unknown_unit`, distinguished from the delete by the error's `table` field.
+Only the side that writes into a unit is mapped.
+A delete never violates these keys, because it locks the unit before checking that it is empty (see "Delete a unit" in 4.3); the error's `table` field could not tell the two sides of `org_units_parent_fk` apart anyway, since both are `org_units`.
 
 #### Membership role changes
 
@@ -305,8 +305,15 @@ Deactivating or reactivating a user already in that state returns 200 with no ch
 
 #### Delete a unit
 
-In one transaction: load the unit (404); any section or member → 409 `UNIT_NOT_EMPTY`; delete; audit.
-Two concurrent requests (Sara deletes Finance while Majed creates a section under it) are resolved by the foreign key: whichever commits second fails, and the error maps to a 409 or 400 as above.
+In one transaction: load and lock the unit (`FOR UPDATE`; 404); any section or member → 409 `UNIT_NOT_EMPTY`; delete; audit.
+
+Why the lock: Sara deletes Finance while Majed creates a section under it.
+Majed's insert checks its foreign key by taking a key-share lock on Finance, which conflicts with Sara's `FOR UPDATE`, so the two run one after the other:
+
+- Majed's insert first: Sara's lock waits for his commit, her count then sees his section, and she gets 409 `UNIT_NOT_EMPTY`.
+- Sara's lock first: Majed's foreign-key check waits for her commit, then finds Finance gone, and he gets 400 `unknown_unit`.
+
+Without the lock, Sara's count could miss Majed's uncommitted section and her `DELETE` would fail on the foreign key instead.
 
 #### Change password (signed in)
 
@@ -359,7 +366,7 @@ src/
 
 | Scenario                                                                                  | Expected behavior                                                                                                                                                                      |
 | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sara and Majed create a department named "HR" at the same moment.                         | One succeeds; the other hits `org_units_name_unique` and gets 409 `UNIT_NAME_TAKEN`.                                                                                                   |
+| Sara and Majed create a department named "HR" at the same moment.                         | One succeeds; the other hits `org_units_department_name_unique` and gets 409 `UNIT_NAME_TAKEN`.                                                                                                   |
 | Sara deletes Finance while Majed moves Khalid into it.                                    | The foreign key decides: if the delete commits first, the move fails with 400 (`unknown_unit`); if the move commits first, the delete fails with 409 `UNIT_NOT_EMPTY`.                 |
 | Sara marks Faisal as a manager while Majed moves him to Litigation.                       | Both update Faisal's membership row; PostgreSQL applies them one after the other. Faisal ends in Litigation; he is a manager only if the mark ran second, which the audit order shows. |
 | Faisal, manager of Contracts, is moved to Litigation without `isManager`.                 | He arrives as a plain member; Contracts has no manager; `user.updated` shows `isManager: true → false`.                                                                                |
@@ -396,8 +403,8 @@ src/
 | Step                   | Objective                                         | Delivers                                                                                                                                                                                                       | Acceptance criteria                                                                                                                                                                                                                                                                                                                                                       | Verification                                                                                                               |
 | ---------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | 2.1 Tenant permissions | Every tenant route declares a permission.         | `tenant-access` module, `requireTenantPermission`, interim role table; `GET /subscription` moved onto it.                                                                                                      | R2.20: `admin` passes every permission; `member` passes only `org.view` and `user.view`; operators are refused; a token with a `roleId` is judged by its `permissions` only, never by the fallback.                                                                                                                                                                            | Integration tests.                                                                                                         |
-| 2.2 Organization units | Admins build the tree.                            | `org_units`, migration, foreign-key error mapping, unit CRUD and move, `GET /org-units`.                                                                                                                       | R2.1-R2.5, R2.15 (structure), R2.19: only departments under the organization and sections under departments; sibling names unique ignoring case, including Arabic names; delete only when empty, including under a concurrent create; a new tenant starts with no units; another tenant's IDs give 404 or 400.                                                            | Integration tests, including one concurrent delete-versus-create on two connections.                                       |
-| 2.3 Users and managers | Admins invite and manage users and mark managers. | `tenant_members.unit_id` and `is_manager`, `password_tokens` rename with `purpose`, users module (invite, list, detail, edit, deactivate, reactivate, resend), invitation email, managers in `GET /org-units`. | R2.6-R2.14, R2.15 (directory), R2.18, R2.19: an invited user sets a password and logs in; seats taken by invite and reactivation; owner and self protections; a move or deactivation clears the manager flag and audits it; several managers and none both shown correctly; list filters, search, ordering, and paging; every write audited with before and after values. | Integration tests with the fake email sender; one test through Mailpit; concurrency test for the last seat via invitation. |
+| 2.2 Organization units | Admins build the tree.                            | `org_units`, `tenant_members.unit_id` (needed for R2.5 and member counts), migration, foreign-key error mapping, unit CRUD and move, `GET /org-units`.                                                                                                                       | R2.1-R2.5, R2.15 (structure), R2.19: only departments under the organization and sections under departments; sibling names unique ignoring case, including Arabic names; delete only when empty, including under a concurrent create; a new tenant starts with no units; another tenant's IDs give 404 or 400.                                                            | Integration tests, including one concurrent delete-versus-create on two connections.                                       |
+| 2.3 Users and managers | Admins invite and manage users and mark managers. | `tenant_members.is_manager`, `password_tokens` rename with `purpose`, users module (invite, list, detail, edit, deactivate, reactivate, resend), invitation email, managers in `GET /org-units`. | R2.6-R2.14, R2.15 (directory), R2.18, R2.19: an invited user sets a password and logs in; seats taken by invite and reactivation; owner and self protections; a move or deactivation clears the manager flag and audits it; several managers and none both shown correctly; list filters, search, ordering, and paging; every write audited with before and after values. | Integration tests with the fake email sender; one test through Mailpit; concurrency test for the last seat via invitation. |
 | 2.4 Passwords          | Users change and recover passwords.               | `/auth/password`, `/auth/password-reset/request`, `/auth/password-reset`, reset email, `PASSWORD_RESET_TTL_SECONDS`.                                                                                           | R2.16, R2.17: other sessions signed out; reset for unknown, unverified, and inactive emails sends nothing and returns the same 204; tokens are single use, purpose-bound, expire after 1 hour, and are replaced by a newer request.                                                                                                                                       | Integration tests with the fake email sender.                                                                              |
 
 Suggested order: 2.1; then 2.2; then 2.3; then 2.4.
@@ -457,3 +464,4 @@ The spec cannot be `Approved` while a blocking open question remains.
 | 2026-10-21 | Resolved Q2: no Legal marker (P2.14). Removed `is_legal`, the Legal department at tenant creation, and `UNIT_PROTECTED`; R2.1 now states that a new tenant starts with an empty structure.                                                                                                                                                                                                      | Owner review.           |
 | 2026-10-21 | Spec approved; implementation started. | Owner approval. |
 | 2026-10-21 | Step 2.1 implemented and verified: `tenant-access` module (`TENANT_PERMISSIONS`, interim role table, `tenantPermissionsOf`, `requireTenantPermission`); `GET /subscription` requires `subscription.view`, so members now get 403. The fallback applies when the token's `roleId` is null, instead of when `permissions` is empty (approved by the owner with the go-ahead for step 2.2). | Acceptance criteria met; a token whose Phase 3 role is named `admin` with no permissions must not get admin rights through the fallback. |
+| 2026-10-21 | Step 2.2 implemented and verified: migration `0003_org_units`, org module (`GET`, `POST`, `PATCH`, `DELETE /org-units`), foreign-key violations in the central error map. Proposed for owner approval: `tenant_members.unit_id` moved from step 2.3 to 2.2; two partial unique indexes instead of one `NULLS NOT DISTINCT` index; a unit delete locks the unit and only the writing side of a foreign key is mapped (`unknown_unit`), instead of telling the sides apart by table. `managers` joins `GET /org-units` in step 2.3. Approved by the owner with the go-ahead for step 2.3. | Acceptance criteria met; the delete-versus-create race test fails when the lock is removed. |
