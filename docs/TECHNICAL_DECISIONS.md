@@ -61,4 +61,4 @@ Each item below is a known, accepted gap for the MVP stage, with the trigger tha
 
 - **Background job runner:** decided in Phase 7 (escalation checks).
 - **Hosting provider in KSA:** decided at deployment; Docker keeps options open. The managed PostgreSQL must offer version 18.
-- **Email provider for verification emails** (MVP D16): must keep data in KSA. Decided when email verification is implemented.
+- **Email provider for verification emails** (MVP D16): must keep data in KSA and accept SMTP; until then Mailpit serves local development (Phase 1 spec, P1.18). Must be chosen before production.

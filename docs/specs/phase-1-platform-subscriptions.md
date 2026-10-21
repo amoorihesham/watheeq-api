@@ -72,6 +72,19 @@ There is no database-level platform mode (T2).
 Operator endpoints are protected at the route: `authenticate()`, then `requireRole('operator')`, then `requirePlatformPermission(...)`.
 Repositories in `src/modules/platform/` may query across tenants; every other module's tenant-data repository filters by the tenant from the access token (Phase 0, 4.1).
 
+#### Unique values
+
+Repositories never catch (Phase 0.5, 0.5-6).
+A duplicate plan name, tenant slug, or admin email reaches the error handler as a unique violation, and the central constraint map in `src/http/errors.ts` turns it into the 409 code:
+
+| Constraint | Code |
+| ---------- | ---- |
+| `plans_name_lower_unique` (unique index on `lower(name)`) | `PLAN_NAME_TAKEN` |
+| `tenants_slug_unique` | `SLUG_TAKEN` |
+| `users_email_unique` (exists) | `EMAIL_TAKEN` |
+
+Because tenant creation runs in one transaction, the violation also rolls back everything inserted before it (R1.3).
+
 #### Tables
 
 **`plans`**: platform data, no `tenant_id`.
@@ -245,6 +258,26 @@ The dummy-hash check runs when `password_hash` is null, so timing does not revea
 In one transaction: load the plan, take the tenant's seat lock, load the subscription (none → 404), update it with the plan's current terms and the new dates, and audit `subscription.changed` with the old and new terms.
 Renew, extend, change plan, and end early are all this one operation.
 
+#### Email delivery (P1.18)
+
+- `EmailSenderType` has one method, `send({ to, subject, text })`. The tenants service depends only on this interface.
+- The SMTP sender (`nodemailer`) is built in `app.ts` from configuration and passed to the modules that send email; tests pass a fake that records what was sent.
+- Local development runs Mailpit from Docker Compose: SMTP on `127.0.0.1:1025`, inbox on `http://localhost:8025`. Omar creates Al-Noor, and the email to Sara appears in that inbox.
+- Production uses the same sender with the chosen KSA provider's SMTP settings, so choosing the provider is a configuration change.
+- The link is `${APP_BASE_URL}/verify-email?token=<token>`: a web-app page that posts the token and the new password to `/auth/verify`.
+- The email is sent after the transaction commits (P1.14); the token never appears in logs.
+
+New configuration keys:
+
+| Key | Default | Meaning |
+| --- | ------- | ------- |
+| `SMTP_HOST`, `SMTP_PORT` | none | SMTP server. Locally Mailpit (`localhost`, `1025`). |
+| `SMTP_USER`, `SMTP_PASSWORD` | none | Optional; Mailpit needs none. |
+| `SMTP_SECURE` | `false` | TLS from the first byte (port 465 style). |
+| `EMAIL_FROM` | none | Sender address, for example `Watheeq <no-reply@watheeq.sa>`. |
+| `APP_BASE_URL` | none | Web-app origin used to build links, for example `http://localhost:5173`. |
+| `VERIFICATION_TOKEN_TTL_SECONDS` | `259200` | Verification link lifetime (72 hours). |
+
 #### Subscription guard (tenant routes)
 
 A middleware after `authenticate()` on every tenant router loads the subscription by the token's `tenant.id` and attaches the state to the request.
@@ -256,21 +289,32 @@ Default-deny by method means every future write route is blocked in Read-only wi
 
 ### 4.4 Module structure
 
+Every module follows the Phase 0.5 per-module file rules: its routes file composes its layers, and constants, schemas, and types live in their own files.
+
 ```
 src/
   db/schema/plans.ts, subscriptions.ts, email-verifications.ts
-  middleware/subscription-guard.ts       Read-only guard and requireActiveSubscription
+  email/                                 EmailSenderType, the SMTP sender (nodemailer), email.config.ts, email.types.ts (P1.18)
+  types/express.ts                       (changed) adds req.subscription
   modules/
     platform/
-      permissions.ts                     platform permissions, requirePlatformPermission
-      plans/                             routes, controller, service, repository
-      tenants/                           creation, list, detail, subscription change
+      platform.config.ts                 PLATFORM_PERMISSIONS
+      platform.types.ts                  PlatformPermissionType, ...
+      shared/middlewares.ts              requirePlatformPermission(permission)
+      plans/                             plans.routes.ts (composes), .controller.ts, .service.ts, .repository.ts,
+                                         .config.ts, .schemas.ts, .types.ts
+      tenants/                           same files; tenant creation, list, detail, subscription change, resend
     subscriptions/
-      subscription-state.ts              pure state function
-      seats.ts                           assertSeatAvailable(tx, tenantId)
-      subscription.routes.ts, ...        GET /subscription
-    auth/                                (changed) /auth/verify; /auth/me carries the state
+      subscriptions.routes.ts (composes), .controller.ts, .service.ts, .repository.ts   GET /subscription
+      subscriptions.config.ts, .schemas.ts, .types.ts
+      shared/subscription-state.ts       pure state function
+      shared/seats.ts                    assertSeatAvailable(tx, tenantId)
+      shared/middlewares.ts              subscription guard and requireActiveSubscription
+    auth/                                (changed) /auth/verify; login refuses unverified users; /auth/me carries the state
 ```
+
+`app.ts` gains one line per new router: `/operator/plans`, `/operator/tenants`, and `/subscription`.
+HTTP bodies are named per the type rule, for example `CreatePlanRequestType`, `CreatePlanResponseType`, `CreateTenantRequestType`, `VerifyEmailRequestType`.
 
 ## 5. Edge Cases and Failure Behavior
 
@@ -308,7 +352,7 @@ Phase 0 steps 0.3-0.5 must be complete first.
 | ---- | --------- | -------- | ------------------- | ------------ |
 | 1.1 Operator permissions | Every operator route declares a permission. | `requirePlatformPermission`, platform permission list. | A route with a permission rejects a tenant user with 403 and accepts an operator; a forced-false check returns 403. | Integration tests. |
 | 1.2 Plans | Operators manage plans. | `plans` table; plan routes, controller, service, repository; audit. | R1.1: CRUD works; duplicate name (any case) 409; invalid values 400; each write leaves one platform-level audit row with before and after values. | Integration tests. |
-| 1.3 Tenants, subscriptions, verification | Operators create tenants; the first admin verifies. | `subscriptions`, `email_verifications`, `users` changes, state function, `assertSeatAvailable`, tenant routes, `/auth/verify`, resend endpoint, an email sender interface (the provider is decided separately; tests use a fake). | R1.3, R1.4, R1.7: atomic creation; taken email or slug leaves nothing; Sara cannot log in before verifying, then verifies with a password and logs in; a used, expired, or replaced link is rejected; the list shows state and usage; the state function matches R1.7 at every boundary, including Riyadh midnight. | Unit tests for the state function; integration tests with a fake email sender. |
+| 1.3 Tenants, subscriptions, verification | Operators create tenants; the first admin verifies. | `subscriptions`, `email_verifications`, `users` changes, state function, `assertSeatAvailable`, tenant routes, `/auth/verify`, resend endpoint, the `email/` SMTP sender and its configuration; Mailpit in Docker Compose (tests use a fake sender, plus one integration test against Mailpit started by Testcontainers). | R1.3, R1.4, R1.7: atomic creation; taken email or slug leaves nothing; Sara cannot log in before verifying, then verifies with a password and logs in; a used, expired, or replaced link is rejected; the list shows state and usage; the state function matches R1.7 at every boundary, including Riyadh midnight. | Unit tests for the state function; integration tests with a fake email sender. |
 | 1.4 Subscription changes | Renew, extend, change, end. | `PUT /operator/tenants/:tenantId/subscription`, audit. | R1.2, R1.5, R1.6, R1.8. | Integration tests, including concurrent changes on two connections. |
 | 1.5 User-limit enforcement | The limit holds under concurrency and after a downgrade. | Seat lock in subscription changes; tests of `assertSeatAvailable`. | R1.12, R1.13; one tenant's lock never blocks another. | Integration tests on two connections with a controlled interleaving. |
 | 1.6 Tenant-side state | Tenants see and are governed by their subscription. | Subscription guard, `requireActiveSubscription`, `GET /subscription`, state in `/auth/me`. | R1.9-R1.11. | Integration tests with dates set to reach each state. |
@@ -342,6 +386,7 @@ Integration tests run against real PostgreSQL; dates are controlled by writing s
 | Q6 | How does the first Tenant Admin get a password, now that `/auth/verify` exists (MVP D16)? | | **Resolved 2026-10-21:** Sara sets her own password in the verification step (P1.15). Replaces the earlier "generated, shown once". |
 | Q7 | What happens if the verification email fails or expires? | | **Resolved 2026-10-21:** the operator can resend; older links stop working (P1.16). |
 | Q8 | Can an unverified user log in? | | **Resolved 2026-10-21:** no; 401 `INVALID_CREDENTIALS` (P1.17). |
+| Q9 | How are verification emails delivered before the email provider is chosen (deferred decision; must keep data in KSA)? Example: Omar creates Al-Noor today; Sara needs her link. | (a) **Recommended:** an `EmailSenderType` interface with two implementations: a development sender that writes the email (with the link) to the log, allowed only when `NODE_ENV` is `development` or `test`, and the real provider added when it is chosen. In production the app refuses to start without a provider. Tests use a fake that records emails. (b) Choose the provider now, as part of Phase 1. (c) Return the link to the operator in the API response until a provider exists, and Omar passes it on. | **Resolved 2026-10-21:** an `EmailSenderType` interface with one SMTP implementation (`nodemailer`); Mailpit is the SMTP server for local development, and production points the same sender at the chosen KSA provider (P1.18). |
 
 The spec cannot be `Approved` while a blocking open question remains.
 
@@ -366,6 +411,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P1.15 | The first Tenant Admin is created without a password and sets it (12-256 characters) in `/auth/verify`. | Owner decision (Q6): nobody but Sara ever knows her password. |
 | P1.16 | The operator can resend the verification link; a resend invalidates every older link. Requires `platform.tenant.create`. | Owner decision (Q7): recovers from a lost or expired email without recreating the tenant. |
 | P1.17 | An unverified user cannot log in, with the same 401 as a wrong password. | Owner decision (Q8); no account enumeration. |
+| P1.18 | Email goes through an `EmailSenderType` interface with one SMTP implementation (`nodemailer`); Mailpit is the local development SMTP server and inbox; production uses the chosen KSA provider's SMTP settings. | Owner decision (Q9): real email locally from day one, and the provider choice reduces to configuration. |
 
 Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is implemented.
 
@@ -379,3 +425,5 @@ Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is im
 | 2026-10-21 | The first Tenant Admin's membership is created with role `admin` (Phase 0, P0.13). | Owner added `tenant_members.role`. |
 | 2026-10-21 | Resolved Q6-Q8: password set at verification, operator resend, no login before verification; added the verify, resend, and login-before-verification flows, `ALREADY_VERIFIED`, and P1.15-P1.17. | Owner review. |
 | 2026-10-21 | The first Tenant Admin is created with a `userName`; the guard reads `tenant.id` from the token (Phase 0, P0.18, P0.20). | Phase 0 refactor. |
+| 2026-10-21 | Aligned with the Phase 0 refactor: module layout per the per-module file rules, guard in the subscriptions module, central constraint map for 409 codes, `req.subscription` in `src/types/`; added Q9 (email delivery before a provider). | Phase 0 conventions. |
+| 2026-10-21 | Resolved Q9: SMTP sender behind `EmailSenderType`, Mailpit for local development (P1.18); added the email delivery section and configuration keys. | Owner decision. |

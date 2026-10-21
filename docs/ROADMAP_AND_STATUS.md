@@ -13,7 +13,7 @@
 - **Phase 0 (technical foundations) implemented** (`docs/specs/phase-0-foundations.md`): skeleton, cross-cutting basics, database baseline, audit, and JWT authentication with rotating, database-checked refresh tokens.
   `modules/auth/` is the reference example of the per-module file rules (Phase 0.5 spec), which every later module follows.
   A post-implementation refactor added `users.user_name`, the final access-token payload (`tenant: {id, roleId, roleName, permissions}`), module-owned composition in each routes file, and `<Name>Type` naming. The baseline migration was regenerated, so a local database migrated earlier must be recreated (`docker compose down -v`).
-- **Next action:** review and approve the Phase 1 spec (`docs/specs/phase-1-platform-subscriptions.md`); it has no open questions left.
+- **Next action:** review and approve the Phase 1 spec (`docs/specs/phase-1-platform-subscriptions.md`); all its open questions (Q1-Q9) are resolved.
 
 ---
 
