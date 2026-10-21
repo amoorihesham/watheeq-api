@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Status:** Agreed scope baseline (last updated 2026-10-17). Nothing described here is implemented yet.
+**Status:** Agreed scope baseline (last updated 2026-10-21). Nothing described here is implemented yet.
 **Relationship to other docs:** `PRODUCT_VISION.md` describes the long-term product. This document defines what the first release must do. When they differ, this document governs the MVP.
 
 ---
@@ -35,6 +35,7 @@ Within a tenant, what an actor can do is determined by the permissions of their 
 
 - Create a tenant.
 - Create the tenant's first Tenant Admin, who holds every tenant-level permission.
+- The first Tenant Admin verifies their email address before using the tenant (D16).
 
 **Plans**
 
@@ -147,7 +148,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 - Workflow routing policies.
 - Branching, conditional, or parallel workflow stages.
 - Positions / job titles.
-- Email, SMS, or push notifications.
+- Email, SMS, or push notifications. (Transactional email for account verification is in scope, D16.)
 - Attachments and document management.
 - Pausing the SLA clock.
 - Repeated reminders after breach; automatic reassignment on escalation.
@@ -175,6 +176,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D13 | Expiry: grace period (new submissions blocked, in-progress requests workable), then read-only | Keeps legal records accessible and lets in-flight requests close fairly against their SLA.             |
 | D14 | Subscriptions copy plan terms at assignment; plan edits apply to new subscriptions only       | Prevents plan edits from silently changing existing customers' terms.                                  |
 | D15 | Downgrade below current user count creates an over-limit state, not removal                   | Avoids destructive automatic changes to a tenant's users.                                              |
+| D16 | The first Tenant Admin verifies their email after the tenant is created                       | Confirms the address belongs to the customer before it controls the tenant. Adds one email provider dependency (must keep data in KSA); notifications stay in-app only (D10). |
 
 ---
 

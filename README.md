@@ -8,7 +8,6 @@ Start with `CLAUDE.md` and `docs/ROADMAP_AND_STATUS.md`.
 
 - pnpm 12 and Docker.
 - Node 24 LTS is pinned in `package.json` (`devEngines.runtime`), so `pnpm install` downloads it and pnpm runs scripts on it.
-  A different Node on your `PATH` does not affect the scripts.
 
 ## Setup
 
@@ -20,187 +19,90 @@ pnpm db:migrate
 pnpm dev
 ```
 
-`pnpm dev` and `pnpm db:migrate` load `.env` through Node's `--env-file-if-exists` flag, so no extra dependency is needed.
+`pnpm dev` and `pnpm db:migrate` load `.env` through Node's `--env-file-if-exists` flag.
 `pnpm start` does not read `.env`: it uses the real process environment, as in production.
 
 ## Configuration
 
 The app validates its environment at startup.
-If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` and exits with code 1.
-The message names keys and reasons only, never values.
+If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` and exits with code 1, naming keys and reasons only, never values.
 
-| Key            | Default       | Meaning                                                              |
-| -------------- | ------------- | -------------------------------------------------------------------- |
-| `DATABASE_URL` | none          | Required. PostgreSQL connection URL, as `watheeq_app`.               |
-| `PORT`         | `3000`        | HTTP port.                                                           |
-| `NODE_ENV`     | `development` | `development`, `test`, or `production`.                              |
-| `OPERATOR_SESSION_IDLE_SECONDS` | `1800` | Operator session idle timeout (minimum 60). |
-| `OPERATOR_SESSION_ABSOLUTE_SECONDS` | `28800` | Operator session absolute lifetime (minimum 60). |
-| `TENANT_SESSION_IDLE_SECONDS` | `7200` | Tenant session idle timeout (minimum 60). |
-| `TENANT_SESSION_ABSOLUTE_SECONDS` | `43200` | Tenant session absolute lifetime (minimum 60). |
-| `LOGIN_ACCOUNT_MAX_FAILURES` | `5` | Consecutive wrong passwords that lock an account. |
-| `LOGIN_ACCOUNT_LOCK_SECONDS` | `900` | How long a locked account is refused. |
-| `LOGIN_IP_MAX_FAILURES` | `100` | Failed logins per client IP and window before that IP is blocked. |
-| `LOGIN_IP_WINDOW_SECONDS` | `900` | Length of the per-IP window. |
-| `TRUST_PROXY` | `0` | Number of reverse proxies in front of the app (see "Client IP and throttling"). |
-| `LOG_LEVEL`    | `info`        | `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent`.     |
+| Key            | Default       | Meaning |
+| -------------- | ------------- | ------- |
+| `DATABASE_URL` | none          | Required. PostgreSQL connection URL, used by the app, migrations, and the CLI. |
+| `PORT`         | `3000`        | HTTP port. |
+| `NODE_ENV`     | `development` | `development`, `test`, or `production`. |
+| `LOG_LEVEL`    | `info`        | `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent`. |
+| `JWT_SECRET`   | none          | Required, at least 32 characters. Signs access tokens (HS256). Generate one with `openssl rand -base64 48`. |
+| `ACCESS_TOKEN_TTL_SECONDS`  | `1800`   | Access-token lifetime (minimum 60). |
+| `REFRESH_TOKEN_TTL_SECONDS` | `604800` | Refresh-token lifetime (minimum 60). |
 
 ## HTTP behavior
 
 - Every response has an `X-Request-Id` header.
-  A client-sent `X-Request-Id` is reused only if it matches `^[A-Za-z0-9._-]{1,64}$`, otherwise a UUID is generated.
+  A client-sent `X-Request-Id` is reused only if it matches `^[A-Za-z0-9._-]{1,64}$`; otherwise a UUID is generated.
 - Every log line of a request carries it as `reqId`.
-- Errors use one JSON shape: `{"error":{"code","requestId","details?"}}`.
-  There is no human-readable message. Clients map `code` to text.
+- Errors use one JSON shape: `{"error":{"code","requestId","details?"}}`, with no human-readable message.
   `details` (a list of `{path, code}`) appears only for validation errors.
 - Request bodies must be `application/json` and at most 100 KB (otherwise 415 or 413).
-- Logs are JSON on stdout. `password`, `cookie`, `set-cookie`, `x-csrf-token`, and `authorization` are redacted.
+- Logs are JSON on stdout. `password`, `cookie`, `set-cookie`, and `authorization` are redacted.
 - On `SIGTERM` or `SIGINT` the server stops accepting connections, lets in-flight requests finish (up to 10 seconds), closes the database pool, and exits.
 
-## Operator authentication
+## Authentication
 
-Platform operators log in through their own realm, separate from tenant users.
+| Endpoint             | Needs                 | Result |
+| -------------------- | --------------------- | ------ |
+| `POST /auth/login`   | `{email, password}`   | 200 `{user:{id, email, userName, role, tenant}}` and both cookies. 401 `INVALID_CREDENTIALS` for any failure. |
+| `POST /auth/refresh` | `wq_refresh` cookie   | 200 `{user}` and new cookies; the old refresh token is revoked. 401 `UNAUTHENTICATED` (and both cookies cleared) if the token is unknown, revoked, or expired, or the user is inactive. |
+| `POST /auth/logout`  | nothing               | 204; the refresh token is revoked and both cookies are cleared. |
+| `GET /auth/me`       | `wq_access` cookie    | 200 `{user}`. 401 `UNAUTHENTICATED`. |
 
-| Endpoint                      | Auth           | Result                                                                                          |
-| ----------------------------- | -------------- | ----------------------------------------------------------------------------------------------- |
-| `POST /operator/auth/login`   | none           | 200 `{operator:{id,email}, csrfToken}` and a cookie. 401 `INVALID_CREDENTIALS` for any failure. |
-| `GET /operator/auth/session`  | session        | 200 `{operator, csrfToken}`. 401 `UNAUTHENTICATED`.                                             |
-| `POST /operator/auth/logout`  | session + CSRF | 204 and the cookie is cleared. 403 `CSRF_FAILED` without a valid `X-CSRF-Token` header.         |
+- `wq_access` holds a 30-minute JWT (`Path=/`); `wq_refresh` holds a 7-day random token (`Path=/auth`). Both are `HttpOnly`, `Secure`, `SameSite=Lax`.
+  Browsers treat `http://localhost` as secure; `curl` also sends `Secure` cookies to `localhost`.
+- Only the SHA-256 hash of a refresh token is stored.
+- A deactivated user keeps a valid access token for at most 30 minutes; the next refresh fails.
+- The access token's payload is `{sub, iss: "watheeq_api", iat, exp, username, email, role, tenant}`. `tenant` is `{id, roleId, roleName, permissions}` for a tenant user (until Phase 3: `roleId` null, `roleName` `admin` or `member`, `permissions` empty) and `null` for an operator.
+- Protect a route with `authenticate(jwtSecret)` and, for operator routes, `requireRole("operator")`, both from `src/modules/auth/`.
+- Create an operator with `pnpm operator:create <email> "<full name>"`. Tenant users are created in Phase 1 (tenant creation) and Phase 2 (user management).
 
-- The session cookie is `__Host-wq_operator` (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`).
-  Browsers treat `http://localhost` as a secure context, but `curl` needs the cookie sent by hand over plain HTTP.
-- Only the SHA-256 hash of the session token is stored.
-- The CSRF token is HMAC-SHA256 of the session token, so nothing is stored for it and it stays the same for the whole session.
-  `GET /operator/auth/session` returns the same token as login, so every tab and every reload uses one token.
-- A session is rejected when it is revoked, past its absolute lifetime, idle for too long, or its operator is deactivated.
-- Passwords are hashed with argon2id (19 MiB, 2 iterations, 1 lane) through `@node-rs/argon2`.
-- Logins and logouts go to the application log, never with passwords, cookies, or tokens.
+## Architecture in brief
 
-Create the first operator with the CLI, which connects as `watheeq_owner` through `MIGRATION_DATABASE_URL`:
+- **Tenant isolation:** shared tables with a `tenant_id` column, filtered in application code.
+  Every repository function that touches tenant data takes the tenant ID from the authenticated user and filters by it.
+- **Accounts:** one `users` table; `role` is `operator` (platform operator, no tenant) or `user` (tenant user).
+  A tenant user belongs to exactly one tenant through `tenant_members`.
+- **Authentication:** a 30-minute JWT access token and a 7-day refresh token in `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Refresh tokens are stored hashed, rotated on every refresh, and checked against the database, so a deactivated user loses access within 30 minutes (design in `docs/specs/phase-0-foundations.md`).
+- **Audit:** `writeAuditEntry(tx, entry)` from `src/audit/`, inside the same transaction as the change.
+- **Layers:** routes → controller → service → repository. Each module's routes file composes its own layers, and `src/app.ts` mounts the routers (`docs/specs/phase-0.5-refactor.md`).
 
-```sh
-pnpm operator:create omar@watheeq.sa          # prompts for the password without echo
-OPERATOR_PASSWORD=... pnpm operator:create omar@watheeq.sa
-```
+Deliberately deferred for the MVP: Row-Level Security, login throttling, CSRF tokens, and database-enforced append-only audit (`docs/TECHNICAL_DECISIONS.md`, "Deferred hardening").
 
-The password is never read from command-line arguments, because those end up in shell history.
-It must be 12 to 256 characters.
-The application role `watheeq_app` can read and update operators but cannot insert or delete them, so a compromised application cannot create operators.
+## Migrations
 
-## Tenant authentication
-
-Tenant users (for example Sara at Al-Noor) log in through the tenant realm, which works like the operator realm.
-
-| Endpoint              | Auth           | Result                                                                                                  |
-| --------------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
-| `POST /auth/login`    | none           | 200 `{user:{id,email,tenantId}, csrfToken}` and a cookie. 401 `INVALID_CREDENTIALS`. 429 `TOO_MANY_ATTEMPTS`. |
-| `GET /auth/session`   | session        | 200 `{user, csrfToken}`. 401 `UNAUTHENTICATED`.                                                         |
-| `POST /auth/logout`   | session + CSRF | 204 and the cookie is cleared. 403 `CSRF_FAILED` without a valid `X-CSRF-Token` header.                 |
-
-- The session cookie is `__Host-wq_session`, with the same flags as the operator cookie.
-  Each realm reads only its own cookie and its own session table (`user_sessions` or `operator_sessions`), so a session never works in the other realm.
-- A user's session belongs to the user's tenant, and everything after the first lookup runs in that tenant's `withTenantTx`.
-- Login must find the user by email, and a request must find its session by token, before the tenant is known.
-  Both go through two `SECURITY DEFINER` functions, `auth_find_user_for_login` and `auth_resolve_user_session`.
-  They are owned by the `watheeq_auth` role, which is the only RLS bypass in the system (see below).
-- There is no tenant or user creation API yet (Phase 1 and 2).
-  To log in locally, insert them as the database superuser, because forced RLS also applies to `watheeq_owner`:
-
-```sh
-docker compose exec db psql -U watheeq -d watheeq <<'SQL'
-BEGIN;
-WITH t AS (INSERT INTO tenants (name) VALUES ('Al-Noor') RETURNING id)
-SELECT set_config('app.tenant_id', id::text, true) FROM t;
-INSERT INTO users (tenant_id, email, password_hash)
-VALUES (current_setting('app.tenant_id')::uuid, 'sara@alnoor.test', '<argon2id hash>');
-COMMIT;
-SQL
-```
-
-  Create the hash with `node -e "import('@node-rs/argon2').then(a => a.hash('the password', {memoryCost:19456,timeCost:2,parallelism:1})).then(console.log)"`.
-
-## Login throttling
-
-Both realms share the same rules, in PostgreSQL:
-
-- **Per account:** 5 consecutive wrong passwords lock the account for 15 minutes.
-  While locked, login returns 429 `TOO_MANY_ATTEMPTS` without checking the password.
-  A successful login resets the count.
-- **Per IP:** 100 failed logins within a 15-minute window block that IP with 429 for every email.
-  A window older than 15 minutes counts as zero.
-  Every 401 counts, and a successful login does not reset the IP counter.
-  An IPv6 client is counted by its `/64` network, because one customer usually holds a whole `/64` and could otherwise rotate addresses.
-  Sessions still store the full address.
-- Counters are single atomic `UPDATE` or upsert statements, so concurrent attempts lose no increments.
-
-### Client IP and `TRUST_PROXY`
-
-The IP counter uses Express's `req.ip`.
-`TRUST_PROXY` is the number of reverse proxies in front of the app (Express `trust proxy` set to a number).
-With `0`, `X-Forwarded-For` is ignored and the socket address is used.
-With `N`, the address is read from the `X-Forwarded-For` entries added by the N proxy hops nearest to the app, so entries a client supplies itself are never counted.
-Set it to exactly the number of proxies you run: too low counts the proxy's address (all users share one counter), and too high lets a client choose its own address.
-
-## Local database
-
-`docker compose up` creates the database roles only when the volume is empty.
-If you have an older volume without them, run `docker compose down -v` first (this deletes local data).
-
-## Database roles and migrations
-
-Three PostgreSQL roles are used, so the application cannot bypass Row-Level Security (RLS).
-
-| Role            | Used by                 | Privileges                                                                            |
-| --------------- | ----------------------- | ------------------------------------------------------------------------------------- |
-| `watheeq_owner` | Migrations only         | Owns the schema, tables, functions, and policies.                                     |
-| `watheeq_app`   | The running application | `LOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`, owns nothing, only the grants migrations give. |
-| `watheeq_auth`  | The two lookup functions only | `NOLOGIN`, `BYPASSRLS`, owns `auth_find_user_for_login` and `auth_resolve_user_session`, and has `SELECT` on `users` and `user_sessions` only. `watheeq_app` is not a member and cannot become it. |
-
-- `db/bootstrap/roles.sql` creates the three roles and makes `watheeq_owner` a member of `watheeq_auth`, so migrations can assign function ownership.
-  Creating a `BYPASSRLS` role needs an administrator, which is why this is not a migration.
-  It is run once by a database administrator.
-  Docker Compose runs it through `/docker-entrypoint-initdb.d`, and the test setup runs it as the container superuser.
-  Its passwords are for local development only.
-- `DATABASE_URL` is the runtime connection (`watheeq_app`).
-  `MIGRATION_DATABASE_URL` is the migration connection (`watheeq_owner`).
-- Migrations live in `db/migrations/` and are never run at application startup.
-  The table definitions in `src/db/schema/` generate the table migrations with `pnpm db:generate`.
-  The function, RLS, policy, and grant migrations are written by hand, and policies are not declared in the Drizzle schema.
-  To add a hand-written migration, run `pnpm exec drizzle-kit generate --custom --name <name>` and fill in the SQL.
-- `pnpm db:migrate` applies pending migrations, and running it again does nothing.
-- Tenant data is reached only through `withTenantTx(db, tenantId, fn)` in `src/db/tenant-tx.ts`.
-  It sets a transaction-local tenant context that the RLS policies read through `app_current_tenant()`.
-  Querying a tenant table without a context fails with `tenant context is not set`.
-
-## Audit
-
-- Business changes are recorded with `audit(tx, ctx, entry)` from `src/audit/`, inside the same `withTenantTx` transaction as the change.
-  The entry commits or rolls back together with the change.
-- `audit` accepts only a transaction (`Tx`), so calling it with the top-level `db` is a compile error.
-- `ctx` is `{ actor: { type, id }, requestId }`.
-  The tenant is never passed: the database fills it from the transaction's tenant context.
-- `audit_log` is append-only: `watheeq_app` has `INSERT` and `SELECT` only, and RLS limits both to the current tenant.
-  `UPDATE` and `DELETE` fail with `permission denied`.
-- A migration that adds a foreign key to `tenants` on a new table must declare it inline in `CREATE TABLE`.
-  A separate `ALTER TABLE ... ADD CONSTRAINT` makes the owner read `tenants`, which has forced RLS, and fails with `tenant context is not set`.
+- Tables are defined in `src/db/schema/`.
+  `pnpm db:generate` generates SQL migrations into `db/migrations/` with Drizzle Kit, and they are committed.
+- `pnpm db:migrate` applies pending migrations; running it again does nothing.
+  Migrations never run at application startup.
 
 ## Scripts
 
-| Script             | What it does                                                      |
-| ------------------ | ----------------------------------------------------------------- |
-| `pnpm dev`         | Runs the app with `tsx` in watch mode.                            |
-| `pnpm build`       | Builds `dist/` with tsup.                                         |
-| `pnpm start`       | Runs the build output (`node dist/main.js`).                      |
-| `pnpm test`        | Runs Vitest. Testcontainers starts PostgreSQL 18 by itself.       |
-| `pnpm typecheck`   | Runs `tsc --noEmit`.                                              |
-| `pnpm lint`        | Runs the Biome linter, failing on warnings.                       |
-| `pnpm check`       | Runs Biome lint, format, and import checks without writing.       |
-| `pnpm format`      | Formats all files with Biome.                                     |
-| `pnpm db:generate` | Generates a migration from changes in `src/db/schema/`.           |
-| `pnpm db:migrate`  | Applies migrations as `watheeq_owner` (`MIGRATION_DATABASE_URL`). |
-| `pnpm operator:create <email>` | Creates a platform operator as `watheeq_owner`.      |
+| Script             | What it does |
+| ------------------ | ------------ |
+| `pnpm dev`         | Runs the app with `tsx` in watch mode. |
+| `pnpm build`       | Builds `dist/` with tsup. |
+| `pnpm start`       | Runs the build output (`node dist/main.js`). |
+| `pnpm test`        | Runs Vitest. Testcontainers starts PostgreSQL 18 by itself. |
+| `pnpm typecheck`   | Runs `tsc --noEmit`. |
+| `pnpm lint`        | Runs the Biome linter, failing on warnings. |
+| `pnpm check`       | Runs Biome lint, format, and import checks without writing. |
+| `pnpm format`      | Formats all files with Biome. |
+| `pnpm db:generate` | Generates a migration from changes in `src/db/schema/`. |
+| `pnpm db:migrate`  | Applies pending migrations. |
+| `pnpm operator:create <email> "<full name>"` | Creates a platform operator (a `users` row with role `operator`). Reads the password from `OPERATOR_PASSWORD` or a hidden prompt, never from arguments. |
 
 ## Notes
 
 - Tests need a running Docker daemon but nothing started by hand.
 - The local database lives in a Docker volume on your machine only.
+- The migration history was reset to a single baseline on 2026-10-21 (regenerated the same day to add `users.user_name`).
+  A volume created before that still holds the old schema: run `docker compose down -v` once (this deletes local data), then `docker compose up -d --wait` and `pnpm db:migrate`.

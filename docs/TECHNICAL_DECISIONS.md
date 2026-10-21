@@ -2,57 +2,63 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Status:** Approved (2026-10-17). T1-T22 implemented in Phase 0 (`docs/specs/phase-0-foundations.md`), which holds the full design and the smaller decisions P0.1-P0.27. T23 implemented in Phase 0.5 (`docs/specs/phase-0.5-refactor.md`), which holds the full design and the decisions 0.5-1 to 0.5-5.
-**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D15).
+**Status:** Revised 2026-10-21 to match the simplified MVP codebase.
+The full design for T1-T13 is in `docs/specs/phase-0-foundations.md`, and T14 in `docs/specs/phase-0.5-refactor.md`.
+**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D16).
+
+**Guiding rule:** for the MVP, choose the simplest design that is correct for the current requirements.
+Hardening that the MVP does not need yet is listed under "Deferred hardening" and added when the product grows.
 
 ---
 
 ### Constraints
 
 - **Language / framework:** Node.js + TypeScript, Express.
-- **Data residency:** all tenant data must remain in Saudi Arabia. This includes databases, backups, logs, and any third-party tooling (e.g. error tracking) that receives request data.
+- **Data residency:** all tenant data must remain in Saudi Arabia.
+  This includes databases, backups, logs, and any third-party service that receives tenant data (for example error tracking or an email provider).
 - **Primary client:** a browser web app. A mobile app is a distant future client.
 
 ---
 
 ### Decision Log
 
-| #   | Decision                                                                                                                                                                  | Rationale                                                                                                                                                                                  | Alternatives considered                                                                                   |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| T1  | **PostgreSQL** as the database                                                                                                                                            | Relational data (org tree, roles, requests), strong transactions, Row-Level Security, managed offerings available in KSA                                                                   | MySQL (no RLS), MongoDB (poor fit for relational data and cross-document transactions)                    |
-| T2  | **Tenant isolation: shared tables with `tenant_id` + PostgreSQL Row-Level Security**                                                                                      | Database refuses cross-tenant rows even if a query omits the tenant filter; single database to operate                                                                                     | Schema per tenant (N× migrations), database per tenant (heavy operations; possible future premium tier)   |
-| T3  | **Drizzle ORM** for data access                                                                                                                                           | Typed queries, explicit transactions, raw SQL available for setting the tenant context per transaction                                                                                     | Kysely, Prisma (hides connection/transaction control, making the RLS pattern awkward)                     |
-| T4  | **In-house authentication with server-side sessions** stored in PostgreSQL                                                                                                | Immediate revocation on deactivation, role change, or read-only subscription state                                                                                                         | JWT (cannot be revoked before expiry), external IdP / Keycloak (extra infrastructure, residency concerns) |
-| T5  | **Session transport: httpOnly, Secure cookie, with CSRF protection**                                                                                                      | Browser client; cookie not readable by scripts. Mobile can later use the same sessions via a header token                                                                                  | Bearer tokens in browser storage (exposed to script injection)                                            |
-| T6  | **Separate identity realms: `operators` table and tenant `users` table**, with separate login endpoints (`/operator/auth/login`, `/auth/login`) and shared auth internals | No tenant endpoint can ever grant operator access; keeps RLS policies clean; allows stricter operator policies                                                                             | Single users table with `is_operator` flag (one field separates one-tenant from all-tenant access)        |
-| T7  | **Tenant user email is unique across the platform**; login resolves the tenant from the email                                                                             | Matches the one-user-one-tenant model; no extra infrastructure                                                                                                                             | Subdomain per tenant (possible later, without data migration), tenant code at login                       |
-| T8  | **Audit entries written in the same transaction** as the business change; audit table is append-only                                                                      | Audit can never disagree with the actual data                                                                                                                                              | Log files, asynchronous audit writes                                                                      |
-| T9  | **Modular monolith** organized by feature modules                                                                                                                         | One deployable; clear module boundaries without network and operational overhead                                                                                                           | Microservices                                                                                             |
-| T10 | **Express 5, zod, pino, Vitest; integration tests against real PostgreSQL in Docker; Docker packaging**                                                                   | Async error handling; input validation at the trust boundary; structured logs with request IDs; RLS and transactions require real-database tests; portability across KSA hosting providers | Jest; mocked databases                                                                                    |
-| T11 | **RLS enforced against a non-owner runtime role:** `watheeq_app` owns nothing and has no `BYPASSRLS`; every tenant table uses `FORCE ROW LEVEL SECURITY`; the tenant is a transaction-local setting read by `app_current_tenant()`, which raises when unset (P0.1, P0.2) | RLS is otherwise skipped for owners and superusers; a forgotten tenant context becomes an error instead of an empty or wrong result | Application-level `tenant_id` filters only |
-| T12 | **Database roles created by an administrator's bootstrap script**, not by migrations: `watheeq_owner` (migrations), `watheeq_app` (runtime), `watheeq_auth` (P0.8, P0.23) | Managed PostgreSQL often restricts role creation; migrations stay runnable by the owner role | Roles created in migrations |
-| T13 | **The two pre-tenant lookups (login by email, session by token) are `SECURITY DEFINER` functions owned by `watheeq_auth`** (`NOLOGIN`, `BYPASSRLS`, `SELECT` on `users` and `user_sessions` only) (P0.3, P0.23) | Forced RLS applies to the owner, so the bypass is confined to two fixed read-only queries | Unprotected lookup tables; dropping `FORCE` RLS; policy exceptions |
-| T14 | **Foreign keys to `tenants` are declared inline in `CREATE TABLE`** (P0.17) | Validating a foreign key added later reads `tenants` under forced RLS without a tenant context, and fails | `ALTER TABLE ... ADD CONSTRAINT` |
-| T15 | **Audit is append-only at the database level** (`INSERT` and `SELECT` only) and `audit()` accepts only a tenant transaction, taking the tenant from the transaction's context (P0.7, P0.18) | Entries cannot be rewritten, lost by a rollback mismatch, or attributed to another tenant | Application-enforced append-only |
-| T16 | **Sessions:** separate tables and cookies per realm (`__Host-wq_session`, `__Host-wq_operator`); only SHA-256 hashes of 256-bit tokens stored; idle and absolute expiry checked in SQL (P0.4, P0.5, P0.22) | Realm separation by construction; a database leak yields no usable sessions | Shared sessions table with a realm flag |
-| T17 | **CSRF token = HMAC-SHA256 keyed by the session token**, stable per session and never stored; login protected by JSON-only bodies and `SameSite=Lax` (P0.6) | Works across tabs and reloads, nothing to leak, no extra secret | Stored token hash (forced rotation, broke other tabs); double-submit cookie |
-| T18 | **Login throttling in PostgreSQL:** per account (5 failures, 15-minute lock) and per client IP (100 failures per 15 minutes; IPv6 counted per `/64`), for both realms; no Redis (P0.14, P0.24) | Covers single-account guessing and password spraying, works across instances, no extra datastore | Redis; per-IP only; per-account only |
-| T19 | **Same-origin deployment** behind one reverse proxy (API under `/api`), no CORS; client IP resolved through a configured `TRUST_PROXY` hop count (P0.15) | Simplest cookie and CSRF setup; prevents both shared-proxy-IP lockouts and spoofed `X-Forwarded-For` | Separate API subdomain with CORS |
-| T20 | **Operators are created only by the `operator:create` CLI**, connecting as `watheeq_owner`; the runtime role cannot insert or delete operators (P0.16, P0.20) | A compromised application cannot mint accounts with access to every tenant | Bootstrap HTTP endpoint; seeded migration |
-| T21 | **Error responses are `{error:{code, requestId, details?}}` with no human-readable message** (P0.12) | Clients localize from codes (Arabic and English); no server wording can leak internals | Message field in responses |
-| T22 | **Toolchain:** Node 24 LTS (pinned through pnpm `devEngines`), pnpm, ESM, `tsx`, tsup, Biome, Vitest with Testcontainers, PostgreSQL 18, Drizzle with hand-written SQL for RLS, grants and functions; argon2id via `@node-rs/argon2` (P0.13, P0.19) | Owner's choices; tests need nothing started by hand; policies have one owner (hand-written SQL) | ESLint + Prettier; `tsc` or tsdown builds; Drizzle-managed policies |
-| T23 | **Layered feature modules:** routes → controller → service → repository, each written as a factory function and composed once in `app.ts`. Features live in `src/modules/<feature>/`, all Express middleware in `src/middleware/`, and infrastructure stays in `db`, `http`, `logging`, `config`, `audit`. Dependencies point downward only; services own transactions and throw `AppError`, and repositories take an executor (`Db \| Tx`) and never open transactions (0.5-1 to 0.5-3) | Business rules and transactions get a home that is neither HTTP nor SQL, so a service can combine repository calls and `audit(tx, ...)` in one transaction (T8, T15). A layer that would only pass calls through is omitted (health has no service) | Repositories opening their own transactions; classes with constructor injection; keeping features beside infrastructure |
+| #   | Decision | Rationale | Alternatives considered |
+| --- | -------- | --------- | ----------------------- |
+| T1  | **PostgreSQL** as the database | Relational data (org tree, roles, requests), strong transactions, managed offerings available in KSA | MySQL, MongoDB (poor fit for relational data and cross-document transactions) |
+| T2  | **Tenant isolation: shared tables with a `tenant_id` column, filtered in application code.** Every repository function that reads or writes tenant data takes the tenant ID and filters by it. One database role is used for everything. | Simplest model to build, run, and debug; no database roles or policies to provision on the KSA host. The data layout is the same one RLS needs, so RLS can be added later without moving data. | PostgreSQL Row-Level Security (stronger: the database refuses cross-tenant rows even if a query forgets the filter; deferred), schema or database per tenant |
+| T3  | **Drizzle ORM** for data access; **migrations generated by Drizzle Kit** from `src/db/schema/` | Typed queries and explicit transactions; one source of truth for tables, no hand-written SQL migrations | Kysely, Prisma |
+| T4  | **One `users` table for every account**, with a `role` column: `operator` (platform operator, belongs to no tenant) or `user` (tenant user) | One login flow, one table, one set of auth code | Separate `operators` table and login realm (stronger separation; deferred) |
+| T5  | **Tenant membership through a `tenant_members` table** with a unique `user_id`, so a user belongs to exactly one tenant, and a `role` for the user inside the tenant (`admin` or `member` until Phase 3 replaces it with tenant-defined roles). `tenants.owner_id` points to the tenant's owner. | Keeps `users` free of tenant columns (operators have none), while the unique constraint keeps the MVP's one-user-one-tenant rule a database fact | `users.tenant_id` column; many-to-many membership (not needed by the MVP) |
+| T6  | **Email is unique across the platform**; login finds the user, and through membership the tenant, from the email | Matches one-user-one-tenant; no tenant code or subdomain at login | Subdomain per tenant, tenant code at login |
+| T7  | **Authentication with tokens in httpOnly cookies:** a signed JWT access token (30 minutes; payload `{sub, iss: "watheeq_api", iat, exp, username, email, role, tenant}`) and an opaque refresh token (7 days) stored hashed in the database, rotated on every refresh, revoked on logout; refresh rejects inactive users | No database read on ordinary requests; a deactivated user loses access within 30 minutes; one mechanism for operators and tenant users | Server-side sessions in PostgreSQL (immediate revocation, but a database read per request), external IdP (extra infrastructure, residency concerns) |
+| T8  | **Audit entries are written in the same transaction** as the business change, through `writeAuditEntry(tx, entry)`, which accepts only a transaction | Audit can never disagree with the actual data | Log files, asynchronous audit writes |
+| T9  | **Modular monolith** organized by feature modules | One deployable; clear module boundaries without network and operational overhead | Microservices |
+| T10 | **Express 5, zod, pino, Vitest; integration tests against real PostgreSQL (Testcontainers); Docker packaging** | Async error handling; input validation at the trust boundary; structured logs with request IDs; transactions and constraints need real-database tests | Jest; mocked databases |
+| T11 | **Error responses are `{error:{code, requestId, details?}}` with no human-readable message** | Clients localize from codes (Arabic and English); no server wording can leak internals | Message field in responses |
+| T12 | **Toolchain:** Node 24 LTS (pinned through pnpm `devEngines`), pnpm, ESM, `tsx`, tsup, Biome, Vitest with Testcontainers, PostgreSQL 18; argon2id via `@node-rs/argon2`; JWTs via `jose`; cookies read with `cookie-parser`; `@/` import alias for `src/` (declared in `tsconfig.json` and mirrored in `vitest.config.ts`) | Owner's choices; tests need nothing started by hand | ESLint + Prettier; `tsc` or tsdown builds |
+| T13 | **Platform operators are created by the `operator:create` CLI**, not through the API | No HTTP endpoint can mint an account that reaches every tenant | Bootstrap HTTP endpoint; seeded migration |
+| T14 | **Layered feature modules:** routes → controller → service → repository, each written as a factory function and composed in the module's `<feature>.routes.ts`, which `app.ts` mounts. Features live in `src/modules/<feature>/`, Express middleware in `src/middleware/` (feature-specific middleware may live in its module), and infrastructure in `db`, `http`, `logging`, `config`, `audit`. Services own transactions, validate with zod, and throw `AppError`; repositories take an executor (`Db \| Tx`), never open transactions, return the query result as is (checks belong to the service), and never catch errors (known database errors are translated centrally by `fromDatabaseError`). Each feature keeps its constants in `<feature>.config.ts`, zod schemas in `<feature>.schemas.ts`, and types in `<feature>.types.ts`, named `<Name>Type` (`LoginRequestType`, `LoginResponseType`). Global type declarations live in `src/types/<library>.ts`. | Business rules and transactions get a home that is neither HTTP nor SQL, so a service can combine repository calls and `writeAuditEntry(tx, ...)` in one transaction (T8). A layer that would only pass calls through is omitted (health has no service). | Repositories opening their own transactions; classes with constructor injection |
+
+---
+
+### Deferred Hardening
+
+Each item below is a known, accepted gap for the MVP stage, with the trigger that should bring it back.
+
+| Item | What the MVP does instead | Add it when |
+| ---- | ------------------------- | ----------- |
+| Row-Level Security for tenant isolation | Application-level `tenant_id` filters (T2), covered by isolation tests | Before the first production tenant with sensitive data, or when the number of tenant-data queries makes review unreliable |
+| Database-enforced append-only audit (no `UPDATE`/`DELETE` grants) | No code path updates or deletes audit rows | Together with dedicated database roles |
+| Login throttling (per account and per IP) | None | Before production exposure |
+| Refresh-token reuse detection (revoke all of a user's tokens when a revoked token is replayed) | A revoked token is simply rejected | Before production exposure |
+| CSRF tokens | `SameSite=Lax` cookies and a same-origin deployment | If the API is served from a different site than the web app, or before production exposure |
+| Separate operator identity realm | `users.role = 'operator'` (T4) | When operator roles or stricter operator policies are needed |
+| MFA and enterprise SSO | Email and password only | After the MVP |
 
 ---
 
 ### Deferred Technical Decisions
 
-- **Background job runner** - decided in Phase 7 (escalation checks).
-- **Hosting provider in KSA**: decided at deployment; Docker keeps options open. The chosen managed PostgreSQL must offer version 18 and allow an administrator to create a `NOLOGIN BYPASSRLS` role (`watheeq_auth`, T13).
-- **Enterprise SSO, MFA for operators** - after the MVP.
-
----
-
-### Items to Verify (Spikes)
-
-- **Step 0.3 (resolved 2026-10-17):** the Drizzle + RLS pattern is proven by integration tests: tenant context set per transaction, a query omitting `tenant_id` returns no other-tenant rows, and a query with no tenant context fails.
+- **Background job runner:** decided in Phase 7 (escalation checks).
+- **Hosting provider in KSA:** decided at deployment; Docker keeps options open. The managed PostgreSQL must offer version 18.
+- **Email provider for verification emails** (MVP D16): must keep data in KSA. Decided when email verification is implemented.

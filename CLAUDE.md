@@ -34,8 +34,8 @@ Each document is authoritative for its own topic. Do not duplicate content betwe
 | Document                      | Authoritative for                                                                |
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | `docs/PRODUCT_VISION.md`      | Long-term product direction                                                      |
-| `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1-D15; open product questions |
-| `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T23                                     |
+| `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1-D16; open product questions |
+| `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T14; deferred hardening                 |
 | `docs/ROADMAP_AND_STATUS.md`  | Phase list, phase status, next action                                            |
 | `docs/specs/phase-<N>-*.md`   | Detailed requirements, design, steps, and acceptance criteria for one phase      |
 | `templates/SPEC_TEMPLATE.md`  | Structure every phase spec must follow                                           |
@@ -44,4 +44,6 @@ Read `MVP_SCOPE.md` and `TECHNICAL_DECISIONS.md` before designing or implementin
 
 ## Stack (summary - see TECHNICAL_DECISIONS.md for rationale)
 
-Node.js + TypeScript (strict), Express 5, PostgreSQL with Row-Level Security, Drizzle ORM, zod, pino, Vitest with real PostgreSQL in Docker. All data must stay in Saudi Arabia.
+Node.js + TypeScript (strict), Express 5, PostgreSQL (tenant isolation by application-level `tenant_id` filtering), Drizzle ORM, JWT cookie authentication, zod, pino, Vitest with real PostgreSQL in Docker. All data must stay in Saudi Arabia.
+
+MVP rule: keep designs as simple as the current requirements allow; stronger controls are added gradually as the product grows (see "Deferred hardening" in `TECHNICAL_DECISIONS.md`).
