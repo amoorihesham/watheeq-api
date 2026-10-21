@@ -16,7 +16,8 @@
 - **Phase 1 (platform, plans & subscriptions) implemented** (`docs/specs/phase-1-platform-subscriptions.md`): plans with price, payment period, and discount; tenant creation with the first Tenant Admin, who verifies their email and sets a password (Mailpit locally); subscriptions with copied terms, customer discount, and derived Active / Grace / Read-only state; subscription changes; the user limit under a per-tenant lock; the Read-only guard and `GET /subscription`.
   Its main decisions are T15-T20 in `TECHNICAL_DECISIONS.md`.
 - **Known open items:** the KSA hosting provider must offer PostgreSQL 18 with ICU, and an SMTP email provider must be chosen before production (`TECHNICAL_DECISIONS.md`, deferred decisions).
-- **Next action:** draft the Phase 2 spec (org structure and users) when the owner asks.
+- **Phase 2 (org structure and users) in implementation** (`docs/specs/phase-2-org-structure-users.md`): spec approved 2026-10-21.
+- **Next action:** owner review of Phase 2 step 2.1 (tenant permissions), then step 2.2 (organization units).
 
 ---
 
@@ -29,7 +30,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 0   | Technical foundations           | Skeleton, cross-cutting basics, tenant data model, audit, JWT authentication                | -          | Implemented |
 | 0.5 | Layered architecture            | Routes → controller → service → repository convention, central middleware, test helpers   | 0          | Implemented                             |
 | 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user limit, email verification | 0, 0.5     | Implemented                                    |
-| 2   | Org structure & users           | Department/section tree, managers, membership                                               | 1          | Not started                             |
+| 2   | Org structure & users           | Department/section tree, managers, membership                                               | 1          | In Implementation                       |
 | 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                                   | 2          | Not started                             |
 | 4   | Working calendar                | Working days, holidays, working-day deadline calculation                                    | 1          | Not started                             |
 | 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | Not started                             |

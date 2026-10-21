@@ -232,6 +232,23 @@ describe("GET /subscription (R1.11, P1.23)", () => {
     });
   });
 
+  it("refuses a member with 403: subscription.view is held by admins (Phase 2 spec, 4.2)", async () => {
+    await setState("active");
+    const passwordHash = await hashPassword(PASSWORD);
+    const khalidId = await seedUser(pool, { email: "khalid@sg-alnoor.test", passwordHash });
+    await pool.query(
+      "insert into tenant_members (tenant_id, user_id, role) values ($1, $2, 'member')",
+      [tenantId, khalidId],
+    );
+    const khalid = (await login(app, "khalid@sg-alnoor.test", PASSWORD)).access;
+    const res = await request(app).get("/subscription").set("Cookie", accessCookie(khalid));
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("FORBIDDEN");
+    expect((await request(app).get("/auth/me").set("Cookie", accessCookie(khalid))).status).toBe(
+      200,
+    );
+  });
+
   it("refuses an operator with 403 and an anonymous caller with 401", async () => {
     expect((await request(app).get("/subscription").set("Cookie", accessCookie(omar))).status).toBe(
       403,
