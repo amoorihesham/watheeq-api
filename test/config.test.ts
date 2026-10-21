@@ -4,6 +4,10 @@ import { parseConfig } from "../src/config/config.js";
 const valid = {
   DATABASE_URL: "postgres://u:secret@localhost:5432/db",
   JWT_SECRET: "a-jwt-secret-of-at-least-32-characters",
+  SMTP_HOST: "localhost",
+  SMTP_PORT: "1025",
+  EMAIL_FROM: "Watheeq <no-reply@watheeq.sa>",
+  APP_BASE_URL: "http://localhost:5173",
 };
 
 describe("parseConfig", () => {
@@ -18,6 +22,12 @@ describe("parseConfig", () => {
         JWT_SECRET: valid.JWT_SECRET,
         ACCESS_TOKEN_TTL_SECONDS: 1800,
         REFRESH_TOKEN_TTL_SECONDS: 604800,
+        SMTP_HOST: "localhost",
+        SMTP_PORT: 1025,
+        SMTP_SECURE: false,
+        EMAIL_FROM: valid.EMAIL_FROM,
+        APP_BASE_URL: valid.APP_BASE_URL,
+        VERIFICATION_TOKEN_TTL_SECONDS: 259200,
         LOG_LEVEL: "info",
       },
     });
@@ -39,6 +49,21 @@ describe("parseConfig", () => {
     });
   });
 
+  it("reads SMTP_SECURE as a boolean, and only from 'true' or 'false'", () => {
+    const on = parseConfig({ ...valid, SMTP_SECURE: "true" });
+    expect(on.ok && on.config.SMTP_SECURE).toBe(true);
+    const off = parseConfig({ ...valid, SMTP_SECURE: "false" });
+    expect(off.ok && off.config.SMTP_SECURE).toBe(false);
+    expect(parseConfig({ ...valid, SMTP_SECURE: "yes" }).ok).toBe(false);
+  });
+
+  it("requires APP_BASE_URL to be a URL", () => {
+    expect(parseConfig({ ...valid, APP_BASE_URL: "not a url" })).toEqual({
+      ok: false,
+      message: "Invalid configuration: APP_BASE_URL (invalid_format)",
+    });
+  });
+
   it("coerces PORT to a number", () => {
     const result = parseConfig({ ...valid, PORT: "8080" });
     expect(result.ok && result.config.PORT).toBe(8080);
@@ -47,7 +72,8 @@ describe("parseConfig", () => {
   it("names a missing key", () => {
     expect(parseConfig({})).toEqual({
       ok: false,
-      message: "Invalid configuration: DATABASE_URL (Required), JWT_SECRET (Required)",
+      message:
+        "Invalid configuration: DATABASE_URL (Required), JWT_SECRET (Required), SMTP_HOST (Required), SMTP_PORT (Required), EMAIL_FROM (Required), APP_BASE_URL (Required)",
     });
   });
 

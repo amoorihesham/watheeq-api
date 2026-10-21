@@ -19,9 +19,11 @@ export const users = pgTable(
     email: text().notNull(),
     // The person's display name, for example "Sara Al-Qahtani". Not unique; login is by email.
     userName: text("user_name").notNull(),
-    passwordHash: text("password_hash").notNull(),
+    // Null until the first Tenant Admin sets a password through the verification link (Phase 1 spec, P1.15).
+    passwordHash: text("password_hash"),
     role: userRoles().notNull().default("user"),
     isActive: boolean("is_active").notNull().default(true),
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -31,6 +33,10 @@ export const users = pgTable(
     check(
       "users_user_name_length",
       sql`${t.userName} = btrim(${t.userName}) and char_length(${t.userName}) between 1 and 100`,
+    ),
+    check(
+      "users_verified_has_password",
+      sql`${t.emailVerifiedAt} is null or ${t.passwordHash} is not null`,
     ),
   ],
 );

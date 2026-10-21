@@ -15,6 +15,13 @@
       "when": 1792592273256,
       "tag": "0001_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792592712234,
+      "tag": "0002_tenants_subscriptions_verification",
+      "breakpoints": true
     }
   ]
 }

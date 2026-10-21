@@ -36,6 +36,12 @@ If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` an
 | `JWT_SECRET`   | none          | Required, at least 32 characters. Signs access tokens (HS256). Generate one with `openssl rand -base64 48`. |
 | `ACCESS_TOKEN_TTL_SECONDS`  | `1800`   | Access-token lifetime (minimum 60). |
 | `REFRESH_TOKEN_TTL_SECONDS` | `604800` | Refresh-token lifetime (minimum 60). |
+| `SMTP_HOST`, `SMTP_PORT` | none | Required. SMTP server for verification emails; locally Mailpit (`localhost`, `1025`). |
+| `SMTP_USER`, `SMTP_PASSWORD` | none | Optional SMTP login; Mailpit needs none. |
+| `SMTP_SECURE` | `false` | `true` for TLS from the first byte (port 465 style). |
+| `EMAIL_FROM` | none | Required. Sender address, for example `Watheeq <no-reply@watheeq.sa>`. |
+| `APP_BASE_URL` | none | Required. Web-app origin; verification links are `${APP_BASE_URL}/verify-email?token=...`. |
+| `VERIFICATION_TOKEN_TTL_SECONDS` | `259200` | Verification link lifetime (72 hours). |
 
 ## HTTP behavior
 
@@ -75,9 +81,17 @@ Operator routes require an operator's access token and each declares a platform 
 | `GET /operator/plans` | `platform.plan.view` | 200 `{plans}`, ordered by name |
 | `GET /operator/plans/:planId` | `platform.plan.view` | 200 `{plan}`; 404 |
 | `PATCH /operator/plans/:planId` | `platform.plan.update` | 200 `{plan}`; existing subscriptions keep their copied terms |
+| `POST /operator/tenants` | `platform.tenant.create` | 201 `{tenant, subscription, admin}`; creates the tenant, its subscription, and the first Tenant Admin, and emails the admin a verification link. 409 `EMAIL_TAKEN` or `SLUG_TAKEN` |
+| `GET /operator/tenants` | `platform.tenant.view` | 200 `{tenants:[{tenant, subscription, usage}]}`, ordered by name |
+| `GET /operator/tenants/:tenantId` | `platform.tenant.view` | 200 `{tenant, subscription, usage}`; 404 |
+| `POST /operator/tenants/:tenantId/admin/resend-verification` | `platform.tenant.create` | 204; older links stop working. 409 `ALREADY_VERIFIED` |
 
 A plan is `{name, userLimit, graceDays, priceHalalas, paymentPeriod, discountPercent}`: the price is in halalas per payment period (`monthly` or `yearly`), and the discount is a percentage with up to two decimals.
-Every plan write is audited as a platform-level entry. The full design is in `docs/specs/phase-1-platform-subscriptions.md`.
+Every plan write is audited as a platform-level entry.
+A subscription shows `state` (`active`, `grace`, or `read_only`, derived from today's date in Riyadh) and `pricing`, including `effectivePriceHalalas` (plan discount, then customer discount).
+
+The first Tenant Admin has no password until they open the emailed link, which posts `{token, password}` to `POST /auth/verify` (204; 400 `VERIFICATION_INVALID` for an unknown, used, replaced, or expired link).
+Until then their login returns the same 401 as an unknown email. The full design is in `docs/specs/phase-1-platform-subscriptions.md`.
 
 ## Architecture in brief
 
@@ -113,6 +127,11 @@ Deliberately deferred for the MVP: Row-Level Security, login throttling, CSRF to
 | `pnpm db:generate` | Generates a migration from changes in `src/db/schema/`. |
 | `pnpm db:migrate`  | Applies pending migrations. |
 | `pnpm operator:create <email> "<full name>"` | Creates a platform operator (a `users` row with role `operator`). Reads the password from `OPERATOR_PASSWORD` or a hidden prompt, never from arguments. |
+
+## Local email (Mailpit)
+
+`docker compose up -d --wait` also starts Mailpit, a local SMTP server.
+Verification emails sent by the app appear in its inbox at <http://localhost:8025>.
 
 ## Notes
 

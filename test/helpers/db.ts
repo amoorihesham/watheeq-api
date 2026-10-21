@@ -27,18 +27,21 @@ export interface SeedUser {
   passwordHash?: string;
   isActive?: boolean;
   role?: "user" | "operator";
+  /** Defaults to true; an unverified user cannot log in (Phase 1 spec, P1.17). */
+  verified?: boolean;
 }
 
 /** Inserts one user. Returns the user id. */
 export async function seedUser(db: pg.Pool | pg.PoolClient, user: SeedUser): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
-    "insert into users (email, user_name, password_hash, is_active, role) values ($1, $2, $3, $4, $5) returning id",
+    "insert into users (email, user_name, password_hash, is_active, role, email_verified_at) values ($1, $2, $3, $4, $5, case when $6 then now() end) returning id",
     [
       user.email,
       user.userName ?? user.email.split("@")[0],
       user.passwordHash ?? "x",
       user.isActive ?? true,
       user.role ?? "user",
+      user.verified ?? true,
     ],
   );
   return rows[0]?.id ?? "";

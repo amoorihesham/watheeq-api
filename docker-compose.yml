@@ -19,5 +19,12 @@ services:
       timeout: 3s
       retries: 10
 
+  # Local SMTP server and inbox for verification emails (Phase 1 spec, P1.18). Inbox: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.27.10
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
 volumes:
   watheeq-pgdata:

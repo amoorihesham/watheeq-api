@@ -48,11 +48,12 @@ export async function verifyAccessToken(
   }
 }
 
-export function generateRefreshToken(): string {
+/** A random 256-bit token for refresh tokens and verification links; only its hash is stored. */
+export function generateOpaqueToken(): string {
   return randomBytes(REFRESH_TOKEN_BYTES).toString("base64url");
 }
 
-/** Only this hash is stored, so a database leak yields no usable refresh tokens. */
+/** Only this hash is stored, so a database leak yields no usable refresh tokens or links. */
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }

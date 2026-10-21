@@ -31,9 +31,28 @@ testRouter.post("/duplicate-email", async (_req, res) => {
   );
   res.json({});
 });
-testRouter.post("/duplicate-slug", async (_req, res) => {
-  await pool.query("insert into tenants (name, slug) values ('A', 'dup') on conflict do nothing");
-  await pool.query("insert into tenants (name, slug) values ('B', 'dup')");
+// tenant_members_user_unique has no mapping: a second membership is a server bug, not a client error.
+testRouter.post("/duplicate-membership", async (_req, res) => {
+  const user = await pool.query<{ id: string }>(
+    "insert into users (email, user_name) values ('member-dup@alnoor.test', 'Dup') on conflict do nothing returning id",
+  );
+  const userId =
+    user.rows[0]?.id ??
+    (
+      await pool.query<{ id: string }>(
+        "select id from users where email = 'member-dup@alnoor.test'",
+      )
+    ).rows[0]?.id;
+  const tenant = await pool.query<{ id: string }>(
+    "insert into tenants (name, slug) values ('Dup', 'dup-member') on conflict (slug) do update set name = 'Dup' returning id",
+  );
+  const insert =
+    "insert into tenant_members (tenant_id, user_id) values ($1, $2) on conflict do nothing";
+  await pool.query(insert, [tenant.rows[0]?.id, userId]);
+  await pool.query("insert into tenant_members (tenant_id, user_id) values ($1, $2)", [
+    tenant.rows[0]?.id,
+    userId,
+  ]);
   res.json({});
 });
 testRouter.get("/async-boom", async () => {
@@ -144,7 +163,7 @@ describe("standard error shape", () => {
   });
 
   it("returns 500 INTERNAL for a unique violation that has no mapping", async () => {
-    const res = await request(app).post("/duplicate-slug");
+    const res = await request(app).post("/duplicate-membership");
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe("INTERNAL");
   });

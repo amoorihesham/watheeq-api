@@ -21,6 +21,7 @@ export function createAuthRouter({ db, config }: AuthRouterDepsType): Router {
   router.post("/login", controller.login);
   router.post("/refresh", controller.refresh);
   router.post("/logout", controller.logout);
+  router.post("/verify", controller.verifyEmail);
   router.get("/me", authenticate(settings.jwtSecret), controller.me);
   return router;
 }

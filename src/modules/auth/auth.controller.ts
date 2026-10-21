@@ -48,6 +48,12 @@ export function createAuthController({
       res.status(204).end();
     }) satisfies RequestHandler,
 
+    verifyEmail: (async (req, res) => {
+      await service.verifyEmail(req.body, String(req.id));
+      req.log.info("email verified");
+      res.status(204).end();
+    }) satisfies RequestHandler,
+
     me: (async (req, res) => {
       res.status(200).json({ user: await service.me(principalOf(req)) } satisfies MeResponseType);
     }) satisfies RequestHandler,

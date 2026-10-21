@@ -3,12 +3,16 @@ import { uniqueViolationConstraint } from "../db/errors.js";
 /** Error codes and their HTTP statuses (Phase 0 spec, 4.2). Later phases add codes here. */
 const STATUS_BY_CODE = {
   VALIDATION_FAILED: 400,
+  VERIFICATION_INVALID: 400,
   UNAUTHENTICATED: 401,
   INVALID_CREDENTIALS: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   EMAIL_TAKEN: 409,
   PLAN_NAME_TAKEN: 409,
+  SLUG_TAKEN: 409,
+  ALREADY_VERIFIED: 409,
+  USER_LIMIT_REACHED: 409,
   PAYLOAD_TOO_LARGE: 413,
   UNSUPPORTED_MEDIA_TYPE: 415,
   INTERNAL: 500,
@@ -42,6 +46,7 @@ export class AppError extends Error {
 const CODE_BY_UNIQUE_CONSTRAINT: Record<string, ErrorCode> = {
   users_email_unique: "EMAIL_TAKEN",
   plans_name_lower_unique: "PLAN_NAME_TAKEN",
+  tenants_slug_unique: "SLUG_TAKEN",
 };
 
 /** The AppError for a known database error, or undefined (which the error handler turns into INTERNAL). */

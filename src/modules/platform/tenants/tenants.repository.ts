@@ -1,0 +1,60 @@
+import { eq, sql } from "drizzle-orm";
+import type { Executor } from "@/db/pool.js";
+import { subscriptions, tenantMembers, tenants, users } from "@/db/schema/index.js";
+import { riyadhToday } from "@/modules/subscriptions/index.js";
+import type { NewTenantType, TenantOwnerType, TenantType } from "./tenants.types.js";
+
+const activeMembers = sql<number>`(
+  select count(*)::int from ${tenantMembers}
+  join ${users} on ${users.id} = ${tenantMembers.userId}
+  where ${tenantMembers.tenantId} = ${tenants.id} and ${users.isActive}
+)`;
+
+/** Platform code: reads across tenants, reached only behind `requireRole("operator")` (P1.1). */
+export function createTenantsRepository() {
+  const detailColumns = {
+    tenant: tenants,
+    subscription: subscriptions,
+    activeUsers: activeMembers,
+    today: riyadhToday,
+  };
+
+  return {
+    insertTenant(db: Executor, values: NewTenantType): Promise<TenantType[]> {
+      return db.insert(tenants).values(values).returning();
+    },
+
+    insertAdminMember(db: Executor, tenantId: string, userId: string) {
+      return db.insert(tenantMembers).values({ tenantId, userId, role: "admin" });
+    },
+
+    list(db: Executor) {
+      return db
+        .select(detailColumns)
+        .from(tenants)
+        .innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
+        .orderBy(sql`lower(${tenants.name})`);
+    },
+
+    findById(db: Executor, tenantId: string) {
+      return db
+        .select(detailColumns)
+        .from(tenants)
+        .innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
+        .where(eq(tenants.id, tenantId));
+    },
+
+    findOwner(db: Executor, tenantId: string): Promise<TenantOwnerType[]> {
+      return db
+        .select({
+          id: users.id,
+          email: users.email,
+          userName: users.userName,
+          emailVerifiedAt: users.emailVerifiedAt,
+        })
+        .from(tenants)
+        .innerJoin(users, eq(users.id, tenants.ownerId))
+        .where(eq(tenants.id, tenantId));
+    },
+  };
+}

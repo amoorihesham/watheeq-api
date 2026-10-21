@@ -1,10 +1,15 @@
+import { writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import { DUMMY_PASSWORD_HASH } from "./auth.config.js";
 import { createAuthRepository } from "./auth.repository.js";
-import { createOperatorRequestSchema, loginRequestSchema } from "./auth.schemas.js";
+import {
+  createOperatorRequestSchema,
+  loginRequestSchema,
+  verifyEmailRequestSchema,
+} from "./auth.schemas.js";
 import type {
   AccountType,
   AuthRepositoryType,
@@ -14,9 +19,10 @@ import type {
   CreateOperatorRequestType,
   LoginRequestType,
   UserSummaryType,
+  VerifyEmailRequestType,
 } from "./auth.types.js";
 import { hashPassword, verifyPassword } from "./shared/passwords.js";
-import { generateRefreshToken, hashToken, signAccessToken } from "./shared/tokens.js";
+import { generateOpaqueToken, hashToken, signAccessToken } from "./shared/tokens.js";
 
 /** Until Phase 3 there are no tenant-defined roles: no role id, the membership enum as the name, no permissions (P0.18). */
 const toAuthUser = (account: AccountType): AuthUserType => ({
@@ -46,7 +52,7 @@ export function createAuthService({
       settings.jwtSecret,
       settings.accessTokenTtlSeconds,
     );
-    const refreshToken = generateRefreshToken();
+    const refreshToken = generateOpaqueToken();
     await repo.insertRefreshToken(executor, {
       userId: account.id,
       tokenHash: hashToken(refreshToken),
@@ -60,7 +66,8 @@ export function createAuthService({
     async login(input: LoginRequestType): Promise<AuthSessionType> {
       const { email, password } = validate(loginRequestSchema, input);
       const [account] = await repo.findAccountByEmail(db, email);
-      if (!account) {
+      // An unverified Tenant Admin has no password yet, and is answered exactly like an unknown email (P1.17).
+      if (!account?.passwordHash || !account.emailVerifiedAt) {
         await verifyPassword(DUMMY_PASSWORD_HASH, password);
         throw new AppError("INVALID_CREDENTIALS");
       }
@@ -85,7 +92,7 @@ export function createAuthService({
           return null;
         }
         const [account] = await repo.findAccountById(tx, consumed.userId);
-        if (!account?.isActive) {
+        if (!account?.isActive || !account.emailVerifiedAt) {
           return null;
         }
         return issueSession(tx, account);
@@ -96,6 +103,34 @@ export function createAuthService({
       if (refreshToken) {
         await repo.revokeRefreshToken(db, hashToken(refreshToken));
       }
+    },
+
+    /**
+     * Uses the link, sets the password, and marks the email verified, in one transaction (P1.15).
+     * Unknown, used, expired, and replaced links all give VERIFICATION_INVALID.
+     */
+    async verifyEmail(input: VerifyEmailRequestType, requestId: string): Promise<void> {
+      const { token, password } = validate(verifyEmailRequestSchema, input);
+      const passwordHash = await hashPassword(password);
+      await withTx(db, async (tx) => {
+        const [link] = await repo.consumeEmailVerification(tx, hashToken(token));
+        if (!link) {
+          throw new AppError("VERIFICATION_INVALID");
+        }
+        const [verified] = await repo.setVerifiedPassword(tx, link.userId, passwordHash);
+        if (!verified) {
+          throw new AppError("VERIFICATION_INVALID");
+        }
+        const [account] = await repo.findAccountById(tx, link.userId);
+        await writeAuditEntry(tx, {
+          tenantId: account?.tenantId ?? null,
+          actor: { type: "user", id: link.userId },
+          action: "user.email_verified",
+          resourceType: "user",
+          resourceId: link.userId,
+          requestId,
+        });
+      });
     },
 
     async me(user: AuthUserType): Promise<AuthUserType> {
@@ -122,6 +157,8 @@ export async function createOperator(
     userName,
     passwordHash: await hashPassword(password),
     role: "operator",
+    // The deployer typed the address on the server; there is no link to confirm.
+    emailVerifiedAt: new Date(),
   });
   if (!operator) {
     throw new Error("insert returned no row");

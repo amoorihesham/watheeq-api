@@ -1,8 +1,9 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
-import { refreshTokens, tenantMembers, users } from "@/db/schema/index.js";
+import { emailVerifications, refreshTokens, tenantMembers, users } from "@/db/schema/index.js";
 import type {
   AccountType,
+  NewEmailVerificationType,
   NewRefreshTokenType,
   NewUserType,
   UserSummaryType,
@@ -15,6 +16,7 @@ const accountColumns = {
   passwordHash: users.passwordHash,
   role: users.role,
   isActive: users.isActive,
+  emailVerifiedAt: users.emailVerifiedAt,
   tenantId: tenantMembers.tenantId,
   tenantRole: tenantMembers.role,
 };
@@ -71,6 +73,44 @@ export function createAuthRepository() {
         .update(refreshTokens)
         .set({ revokedAt: sql`now()` })
         .where(and(eq(refreshTokens.tokenHash, tokenHash), isNull(refreshTokens.revokedAt)));
+    },
+
+    insertEmailVerification(db: Executor, values: NewEmailVerificationType) {
+      return db.insert(emailVerifications).values(values);
+    },
+
+    /** Marks every unused link of the user as used, so only the next one issued works. */
+    retireEmailVerifications(db: Executor, userId: string) {
+      return db
+        .update(emailVerifications)
+        .set({ usedAt: sql`now()` })
+        .where(and(eq(emailVerifications.userId, userId), isNull(emailVerifications.usedAt)));
+    },
+
+    /**
+     * Uses a valid link and returns its user in one statement. Of two concurrent submissions of the same link,
+     * only one matches `used_at IS NULL`, so only one gets a row back.
+     */
+    consumeEmailVerification(db: Executor, tokenHash: string): Promise<{ userId: string }[]> {
+      return db
+        .update(emailVerifications)
+        .set({ usedAt: sql`now()` })
+        .where(
+          and(
+            eq(emailVerifications.tokenHash, tokenHash),
+            isNull(emailVerifications.usedAt),
+            gt(emailVerifications.expiresAt, sql`now()`),
+          ),
+        )
+        .returning({ userId: emailVerifications.userId });
+    },
+
+    setVerifiedPassword(db: Executor, userId: string, passwordHash: string) {
+      return db
+        .update(users)
+        .set({ passwordHash, emailVerifiedAt: sql`now()` })
+        .where(and(eq(users.id, userId), isNull(users.emailVerifiedAt)))
+        .returning({ id: users.id });
     },
   };
 }

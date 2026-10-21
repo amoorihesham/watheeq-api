@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                   |
 | ---------------------- | ----------------------------------------------------------------------- |
-| **Status**             | In Implementation (step 1.3 next)                                            |
+| **Status**             | In Implementation (step 1.4 next)                                            |
 | **Approved by / date** | _ِAmr - 21/10/2026 - 17:15 pm_                                          |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`) |
 | **Related decisions**  | MVP 3.1, 3.9, D11-D17; Technical T2, T4, T5, T7, T8, T11, T13, T14      |
@@ -269,16 +269,16 @@ A `grace_days` of 0 moves a tenant from Active straight to Read-only.
 #### Verify email and set password (first Tenant Admin)
 
 1. Validate `{token, password}`; the password is 12-256 characters.
-2. In one transaction: hash the token and load the verification row with `FOR UPDATE`; unknown, used, or expired → 400 `VERIFICATION_INVALID`.
+2. In one transaction: hash the token and use the link with one conditional `UPDATE ... SET used_at = now() WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now() RETURNING user_id`; no row (unknown, used, replaced, or expired) → 400 `VERIFICATION_INVALID`.
 3. Hash the password (argon2id), set `password_hash` and `email_verified_at`, mark the row used, and audit `user.email_verified`.
 4. Return 204. Sara then logs in normally; no tokens are issued by verify.
 
-`FOR UPDATE` makes a double-submitted link verify once: the second request waits, then sees `used_at` set.
+The conditional `UPDATE` makes a double-submitted link verify once: the second request waits for the first's row lock, then no longer matches `used_at IS NULL`. It is the same pattern as refresh-token rotation (Phase 0, P0.17).
 
 #### Resend verification (operator)
 
 In one transaction: load the tenant's owner (none → 404; already verified → 409 `ALREADY_VERIFIED`), mark every unused verification row of that user as used, insert a new one, and audit `user.verification_resent`.
-After commit, send the email.
+After commit, send the email. A send failure returns 500: Omar asked for an email, so he must not be told it went out; the new link is already stored, so retrying is safe.
 Only the newest link works, so an old email found later cannot be used.
 
 #### Login before verification
@@ -474,3 +474,4 @@ Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is im
 | 2026-10-21 | Spec approved; implementation started. | Owner approval. |
 | 2026-10-21 | Step 1.1 implemented and verified: platform permission list in `platform.config.ts`, `platformPermissionsOf`, `requirePlatformPermission` (also refuses tenant users on its own). | Acceptance criteria met. |
 | 2026-10-21 | Step 1.2 implemented and verified: `plans` table (migration `0001_plans`), plan CRUD under `/operator/plans`, platform-level audit, `PLAN_NAME_TAKEN` via the constraint map; `auditContextOf(req)` in the auth module builds the audit actor and request ID. | Acceptance criteria met. |
+| 2026-10-21 | Step 1.3 implemented and verified: migration `0002`, tenants module (create, list, detail, resend), `/auth/verify`, login refuses unverified users, `email/` SMTP sender with Mailpit, subscriptions module shared functions (state, price, seats). Verify uses a conditional `UPDATE` instead of `FOR UPDATE` (same guarantee); a failed resend email returns 500. | Acceptance criteria met; two mechanism details recorded. |

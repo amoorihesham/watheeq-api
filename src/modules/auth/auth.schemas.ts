@@ -25,6 +25,11 @@ export const loginRequestSchema = z.object({
   password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
 });
 
+export const verifyEmailRequestSchema = z.object({
+  token: z.string().min(1).max(200),
+  password: newPasswordSchema,
+});
+
 export const tenantClaimSchema = z.object({
   id: z.uuid(),
   roleId: z.uuid().nullable(),

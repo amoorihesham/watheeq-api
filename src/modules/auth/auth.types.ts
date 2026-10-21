@@ -10,6 +10,7 @@ import type {
   createOperatorRequestSchema,
   loginRequestSchema,
   tenantClaimSchema,
+  verifyEmailRequestSchema,
 } from "./auth.schemas.js";
 import type { createAuthService } from "./auth.service.js";
 
@@ -19,8 +20,10 @@ export type TenantMemberRoleType = (typeof tenantMemberRoles.enumValues)[number]
 export interface NewUserType {
   email: string;
   userName: string;
-  passwordHash: string;
+  /** Null for a first Tenant Admin, who sets a password through the verification link. */
+  passwordHash: string | null;
   role: UserRoleType;
+  emailVerifiedAt: Date | null;
 }
 
 export interface UserSummaryType {
@@ -34,9 +37,10 @@ export interface AccountType {
   id: string;
   email: string;
   userName: string;
-  passwordHash: string;
+  passwordHash: string | null;
   role: UserRoleType;
   isActive: boolean;
+  emailVerifiedAt: Date | null;
   tenantId: string | null;
   tenantRole: TenantMemberRoleType | null;
 }
@@ -56,6 +60,7 @@ export interface AuthUserType {
 }
 
 export type CreateOperatorRequestType = z.infer<typeof createOperatorRequestSchema>;
+export type VerifyEmailRequestType = z.infer<typeof verifyEmailRequestSchema>;
 export type LoginRequestType = z.infer<typeof loginRequestSchema>;
 
 export interface LoginResponseType {
@@ -63,6 +68,17 @@ export interface LoginResponseType {
 }
 export type RefreshResponseType = LoginResponseType;
 export type MeResponseType = LoginResponseType;
+
+export interface NewEmailVerificationType {
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+}
+
+export interface PendingUserType {
+  email: string;
+  userName: string;
+}
 
 export interface NewRefreshTokenType {
   userId: string;

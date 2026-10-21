@@ -18,14 +18,16 @@ afterAll(async () => {
 });
 
 describe("database baseline", () => {
-  it("creates the Phase 0 tables and plans", async () => {
+  it("creates every table", async () => {
     const { rows } = await pool.query<{ table_name: string }>(
       "select table_name from information_schema.tables where table_schema = 'public' order by table_name",
     );
     expect(rows.map((r) => r.table_name)).toEqual([
       "audit_log",
+      "email_verifications",
       "plans",
       "refresh_tokens",
+      "subscriptions",
       "tenant_members",
       "tenants",
       "users",
