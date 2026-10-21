@@ -472,3 +472,4 @@ Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is im
 | 2026-10-21 | Plans gain price, payment period, and discount; subscriptions copy them and add a customer discount; effective price computed (R1.2a, P1.19, P1.20); no minimum term (R1.2b, P1.21).                                                             | Owner review.                      |
 | 2026-10-21 | Price is per payment period with no term total (P1.22); the Tenant Admin sees all subscription data (R1.11, P1.23).                                                                                                                              | Owner review.                      |
 | 2026-10-21 | Spec approved; implementation started. | Owner approval. |
+| 2026-10-21 | Step 1.1 implemented and verified: platform permission list in `platform.config.ts`, `platformPermissionsOf`, `requirePlatformPermission` (also refuses tenant users on its own). | Acceptance criteria met. |
