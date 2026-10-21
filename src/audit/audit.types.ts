@@ -13,3 +13,9 @@ export interface AuditEntryType {
   details?: Record<string, unknown>;
   requestId: string;
 }
+
+/** Who acted, and in which request: built once per request by `auditContextOf(req)` and passed to services. */
+export interface AuditContextType {
+  actor: AuditActorType;
+  requestId: string;
+}

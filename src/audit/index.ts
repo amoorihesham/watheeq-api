@@ -1,2 +1,2 @@
 export { writeAuditEntry } from "./audit.js";
-export type { AuditActorType, AuditEntryType } from "./audit.types.js";
+export type { AuditActorType, AuditContextType, AuditEntryType } from "./audit.types.js";

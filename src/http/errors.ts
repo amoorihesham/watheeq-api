@@ -8,6 +8,7 @@ const STATUS_BY_CODE = {
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   EMAIL_TAKEN: 409,
+  PLAN_NAME_TAKEN: 409,
   PAYLOAD_TOO_LARGE: 413,
   UNSUPPORTED_MEDIA_TYPE: 415,
   INTERNAL: 500,
@@ -40,6 +41,7 @@ export class AppError extends Error {
  */
 const CODE_BY_UNIQUE_CONSTRAINT: Record<string, ErrorCode> = {
   users_email_unique: "EMAIL_TAKEN",
+  plans_name_lower_unique: "PLAN_NAME_TAKEN",
 };
 
 /** The AppError for a known database error, or undefined (which the error handler turns into INTERNAL). */

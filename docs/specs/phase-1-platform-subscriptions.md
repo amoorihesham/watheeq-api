@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                   |
 | ---------------------- | ----------------------------------------------------------------------- |
-| **Status**             | In Implementation (step 1.1)                                            |
+| **Status**             | In Implementation (step 1.3 next)                                            |
 | **Approved by / date** | _ِAmr - 21/10/2026 - 17:15 pm_                                          |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`) |
 | **Related decisions**  | MVP 3.1, 3.9, D11-D17; Technical T2, T4, T5, T7, T8, T11, T13, T14      |
@@ -473,3 +473,4 @@ Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is im
 | 2026-10-21 | Price is per payment period with no term total (P1.22); the Tenant Admin sees all subscription data (R1.11, P1.23).                                                                                                                              | Owner review.                      |
 | 2026-10-21 | Spec approved; implementation started. | Owner approval. |
 | 2026-10-21 | Step 1.1 implemented and verified: platform permission list in `platform.config.ts`, `platformPermissionsOf`, `requirePlatformPermission` (also refuses tenant users on its own). | Acceptance criteria met. |
+| 2026-10-21 | Step 1.2 implemented and verified: `plans` table (migration `0001_plans`), plan CRUD under `/operator/plans`, platform-level audit, `PLAN_NAME_TAKEN` via the constraint map; `auditContextOf(req)` in the auth module builds the audit actor and request ID. | Acceptance criteria met. |

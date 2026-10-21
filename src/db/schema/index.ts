@@ -1,4 +1,5 @@
 export { auditLog } from "./audit-log.js";
+export { paymentPeriods, plans } from "./plans.js";
 export { refreshTokens } from "./refresh-tokens.js";
 export { tenantMemberRoles, tenantMembers } from "./tenant-members.js";
 export { tenants } from "./tenants.js";

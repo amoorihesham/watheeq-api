@@ -7,5 +7,6 @@ export type {
   TenantMemberRoleType,
   UserRoleType,
 } from "./auth.types.js";
+export { auditContextOf } from "./shared/audit-context.js";
 export { authenticate, principalOf, requireRole } from "./shared/middlewares.js";
 export { hashPassword, verifyPassword } from "./shared/passwords.js";

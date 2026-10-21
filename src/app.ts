@@ -10,6 +10,7 @@ import { notFoundHandler } from "./middleware/not-found.js";
 import { requestLogger } from "./middleware/request-logger.js";
 import { createAuthRouter } from "./modules/auth/index.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
+import { createPlansRouter } from "./modules/platform/index.js";
 
 export interface AppDeps {
   pool: pg.Pool;
@@ -31,6 +32,7 @@ export function buildApp(deps: AppDeps): express.Express {
 
   const db = createDb(deps.pool);
   app.use("/auth", createAuthRouter({ db, config: deps.config }));
+  app.use("/operator/plans", createPlansRouter({ db, config: deps.config }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

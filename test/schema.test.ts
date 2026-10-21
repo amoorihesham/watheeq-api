@@ -18,12 +18,13 @@ afterAll(async () => {
 });
 
 describe("database baseline", () => {
-  it("creates the five Phase 0 tables", async () => {
+  it("creates the Phase 0 tables and plans", async () => {
     const { rows } = await pool.query<{ table_name: string }>(
       "select table_name from information_schema.tables where table_schema = 'public' order by table_name",
     );
     expect(rows.map((r) => r.table_name)).toEqual([
       "audit_log",
+      "plans",
       "refresh_tokens",
       "tenant_members",
       "tenants",
@@ -106,5 +107,43 @@ describe("database baseline", () => {
   it("refuses a duplicate tenant slug", async () => {
     const err = await rejectionText(seedTenant(pool, "al-noor", []));
     expect(err).toMatch(/tenants_slug_unique/);
+  });
+
+  const insertPlan = (overrides: Record<string, unknown>) => {
+    const plan = {
+      name: `Schema Plan ${Math.random()}`,
+      user_limit: 10,
+      grace_days: 14,
+      price_halalas: 100000,
+      payment_period: "monthly",
+      discount_percent: 0,
+      ...overrides,
+    };
+    return pool.query(
+      "insert into plans (name, user_limit, grace_days, price_halalas, payment_period, discount_percent) values ($1, $2, $3, $4, $5, $6)",
+      Object.values(plan),
+    );
+  };
+
+  it.each([
+    ["a discount over 100", { discount_percent: 101 }, /plans_discount/],
+    ["a negative price", { price_halalas: -1 }, /plans_price/],
+    ["a zero user limit", { user_limit: 0 }, /plans_user_limit/],
+    ["a grace period over 365", { grace_days: 366 }, /plans_grace_days/],
+    ["an untrimmed name", { name: " Basic " }, /plans_name_length/],
+    [
+      "an unknown payment period",
+      { payment_period: "weekly" },
+      /invalid input value for enum payment_periods/,
+    ],
+  ])("rejects a plan with %s at the database level too", async (_label, overrides, pattern) => {
+    expect(await rejectionText(insertPlan(overrides))).toMatch(pattern);
+  });
+
+  it("treats plan names case-insensitively in the unique index", async () => {
+    await insertPlan({ name: "Schema Unique" });
+    expect(await rejectionText(insertPlan({ name: "schema unique" }))).toMatch(
+      /plans_name_lower_unique/,
+    );
   });
 });

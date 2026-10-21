@@ -65,6 +65,20 @@ If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` an
 - Protect a route with `authenticate(jwtSecret)` and, for operator routes, `requireRole("operator")`, both from `src/modules/auth/`.
 - Create an operator with `pnpm operator:create <email> "<full name>"`. Tenant users are created in Phase 1 (tenant creation) and Phase 2 (user management).
 
+## Operator API
+
+Operator routes require an operator's access token and each declares a platform permission; tenant users get 403.
+
+| Endpoint | Permission | Result |
+| -------- | ---------- | ------ |
+| `POST /operator/plans` | `platform.plan.create` | 201 `{plan}`; 409 `PLAN_NAME_TAKEN` for a name that exists in any case |
+| `GET /operator/plans` | `platform.plan.view` | 200 `{plans}`, ordered by name |
+| `GET /operator/plans/:planId` | `platform.plan.view` | 200 `{plan}`; 404 |
+| `PATCH /operator/plans/:planId` | `platform.plan.update` | 200 `{plan}`; existing subscriptions keep their copied terms |
+
+A plan is `{name, userLimit, graceDays, priceHalalas, paymentPeriod, discountPercent}`: the price is in halalas per payment period (`monthly` or `yearly`), and the discount is a percentage with up to two decimals.
+Every plan write is audited as a platform-level entry. The full design is in `docs/specs/phase-1-platform-subscriptions.md`.
+
 ## Architecture in brief
 
 - **Tenant isolation:** shared tables with a `tenant_id` column, filtered in application code.
