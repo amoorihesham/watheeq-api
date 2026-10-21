@@ -1,14 +1,19 @@
 import { writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
+import type { EmailSenderType } from "@/email/index.js";
 import { AppError } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
+import type { Logger } from "@/logging/logger.js";
 import { toSubscriptionStatus } from "@/modules/subscriptions/index.js";
 import { DUMMY_PASSWORD_HASH } from "./auth.config.js";
 import { createAuthRepository } from "./auth.repository.js";
 import {
+  changePasswordRequestSchema,
   createOperatorRequestSchema,
   loginRequestSchema,
+  passwordResetRequestSchema,
+  resetPasswordRequestSchema,
   verifyEmailRequestSchema,
 } from "./auth.schemas.js";
 import type {
@@ -17,12 +22,16 @@ import type {
   AuthSessionType,
   AuthSettingsType,
   AuthUserType,
+  ChangePasswordRequestType,
   CreateOperatorRequestType,
   LoginRequestType,
   MeResponseType,
+  PasswordResetRequestType,
+  ResetPasswordRequestType,
   UserSummaryType,
   VerifyEmailRequestType,
 } from "./auth.types.js";
+import { issuePasswordToken, passwordResetEmail } from "./shared/onboarding.js";
 import { hashPassword, verifyPassword } from "./shared/passwords.js";
 import { generateOpaqueToken, hashToken, signAccessToken } from "./shared/tokens.js";
 
@@ -42,10 +51,12 @@ export function createAuthService({
   db,
   repo,
   settings,
+  emailSender,
 }: {
   db: Db;
   repo: AuthRepositoryType;
   settings: AuthSettingsType;
+  emailSender: EmailSenderType;
 }) {
   async function issueSession(executor: Executor, account: AccountType): Promise<AuthSessionType> {
     const user = toAuthUser(account);
@@ -130,6 +141,87 @@ export function createAuthService({
           action: "user.email_verified",
           resourceType: "user",
           resourceId: link.userId,
+          requestId,
+        });
+      });
+    },
+
+    /**
+     * Sets a new password after checking the current one, and signs out the user's other sessions (R2.16).
+     * The session making the request keeps its refresh token.
+     */
+    async changePassword(
+      user: AuthUserType,
+      input: ChangePasswordRequestType,
+      refreshToken: string | undefined,
+      requestId: string,
+    ): Promise<void> {
+      const { currentPassword, newPassword } = validate(changePasswordRequestSchema, input);
+      const [account] = await repo.findAccountById(db, user.id);
+      if (
+        !account?.passwordHash ||
+        !(await verifyPassword(account.passwordHash, currentPassword))
+      ) {
+        throw new AppError("INVALID_CREDENTIALS");
+      }
+      const passwordHash = await hashPassword(newPassword);
+      await withTx(db, async (tx) => {
+        await repo.setPassword(tx, account.id, passwordHash);
+        await repo.revokeOtherRefreshTokens(tx, account.id, hashToken(refreshToken ?? ""));
+        await writeAuditEntry(tx, {
+          tenantId: account.tenantId,
+          actor: { type: account.role, id: account.id },
+          action: "user.password_changed",
+          resourceType: "user",
+          resourceId: account.id,
+          requestId,
+        });
+      });
+    },
+
+    /**
+     * Validates the request now and returns the rest as work to run after responding (P2.7): the 204 goes out
+     * before the account is even looked up, so neither the response nor its timing reveals whether it exists.
+     * Only an active user who has set a password gets an email; an invited user uses their invitation (R2.17).
+     */
+    requestPasswordReset(input: PasswordResetRequestType, log: Logger): () => Promise<void> {
+      const { email } = validate(passwordResetRequestSchema, input);
+      return async () => {
+        try {
+          const [account] = await repo.findAccountByEmail(db, email);
+          if (!account?.isActive || !account.emailVerifiedAt || !account.passwordHash) {
+            return;
+          }
+          const token = await withTx(db, (tx) =>
+            issuePasswordToken(tx, account.id, "reset", settings.passwordResetTtlSeconds),
+          );
+          await emailSender.send(passwordResetEmail(account, token, settings.appBaseUrl));
+        } catch (err) {
+          // The response is already sent; the token is never logged.
+          log.warn({ err }, "password reset email failed");
+        }
+      };
+    },
+
+    /** Uses a reset link: sets the new password and signs out every session (R2.17). */
+    async resetPassword(input: ResetPasswordRequestType, requestId: string): Promise<void> {
+      const { token, password } = validate(resetPasswordRequestSchema, input);
+      const passwordHash = await hashPassword(password);
+      await withTx(db, async (tx) => {
+        const [link] = await repo.consumePasswordToken(tx, hashToken(token), "reset");
+        const [account] = link ? await repo.findAccountById(tx, link.userId) : [];
+        // A user deactivated after requesting the link cannot use it; the rollback leaves the link unused.
+        if (!account?.isActive) {
+          throw new AppError("VERIFICATION_INVALID");
+        }
+        await repo.setPassword(tx, account.id, passwordHash);
+        await repo.revokeUserRefreshTokens(tx, account.id);
+        await writeAuditEntry(tx, {
+          tenantId: account.tenantId,
+          actor: { type: account.role, id: account.id },
+          action: "user.password_reset",
+          resourceType: "user",
+          resourceId: account.id,
           requestId,
         });
       });

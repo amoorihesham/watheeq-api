@@ -30,6 +30,15 @@ export const verifyEmailRequestSchema = z.object({
   password: newPasswordSchema,
 });
 
+export const changePasswordRequestSchema = z.object({
+  currentPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH),
+  newPassword: newPasswordSchema,
+});
+
+export const passwordResetRequestSchema = z.object({ email: emailSchema });
+
+export const resetPasswordRequestSchema = verifyEmailRequestSchema;
+
 export const tenantClaimSchema = z.object({
   id: z.uuid(),
   roleId: z.uuid().nullable(),

@@ -28,6 +28,7 @@ describe("parseConfig", () => {
         EMAIL_FROM: valid.EMAIL_FROM,
         APP_BASE_URL: valid.APP_BASE_URL,
         VERIFICATION_TOKEN_TTL_SECONDS: 259200,
+        PASSWORD_RESET_TTL_SECONDS: 3600,
         LOG_LEVEL: "info",
       },
     });

@@ -39,7 +39,7 @@ export function buildApp(deps: AppDeps): express.Express {
   const db = createDb(deps.pool);
   const { config } = deps;
   const emailSender = deps.emailSender ?? createSmtpSender(smtpSettingsOf(config));
-  app.use("/auth", createAuthRouter({ db, config }));
+  app.use("/auth", createAuthRouter({ db, config, emailSender }));
   app.use("/operator/plans", createPlansRouter({ db, config }));
   app.use("/operator/tenants", createTenantsRouter({ db, config, emailSender }));
   app.use("/subscription", createSubscriptionsRouter({ db, config }));

@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import {
   passwordTokens,
@@ -136,6 +136,24 @@ export function createAuthRepository() {
           ),
         )
         .returning({ userId: passwordTokens.userId });
+    },
+
+    setPassword(db: Executor, userId: string, passwordHash: string) {
+      return db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+    },
+
+    /** Revokes every live refresh token of the user except one, signing out their other sessions. */
+    revokeOtherRefreshTokens(db: Executor, userId: string, keepTokenHash: string) {
+      return db
+        .update(refreshTokens)
+        .set({ revokedAt: sql`now()` })
+        .where(
+          and(
+            eq(refreshTokens.userId, userId),
+            isNull(refreshTokens.revokedAt),
+            ne(refreshTokens.tokenHash, keepTokenHash),
+          ),
+        );
     },
 
     /** Revokes every live refresh token of the user, signing out all their sessions. */

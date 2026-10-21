@@ -26,6 +26,7 @@ const configSchema = z.object({
   EMAIL_FROM: z.string().min(3),
   APP_BASE_URL: z.url(),
   VERIFICATION_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(259200),
+  PASSWORD_RESET_TTL_SECONDS: z.coerce.number().int().min(60).default(3600),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 

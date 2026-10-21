@@ -69,6 +69,31 @@ export function verificationEmail(
   };
 }
 
+/** The email with a password reset link (Phase 2 spec, 4.3). */
+export function passwordResetEmail(
+  user: { email: string; userName: string },
+  token: string,
+  appBaseUrl: string,
+): EmailMessageType {
+  const link = new URL("/reset-password", appBaseUrl);
+  link.searchParams.set("token", token);
+  return {
+    to: user.email,
+    subject: "إعادة تعيين كلمة المرور في وثيق | Reset your Watheeq password",
+    text: [
+      `مرحبا ${user.userName}،`,
+      "لاختيار كلمة مرور جديدة لحسابك في وثيق، افتح الرابط التالي. يعمل الرابط مرة واحدة وينتهي قريبا.",
+      link.toString(),
+      "",
+      `Hello ${user.userName},`,
+      "To choose a new password for your Watheeq account, open this link. It works once and expires soon.",
+      link.toString(),
+      "",
+      "If you did not ask for this, you can ignore this email; your password stays the same.",
+    ].join("\n"),
+  };
+}
+
 /** The email an invited user receives; the link is the same `/verify-email` page as the first Tenant Admin's (P2.5). */
 export function invitationEmail(
   user: { email: string; userName: string },

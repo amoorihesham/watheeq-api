@@ -54,6 +54,29 @@ export function createAuthController({
       res.status(204).end();
     }) satisfies RequestHandler,
 
+    changePassword: (async (req, res) => {
+      await service.changePassword(
+        principalOf(req),
+        req.body,
+        refreshCookieOf(req.cookies),
+        String(req.id),
+      );
+      req.log.info("password changed");
+      res.status(204).end();
+    }) satisfies RequestHandler,
+
+    requestPasswordReset: (async (req, res) => {
+      const sendLink = service.requestPasswordReset(req.body, req.log);
+      res.status(204).end();
+      await sendLink();
+    }) satisfies RequestHandler,
+
+    resetPassword: (async (req, res) => {
+      await service.resetPassword(req.body, String(req.id));
+      req.log.info("password reset");
+      res.status(204).end();
+    }) satisfies RequestHandler,
+
     me: (async (req, res) => {
       res.status(200).json((await service.me(principalOf(req))) satisfies MeResponseType);
     }) satisfies RequestHandler,

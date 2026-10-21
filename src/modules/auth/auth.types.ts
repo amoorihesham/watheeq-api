@@ -4,13 +4,17 @@ import type { Db } from "@/db/pool.js";
 import type { passwordTokenPurposes } from "@/db/schema/password-tokens.js";
 import type { tenantMemberRoles } from "@/db/schema/tenant-members.js";
 import type { userRoles } from "@/db/schema/users.js";
+import type { EmailSenderType } from "@/email/index.js";
 import type { SubscriptionStatusType } from "@/modules/subscriptions/index.js";
 import type { createAuthController } from "./auth.controller.js";
 import type { createAuthRepository } from "./auth.repository.js";
 import type {
   accessTokenPayloadSchema,
+  changePasswordRequestSchema,
   createOperatorRequestSchema,
   loginRequestSchema,
+  passwordResetRequestSchema,
+  resetPasswordRequestSchema,
   tenantClaimSchema,
   verifyEmailRequestSchema,
 } from "./auth.schemas.js";
@@ -64,6 +68,9 @@ export interface AuthUserType {
 export type CreateOperatorRequestType = z.infer<typeof createOperatorRequestSchema>;
 export type VerifyEmailRequestType = z.infer<typeof verifyEmailRequestSchema>;
 export type LoginRequestType = z.infer<typeof loginRequestSchema>;
+export type ChangePasswordRequestType = z.infer<typeof changePasswordRequestSchema>;
+export type PasswordResetRequestType = z.infer<typeof passwordResetRequestSchema>;
+export type ResetPasswordRequestType = z.infer<typeof resetPasswordRequestSchema>;
 
 export interface LoginResponseType {
   user: AuthUserType;
@@ -109,11 +116,14 @@ export interface AuthSettingsType {
   jwtSecret: string;
   accessTokenTtlSeconds: number;
   refreshTokenTtlSeconds: number;
+  appBaseUrl: string;
+  passwordResetTtlSeconds: number;
 }
 
 export interface AuthRouterDepsType {
   db: Db;
   config: Config;
+  emailSender: EmailSenderType;
 }
 
 export type AuthRepositoryType = ReturnType<typeof createAuthRepository>;
