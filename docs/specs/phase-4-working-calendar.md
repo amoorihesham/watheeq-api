@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                                                                                                              |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Status**             | In Implementation                                                                                                                                                  |
+| **Status**             | Implemented                                                                                                                                                        |
 | **Approved by / date** | _Amr - 22/10/2026 - 17:32 pm_                                                                                                                                      |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`), Phase 1 (`phase-1-platform-subscriptions.md`), Phase 3 (`phase-3-roles-authorization.md`) |
 | **Related decisions**  | MVP 3.2, 3.6, 3.7, D4, D7, D8, D13, D21; open question 3; Technical T2, T8, T14, T15, T16, T17, T24, T25, T26                                                      |
@@ -167,8 +167,13 @@ The edit, in one transaction:
 3. Moves A's adjustments of occurrences that start after today to B.
 
 The client gets B back, with a new ID.
-When no occurrence of a version has started yet (`valid_from` after today), an edit simply updates the row.
-A delete works the same way: a version with started occurrences is ended (`valid_until` = today); one without is removed with its adjustments.
+When no occurrence of a version has begun yet, an edit simply updates the row, and moves its `valid_from` to tomorrow at the earliest, so the edited rule cannot place an occurrence on a past day.
+A delete works the same way: a version with begun occurrences is ended (`valid_until` = today) and its adjustments of later years are removed; one without is removed with its adjustments.
+
+Because a version owns the occurrences that start within its validity, two consequences follow, both affecting only days after today:
+
+- An edit during an occurrence that moves the start later adds this year's new occurrence beside the one under way: lengthening Eid from 1-4 to 3-7 Shawwal during Eid makes it run to 7 Shawwal.
+- An edit that moves the start to before today drops this year's occurrence if it had not begun yet, because it would now start in the past.
 A one-off period cannot be edited or deleted once its start date is today or earlier.
 
 Why versions instead of editing rows and keeping an audit trail: the calculation must reproduce the calendar as it was on any past date, for example when Phase 6 writes a closure record for a request accepted a year earlier.
@@ -176,7 +181,7 @@ With versions, the rules that applied to a past date are still rows in the table
 
 #### Migration
 
-Migration `0006` creates the three tables and enums, and inserts the default normal hours for every existing tenant, effective on its creation date in Riyadh.
+Migration `0006` (generated) creates the three tables and enums; migration `0007_calendar_backfill` (custom SQL, idempotent) inserts the default normal hours for every existing tenant, effective on its creation date in Riyadh.
 
 #### Audit actions
 
@@ -190,7 +195,9 @@ Migration `0006` creates the three tables and enums, and inserts the default nor
 | `calendar.override_set`     | calendar period | `{year, before, after}`                                                       |
 | `calendar.override_deleted` | calendar period | `{year, override}`                                                            |
 
-Tenant creation (Phase 1) writes `calendar.hours_set` for the default version.
+Tenant creation (Phase 1) writes `calendar.hours_set` for the default version, after its other entries.
+A working-hours entry has resource type `working_hours` and its `effectiveFrom` as resource ID; a period entry has resource type `calendar_period` and the version's ID.
+A write that changes nothing (the same week, definition, or adjustment) returns 200 with no entry.
 
 ### 4.2 API
 
@@ -216,7 +223,8 @@ A recurring period is created with `validFrom` = tomorrow.
 `kind` and `recurrence` cannot change; a different kind of period is a new period.
 A **day**: `{date, hijriDate: {year, month, day}, working, start?, end?, holidays:[{id, name}], season?: {id, name}}`.
 
-`GET /calendar` lists every hours version (they are few) and, unless `includeEnded`, only periods whose versions are still in force or in the future.
+`GET /calendar` lists every hours version (they are few) and, unless `includeEnded`, leaves out period versions ended by an edit or a delete and one-off periods already over; periods are listed in creation order.
+A `DELETE` of a missing hours version is 404 before the date check.
 
 #### Validation
 
@@ -225,7 +233,8 @@ A **day**: `{date, hijriDate: {year, month, day}, working, start?, end?, holiday
 - Dates and `:effectiveFrom`: valid Riyadh dates, at most 5 years after today (`too_far_ahead`).
 - One-off range and moved occurrence: `startDate <= endDate` (`end_before_start`); a holiday at most 30 days, a season at most 184 days (`period_too_long`), also checked on recurring rules' longest possible occurrence.
 - Recurring days: a valid month and day; Gregorian 29 February is allowed and falls on 28 February in other years; Hijri day 30 falls on the 29th in a 29-day month.
-- Overrides: only on recurring periods (`not_recurring`); `year` within the Umm al-Qura data range for Hijri periods (1300-1600 AH).
+- A definition is checked whole, also after a `PATCH`: a field its kind or recurrence needs is `required`, one it does not take is `not_allowed`; a day the month cannot have is `invalid_day`.
+- Overrides: only on recurring periods (`not_recurring`); only for a year the version has an occurrence in (`no_occurrence`), so Hijri years outside the Umm al-Qura data (1300-1600 AH) are refused.
 - `rank`: an integer 0-100, unique among the tenant's seasons in force (`rank_taken`).
 
 #### New error codes
@@ -272,6 +281,13 @@ Legal gets 90% of the Monday and 10% of the Sunday: exactly one day.
 Fraction 0 of a working day and fraction 1 of the previous one are the same point in working time.
 A result at fraction 0 is reported as the previous working day's closing time: "Sunday 16:00", not "Monday 08:00".
 
+**Zero days and the first version.**
+`addWorkingDays(t, 0)` returns `t` itself; the boundary rule would otherwise move a start outside hours back to the previous closing.
+A date before the tenant's first hours version is not a working day, so the functions always answer.
+
+**Floating point.**
+Sums of fractions are rounded to 1e-9 before they are split into whole days: `0.05 + 15 * 0.93` is `14.000000000000002`, which would otherwise report the next opening instead of a closing.
+
 **Termination.**
 The search for the next working day stops after 3,660 days (ten years) and throws `CalendarExhaustedError`, a 500 with a log entry.
 Validation already makes this unreachable (a working weekday always exists, holidays are at most 30 days); the bound keeps a defect from becoming an endless loop.
@@ -312,11 +328,16 @@ src/
       shared/week.ts                        week shape and dayHours
       shared/hijri.ts                       Gregorian <-> Umm al-Qura conversion
       shared/occurrences.ts                 expanding periods, versions, and overrides
+      shared/riyadh-time.ts                 Riyadh dates and times through Intl
       shared/working-time.ts                addWorkingDays, workingDaysBetween
+      shared/load.ts                        loadCalendar, insertDefaultHours
+      shared/rows.ts                        stored rows to calendar types, canonical week shapes
+      shared/period-rules.ts                definition checks, hasBegun
       index.ts                              loadCalendar and the working-time functions for Phases 6 and 7
     tenant-access/                          (changed) calendar.view, calendar.manage in the catalog
     platform/tenants/                       (changed) default hours with the tenant
-    subscriptions/                          riyadhDateOf / riyadhToday reused (moved to db/ if a second module needs them)
+    subscriptions/                          riyadhToday and addDays reused
+db/migrations/0006_calendar.sql, 0007_calendar_backfill.sql
 ```
 
 `app.ts` gains `/calendar`.
@@ -340,6 +361,7 @@ src/
 | Sara adds a holiday for today because work stopped this morning.                                     | 409 `CALENDAR_DATE_LOCKED` (Q10); she adds it for the following days only.                                                                               |
 | A season with every weekday off.                                                                     | 400 `no_working_day`.                                                                                                                                    |
 | A week with only Saturday working, and holidays covering many Saturdays.                             | Still terminates: holidays are at most 30 days long.                                                                                                     |
+| The moon sighting moves Eid al-Fitr 1448 a day later. | Sara adjusts Eid 1448 and Ramadan hours 1448 (one more day); the day view's Hijri dates stay Umm al-Qura dates. |
 | A Hijri recurring period beyond 1600 AH.                                                             | Occurrences after the Umm al-Qura data end are not produced; a request in 2174 is not a concern.                                                         |
 | Al-Noor is Read-only; Sara edits hours.                                                              | 403 `SUBSCRIPTION_READ_ONLY` (guard). `GET /calendar` still works.                                                                                       |
 | Sara sends an Al-Rashid period ID.                                                                   | 404.                                                                                                                                                     |
@@ -416,7 +438,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P4.11 | Week shapes are stored as `jsonb`, validated by zod.                                                                                                                                                                                                          | Always read whole, never queried by weekday; one shape shared by two tables.                                                                                             |
 | P4.12 | Limits: holidays at most 30 days, seasons at most 184 days, dates at most 5 years ahead, day view at most 366 days; the next-working-day search stops after 3,660 days with an error.                                                                         | Keeps every calculation bounded; the error is a safety net, unreachable through validation.                                                                              |
 
-Promote P4.1-P4.3 and P4.7 to `MVP_SCOPE.md` (with 3.2 and 3.6 updated and open question 3 struck), and P4.5, P4.6, P4.8, P4.10 to `TECHNICAL_DECISIONS.md`, when the phase is implemented.
+Promoted on 2026-10-22: P4.1-P4.3, P4.7, and P4.9 to `MVP_SCOPE.md` as D24-D27 (with 3.2 and 3.6 updated and open question 3 struck); P4.3, P4.5, P4.6, P4.8, P4.10, and P4.12 to `TECHNICAL_DECISIONS.md` as T30-T33. Decisions not promoted are detail that stays authoritative here.
 
 ## 11. Change Log
 
@@ -430,3 +452,4 @@ Promote P4.1-P4.3 and P4.7 to `MVP_SCOPE.md` (with 3.2 and 3.6 updated and open 
 | 2026-10-22 | Step 4.2 implemented and verified: migration `0006_calendar` (`working_hours`, `calendar_periods`, `calendar_period_overrides`, three enums), `calendar.view` and `calendar.manage` in the catalog, default hours at tenant creation (audited `calendar.hours_set`, after the tenant's other entries), `loadCalendar`, `GET /calendar`, `GET /calendar/days`, `PUT` and `DELETE /calendar/hours/:effectiveFrom`, the calendar lock, the past-is-fixed check, `CALENDAR_DATE_LOCKED`; also checked end to end against a running server with Mailpit. Proposed for owner approval: the backfill is its own custom migration, `0007_calendar_backfill` (idempotent), so the Drizzle-generated `0006` stays untouched; a working-hours audit entry has resource type `working_hours` and its `effectiveFrom` as resource ID; by default `GET /calendar` leaves out ended versions and one-off periods already over, and lists periods in creation order; a `PUT` that changes nothing returns 200 with no audit entry, as role edits do; a `DELETE` of a missing version is 404 before the date check. | Acceptance criteria met; 16 integration tests, full suite 505 passing on Node 24; mutation checks: removing the lock, letting today change, dropping the tenant filter, dropping default hours at creation, a non-idempotent backfill, auditing a no-op, or dropping the five-year limit each fail the matching tests. |
 | 2026-10-22 | Step 4.2 approved by the owner with the go-ahead for step 4.3, including the separate backfill migration `0007`, the working-hours audit resource, the default listing, the no-op PUT, and 404 before the date check. | Owner approval. |
 | 2026-10-22 | Step 4.3 implemented and verified: `POST`, `PATCH`, `DELETE /calendar/periods` and `PUT`, `DELETE /calendar/periods/:periodId/overrides/:year`, whole-definition validation (`required`, `not_allowed`, `invalid_day`, `end_before_start`, `period_too_long`, `too_far_ahead`, `rank_taken`, `not_recurring`, `no_occurrence`), versioning (end today, replace from tomorrow, later adjustments moved), `CALENDAR_PERIOD_ENDED`, audit; also checked end to end against a running server with Al-Noor's calendar from section 3 and the moon-sighting move of Eid 1448. Proposed for owner approval: (1) an edit is made in place when no occurrence of the version has begun, rather than when `valid_from` is after today, and an in-place edit moves `valid_from` to tomorrow at the earliest, so it can never reach a past day; (2) because a version owns the occurrences that start within its validity, an edit during an occurrence that moves the start later adds this year's new occurrence beside the one under way (lengthening Eid from 1-4 to 3-7 Shawwal during Eid makes it run to 7 Shawwal), and an edit that moves the start before today drops this year's occurrence that had not begun yet; both change only days after today; (3) ending a version by a delete removes its adjustments of later years; (4) an unchanged adjustment returns 200 with no audit entry; (5) the day view's Hijri date is the Umm al-Qura date, so when the moon sighting moves Eid, the admin adjusts Ramadan hours for that year as well. | Acceptance criteria met; 21 integration tests, full suite 526 passing on Node 24; mutation checks: removing the lock, `hasBegun` always false or always true, not moving adjustments, keeping an old `valid_from` on an in-place edit, adjusting a begun occurrence, skipping the rank check, editing an ended version, auditing a no-op, or allowing fields of another kind each fail the matching tests. |
+| 2026-10-22 | Step 4.3 approved; all three steps verified; the approved proposals of steps 4.1-4.3 folded into sections 4.1-4.4 and 5; status set to `Implemented`; decisions promoted (D24-D27, T30-T33). | Phase 4 complete. |

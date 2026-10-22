@@ -75,7 +75,7 @@ Renewal by the operator returns the tenant to Active.
   - The department that handles legal affairs is an ordinary department; legal responsibilities come from permissions, not from the structure (D20).
 - **Users:** create and manage users within the tenant, subject to the subscription's user limit (3.1).
 - **Roles:** create and manage roles (see 3.3).
-- **Working calendar:** working days and holidays, used for all SLA calculations.
+- **Working calendar:** working hours (a default span for every working weekday, and an optional own span or day off for any weekday), seasonal hours such as Ramadan, and holidays, one-off or recurring every year on Gregorian or Hijri (Umm al-Qura) dates, with one-year adjustments for announced dates; used for all SLA calculations (D24-D27).
 
 #### 3.3 Roles and Permissions
 
@@ -113,7 +113,7 @@ Workflow-stage assignment does not transfer overall request ownership.
 
 #### 3.6 SLA and Closure Record
 
-- The SLA clock starts at acceptance and runs continuously in working days until closure.
+- The SLA clock starts at acceptance and runs continuously in working time until closure; every working day counts as one day whatever its length, and a deadline is an exact moment (D24, D25).
 - **The clock does not pause** while awaiting requester information.
 - The closure record states: outcome, SLA deadline, actual elapsed time, met or breached, breach duration, and time spent awaiting information (informational only - it does not affect the SLA result).
 
@@ -188,6 +188,10 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D21 | Every tenant has one protected Tenant Admin role, created with the tenant and held by the owner; it always holds every permission, including those added later, and cannot be edited or deleted. A new tenant starts with no other role | The first Tenant Admin holds every permission (3.1) without migrations as the catalog grows; more than one person can be a full admin; no seeded roles drift from what later phases add (Phase 3 spec, P3.8, P3.9). |
 | D22 | The subset rule also protects the target: editing, deleting, or assigning a role requires its current permissions to be within the actor's, and deactivating or reactivating a user requires the user's role to be within the actor's | Nobody can take away powers they do not hold, such as demoting a Tenant Admin or emptying a role with more permissions; extends D2 (Phase 3 spec, P3.11). |
 | D23 | Changing a user's role needs its own permission, `role.assign` | A Head of Legal can give legal roles without being able to rename or move other departments' people (Phase 3 spec, P3.12). |
+| D24 | The calendar has working hours; deadlines and elapsed times are exact moments in Riyadh time | Resolves the precision half of open question 3 (Phase 4 spec, P4.1). |
+| D25 | Every working day counts as one day whatever its length; a deadline keeps the start's fraction of its working day, and a start outside working hours counts from the next opening | SLAs are promised in days (D4), so shorter Ramadan days do not stretch them, and every SLA is exactly N days (Phase 4 spec, P4.2, P4.3). |
+| D26 | The calendar's past is fixed: a change to hours, holidays, or seasons affects only days after today | A calendar edit can never erase a breach or rewrite a closed record, yet a holiday announced the day before still helps open requests (Phase 4 spec, P4.7). |
+| D27 | Where seasons overlap, the one with the higher explicit rank sets the hours | Ramadan moves through the Gregorian year, so seasons overlap only in some years; one ranking holds every year (Phase 4 spec, P4.9). |
 
 ---
 
@@ -204,7 +208,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 
 1. How services map to workflows (one workflow per service, or chosen at acceptance).
 2. Who a workflow stage is assigned to (a legal role, a specific person, or chosen by the owner).
-3. Deadline calculation precision (end of working day vs. exact time) and whether calendar changes affect already-accepted requests.
+3. ~~Deadline calculation precision (end of working day vs. exact time) and whether calendar changes affect already-accepted requests.~~ Resolved in Phase 4: deadlines are exact moments, placed proportionally within working days (D24, D25); calendar changes affect only days after today, so the future deadlines of open requests follow them and past outcomes never change (D26).
 4. Whether a requester can withdraw a request.
 5. ~~Length of the grace period, and whether it is a platform-wide setting or defined per plan.~~ Resolved in Phase 1: defined per plan (`grace_days`, 0-365) and copied into each subscription.
 6. In the read-only state, whether SLA clocks and escalations for still-open requests continue, stop, or are marked as affected by the subscription state.
