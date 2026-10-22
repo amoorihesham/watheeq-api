@@ -1,5 +1,10 @@
 import type { Executor } from "@/db/pool.js";
-import { PERMISSION_CATALOG, PERMISSION_SCOPES } from "../tenant-access.config.js";
+import { AppError } from "@/http/errors.js";
+import {
+  PERMISSION_CATALOG,
+  PERMISSION_SCOPES,
+  TENANT_PERMISSIONS,
+} from "../tenant-access.config.js";
 import { createTenantAccessRepository } from "../tenant-access.repository.js";
 import type {
   GrantMapType,
@@ -15,6 +20,16 @@ const isCatalogKey = (key: string): key is TenantPermissionType =>
   Object.hasOwn(PERMISSION_CATALOG, key);
 
 const rank = (scope: PermissionScopeType) => PERMISSION_SCOPES.indexOf(scope);
+
+const storedGrants = (rows: { permission: string | null; scope: PermissionScopeType | null }[]) =>
+  rows.flatMap(({ permission, scope }) => (permission && scope ? [{ permission, scope }] : []));
+
+/** A grant map as a list in catalog order, so equal sets compare and audit the same. */
+export const grantListOf = (grants: GrantMapType): GrantType[] =>
+  TENANT_PERMISSIONS.flatMap((key) => {
+    const scope = grants.get(key);
+    return scope ? [{ key, scope }] : [];
+  });
 
 /** A role's grants as a map; the system role holds the whole catalog, and keys no longer in it are ignored. */
 export function grantMapOf(role: {
@@ -62,10 +77,36 @@ export async function loadMemberGrants(
   if (!first?.isActive) {
     return new Map();
   }
-  return grantMapOf({
-    isSystem: first.isSystem,
-    grants: rows.flatMap(({ permission, scope }) =>
-      permission && scope ? [{ permission, scope }] : [],
-    ),
-  });
+  return grantMapOf({ isSystem: first.isSystem, grants: storedGrants(rows) });
+}
+
+/** The grants of one of the tenant's roles, or null when the tenant has no such role. */
+export async function loadRoleGrants(
+  executor: Executor,
+  tenantId: string,
+  roleId: string,
+): Promise<GrantMapType | null> {
+  const rows = await repo.roleGrants(executor, tenantId, roleId);
+  const [first] = rows;
+  return first ? grantMapOf({ isSystem: first.isSystem, grants: storedGrants(rows) }) : null;
+}
+
+/**
+ * Throws PERMISSION_NOT_HELD unless the actor's role, as it is now, covers `wanted` (D2, R3.12). Callers include
+ * the route's own permission, so a token that still carries it after it was removed is not enough (P3.4).
+ * Each detail names a permission the actor lacks, or holds only at a narrower scope than `scope`.
+ */
+export async function assertGrantsHeld(
+  executor: Executor,
+  tenantId: string,
+  actorId: string,
+  wanted: Iterable<GrantType>,
+): Promise<void> {
+  const missing = missingGrants(await loadMemberGrants(executor, tenantId, actorId), wanted);
+  if (missing.length > 0) {
+    throw new AppError(
+      "PERMISSION_NOT_HELD",
+      missing.map(({ key, scope }) => ({ path: key, code: "permission_not_held", scope })),
+    );
+  }
 }

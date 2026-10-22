@@ -4,11 +4,11 @@ import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import {
+  assertGrantsHeld,
   type GrantMapType,
   type GrantType,
+  grantListOf,
   grantMapOf,
-  loadMemberGrants,
-  missingGrants,
   PERMISSION_CATALOG,
   type PermissionScopeType,
   TENANT_PERMISSIONS,
@@ -34,13 +34,6 @@ function existingRoleId(roleId: string): string {
   return roleId;
 }
 
-/** Grants in catalog order, so equal sets compare and audit the same whatever order a client sent. */
-const listOf = (grants: GrantMapType): GrantType[] =>
-  TENANT_PERMISSIONS.flatMap((key) => {
-    const scope = grants.get(key);
-    return scope ? [{ key, scope }] : [];
-  });
-
 const sameGrants = (a: GrantType[], b: GrantType[]) => JSON.stringify(a) === JSON.stringify(b);
 
 const grantsOfRole = (role: RoleRowType, rows: GrantRowType[]): GrantMapType =>
@@ -48,7 +41,7 @@ const grantsOfRole = (role: RoleRowType, rows: GrantRowType[]): GrantMapType =>
 
 const toRole = (role: RoleRowType, rows: GrantRowType[], memberCount: number): RoleType => ({
   ...role,
-  permissions: listOf(grantsOfRole(role, rows)),
+  permissions: grantListOf(grantsOfRole(role, rows)),
   memberCount,
 });
 
@@ -73,33 +66,21 @@ function catalogGrants(requested: { key: string; scope: PermissionScopeType }[])
   if (details.length > 0) {
     throw new AppError("VALIDATION_FAILED", details);
   }
-  return listOf(grants);
+  return grantListOf(grants);
 }
 
-/** One detail per permission the actor lacks, or holds only at a narrower scope than `scope`. */
-const notHeld = (missing: GrantType[]) =>
-  new AppError(
-    "PERMISSION_NOT_HELD",
-    missing.map(({ key, scope }) => ({ path: key, code: "permission_not_held", scope })),
-  );
-
 export function createRolesService({ db, repo }: { db: Db; repo: RolesRepositoryType }) {
-  /**
-   * The subset rule (D2, R3.8) against the actor's role as it is now (R3.12), including the route's own
-   * permission (P3.4): a token that still carries `role.manage` after it was removed is not enough.
-   */
-  async function assertWithinActor(
+  /** The subset rule (R3.8), including the route's own permission (P3.4). */
+  const assertWithinActor = (
     executor: Executor,
     tenantId: string,
     actorId: string,
     wanted: GrantType[],
-  ) {
-    const held = await loadMemberGrants(executor, tenantId, actorId);
-    const missing = missingGrants(held, [{ key: "role.manage", scope: "organization" }, ...wanted]);
-    if (missing.length > 0) {
-      throw notHeld(missing);
-    }
-  }
+  ) =>
+    assertGrantsHeld(executor, tenantId, actorId, [
+      { key: "role.manage", scope: "organization" },
+      ...wanted,
+    ]);
 
   async function loadRole(executor: Executor, tenantId: string, roleId: string) {
     const [role] = await repo.findById(executor, tenantId, roleId);
@@ -122,7 +103,9 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
     if (role.isSystem) {
       throw new AppError("ROLE_PROTECTED");
     }
-    const grants = listOf(grantsOfRole(role, await repo.listGrants(executor, tenantId, roleId)));
+    const grants = grantListOf(
+      grantsOfRole(role, await repo.listGrants(executor, tenantId, roleId)),
+    );
     return { role, grants };
   }
 

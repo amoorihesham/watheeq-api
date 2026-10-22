@@ -4,7 +4,7 @@ import { createLogger } from "../src/logging/logger.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login, refreshCookie } from "./helpers/auth.js";
 import { TEST_APP_BASE_URL } from "./helpers/config.js";
-import { connectToTestDb, seedSubscribedTenant } from "./helpers/db.js";
+import { connectToTestDb, seedRole, seedSubscribedTenant, seedUser } from "./helpers/db.js";
 import { createFakeEmailSender } from "./helpers/email.js";
 
 const PASSWORD = "correct horse battery staple";
@@ -13,6 +13,7 @@ const SARA = "sara@us-alnoor.test";
 const MAJED = "majed@us-alnoor.test";
 const KHALID = "khalid@us-alnoor.test";
 const RASHID_ADMIN = "admin@us-alrashid.test";
+const HUDA = "huda.legal@us-alnoor.test";
 
 const pool = connectToTestDb();
 const email = createFakeEmailSender();
@@ -26,6 +27,9 @@ let alNoor = "";
 let adminRoleId = "";
 let memberRoleId = "";
 let rashidRoleId = "";
+let legalAdminRoleId = "";
+let employeeRoleId = "";
+let huda = "";
 let saraId = "";
 let majedId = "";
 let khalidId = "";
@@ -41,11 +45,14 @@ const as = (access: string) => ({
     request(app).post(path).set("Cookie", accessCookie(access)).send(body),
   patch: (path: string, body: object) =>
     request(app).patch(path).set("Cookie", accessCookie(access)).send(body),
+  put: (path: string, body: object) =>
+    request(app).put(path).set("Cookie", accessCookie(access)).send(body),
 });
 
 const nextEmail = () => `user${++counter}@us-alnoor.test`;
 const adminRole = () => ({ id: adminRoleId, name: "Tenant Admin", isSystem: true });
 const memberRole = () => ({ id: memberRoleId, name: "Member", isSystem: false });
+const org = (key: string) => ({ key, scope: "organization" });
 
 /** Invites a user into Al-Noor as Sara; returns their id. */
 async function invite(body: Record<string, unknown> = {}): Promise<string> {
@@ -106,10 +113,33 @@ beforeAll(async () => {
   ({ memberRoleId: rashidRoleId } = await seedSubscribedTenant(pool, "us-al-rashid", [
     { email: RASHID_ADMIN, passwordHash },
   ]));
+  // Huda administers people for Legal: she can invite, deactivate, and assign roles, but not everything.
+  legalAdminRoleId = await seedRole(pool, alNoor, {
+    name: "Legal Admin",
+    permissions: [
+      "org.view",
+      "user.view",
+      "user.create",
+      "user.deactivate",
+      "role.view",
+      "role.assign",
+    ].map(org),
+  });
+  employeeRoleId = await seedRole(pool, alNoor, {
+    name: "Employee",
+    permissions: [org("org.view")],
+  });
+  const hudaId = await seedUser(pool, { email: HUDA, userName: "Huda", passwordHash });
+  await pool.query("insert into tenant_members (tenant_id, user_id, role_id) values ($1, $2, $3)", [
+    alNoor,
+    hudaId,
+    legalAdminRoleId,
+  ]);
   sara = (await login(app, SARA, PASSWORD)).access;
   majed = (await login(app, MAJED, PASSWORD)).access;
   khalid = (await login(app, KHALID, PASSWORD)).access;
   rashid = (await login(app, RASHID_ADMIN, PASSWORD)).access;
+  huda = (await login(app, HUDA, PASSWORD)).access;
   finance = await unitOf("Finance");
   procurement = await unitOf("Procurement", finance);
   legal = await unitOf("Legal Affairs");
@@ -375,61 +405,47 @@ describe("listing and viewing (R2.15)", () => {
 });
 
 describe("editing (R2.11, R2.13, R2.18)", () => {
-  it("renames, moves, and promotes, auditing only what changed", async () => {
+  it("renames and moves, auditing only what changed", async () => {
     const id = await invite({ userName: "Before", unitId: procurement });
-    const res = await as(sara).patch(`/users/${id}`, {
-      userName: "After",
-      unitId: finance,
-      roleId: adminRoleId,
-    });
+    const res = await as(sara).patch(`/users/${id}`, { userName: "After", unitId: finance });
     expect(res.status).toBe(200);
     expect(res.body.user).toMatchObject({
       userName: "After",
       unit: { id: finance, kind: "department" },
-      role: adminRole(),
+      role: memberRole(),
     });
     expect((await auditOf(id)).at(-1)).toMatchObject({
       action: "user.updated",
       actor_id: saraId,
       details: {
-        before: { userName: "Before", unitId: procurement, roleId: memberRoleId },
-        after: { userName: "After", unitId: finance, roleId: adminRoleId },
+        before: { userName: "Before", unitId: procurement },
+        after: { userName: "After", unitId: finance },
       },
     });
   });
 
-  it("refuses moving a user onto another tenant's role", async () => {
-    const id = await invite();
-    const res = await as(sara).patch(`/users/${id}`, { roleId: rashidRoleId });
-    expect(res.status).toBe(400);
-    expect(res.body.error.details).toEqual([{ path: "roleId", code: "unknown_role" }]);
+  it("no longer changes a role (P3.12)", async () => {
+    const id = await invite({ userName: "Kept" });
+    expect((await as(sara).patch(`/users/${id}`, { roleId: adminRoleId })).status).toBe(400);
+    const res = await as(sara).patch(`/users/${id}`, { userName: "Kept 2", roleId: adminRoleId });
+    expect(res.status).toBe(200);
+    expect(res.body.user.role).toEqual(memberRole());
   });
 
   it("writes no audit entry when nothing changes", async () => {
     const id = await invite({ userName: "Same" });
     const before = (await auditOf(id)).length;
-    expect(
-      (await as(sara).patch(`/users/${id}`, { userName: "Same", roleId: memberRoleId })).status,
-    ).toBe(200);
+    expect((await as(sara).patch(`/users/${id}`, { userName: "Same" })).status).toBe(200);
     expect((await auditOf(id)).length).toBe(before);
   });
 
-  it("refuses changing one's own role, but allows one's own name and unit", async () => {
-    const own = await as(majed).patch(`/users/${majedId}`, { roleId: memberRoleId });
-    expect(own.status).toBe(403);
-    expect(own.body.error.code).toBe("SELF_CHANGE_FORBIDDEN");
+  it("allows one's own name and unit", async () => {
     const rename = await as(majed).patch(`/users/${majedId}`, {
       userName: "Majed",
       unitId: finance,
     });
     expect(rename.status).toBe(200);
     await as(majed).patch(`/users/${majedId}`, { unitId: null });
-  });
-
-  it("never demotes the owner", async () => {
-    const res = await as(majed).patch(`/users/${saraId}`, { roleId: memberRoleId });
-    expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("OWNER_PROTECTED");
   });
 
   it("refuses an unknown unit and an empty body", async () => {
@@ -513,6 +529,164 @@ describe("managers (R2.6, R2.7)", () => {
     const { id } = await inviteActive({ unitId: unit, isManager: true });
     const res = await as(sara).patch(`/users/${id}`, { unitId: null });
     expect(res.body.user).toMatchObject({ unit: null, isManager: false });
+  });
+});
+
+describe("assigning a role (R3.3, R3.9-R3.11, R3.17)", () => {
+  const assign = (access: string, userId: string, roleId: string) =>
+    as(access).put(`/users/${userId}/role`, { roleId });
+
+  it("gives a user another role and audits the names before and after", async () => {
+    const id = await invite();
+    const res = await assign(sara, id, employeeRoleId);
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    expect(res.body.user.role).toEqual({ id: employeeRoleId, name: "Employee", isSystem: false });
+    expect((await auditOf(id)).at(-1)).toMatchObject({
+      action: "user.role_assigned",
+      actor_id: saraId,
+      details: {
+        before: { roleId: memberRoleId, roleName: "Member" },
+        after: { roleId: employeeRoleId, roleName: "Employee" },
+      },
+    });
+  });
+
+  it("writes no audit entry for the same role again", async () => {
+    const id = await invite();
+    const before = (await auditOf(id)).length;
+    expect((await assign(sara, id, memberRoleId)).status).toBe(200);
+    expect((await auditOf(id)).length).toBe(before);
+  });
+
+  it("reaches the user's token at their next login", async () => {
+    const { id, email: address } = await inviteActive();
+    expect((await as((await login(app, address, PASSWORD)).access).get("/users")).status).toBe(200);
+    await assign(sara, id, employeeRoleId);
+    const fresh = await login(app, address, PASSWORD);
+    expect(fresh.res.body.user.tenant).toMatchObject({
+      roleId: employeeRoleId,
+      roleName: "Employee",
+      permissions: ["org.view"],
+    });
+    expect((await as(fresh.access).get("/users")).status).toBe(403);
+  });
+
+  it("refuses changing one's own role (R3.11)", async () => {
+    const res = await assign(majed, majedId, memberRoleId);
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("SELF_CHANGE_FORBIDDEN");
+  });
+
+  it("keeps the owner on Tenant Admin (R3.3)", async () => {
+    const res = await assign(majed, saraId, memberRoleId);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("OWNER_PROTECTED");
+    expect((await assign(majed, saraId, adminRoleId)).status).toBe(200);
+  });
+
+  it("refuses an unknown role, another tenant's role, and a malformed body", async () => {
+    const id = await invite();
+    for (const roleId of [rashidRoleId, "00000000-0000-4000-8000-000000000000"]) {
+      const res = await assign(sara, id, roleId);
+      expect(res.status).toBe(400);
+      expect(res.body.error.details).toEqual([{ path: "roleId", code: "unknown_role" }]);
+    }
+    expect((await as(sara).put(`/users/${id}/role`, {})).status).toBe(400);
+    expect((await assign(sara, id, "member")).status).toBe(400);
+  });
+
+  it("never reaches another tenant's users", async () => {
+    for (const id of [saraId, "00000000-0000-4000-8000-000000000000", "not-a-uuid"]) {
+      expect((await assign(rashid, id, rashidRoleId)).status).toBe(404);
+    }
+  });
+
+  it("requires role.assign", async () => {
+    const res = await assign(khalid, majedId, memberRoleId);
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("FORBIDDEN");
+  });
+});
+
+describe("the subset rule for users (R3.10, P3.11)", () => {
+  it("lets Huda invite with a role within her grants, but not as Tenant Admin", async () => {
+    const ok = await as(huda).post("/users", {
+      email: nextEmail(),
+      userName: "Employee Invitee",
+      roleId: employeeRoleId,
+    });
+    expect(ok.status).toBe(201);
+    const res = await as(huda).post("/users", {
+      email: nextEmail(),
+      userName: "Admin Invitee",
+      roleId: adminRoleId,
+    });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("PERMISSION_NOT_HELD");
+    expect(res.body.error.details).toContainEqual({
+      path: "role.manage",
+      code: "permission_not_held",
+      scope: "organization",
+    });
+  });
+
+  it("lets Huda move a user between roles within her grants", async () => {
+    const id = await invite();
+    expect((await as(huda).put(`/users/${id}/role`, { roleId: employeeRoleId })).status).toBe(200);
+  });
+
+  it("refuses giving a role beyond Huda's grants", async () => {
+    const id = await invite();
+    const res = await as(huda).put(`/users/${id}/role`, { roleId: adminRoleId });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("PERMISSION_NOT_HELD");
+  });
+
+  it("refuses taking a role beyond Huda's grants away from its holder", async () => {
+    const res = await as(huda).put(`/users/${majedId}/role`, { roleId: employeeRoleId });
+    expect(res.status).toBe(403);
+    expect(res.body.error.details).toContainEqual({
+      path: "org.manage",
+      code: "permission_not_held",
+      scope: "organization",
+    });
+    expect((await as(sara).get(`/users/${majedId}`)).body.user.role).toEqual(adminRole());
+  });
+
+  it("lets Huda deactivate and reactivate a user within her grants, but not a Tenant Admin", async () => {
+    const { id } = await inviteActive({ roleId: employeeRoleId });
+    expect((await as(huda).post(`/users/${id}/deactivate`)).status).toBe(200);
+    expect((await as(huda).post(`/users/${id}/reactivate`)).status).toBe(200);
+
+    const deactivate = await as(huda).post(`/users/${majedId}/deactivate`);
+    expect(deactivate.status).toBe(403);
+    expect(deactivate.body.error.code).toBe("PERMISSION_NOT_HELD");
+
+    const { id: admin } = await inviteActive({ roleId: adminRoleId });
+    await as(sara).post(`/users/${admin}/deactivate`);
+    expect((await as(huda).post(`/users/${admin}/reactivate`)).status).toBe(403);
+    expect((await as(sara).get(`/users/${admin}`)).body.user.status).toBe("inactive");
+  });
+
+  it("checks Huda's role as it is now, not as her token says (R3.12)", async () => {
+    const id = await invite();
+    await pool.query(
+      "delete from role_permissions where role_id = $1 and permission = 'role.assign'",
+      [legalAdminRoleId],
+    );
+    try {
+      const res = await as(huda).put(`/users/${id}/role`, { roleId: employeeRoleId });
+      expect(res.status).toBe(403);
+      expect(res.body.error.details).toEqual([
+        { path: "role.assign", code: "permission_not_held", scope: "organization" },
+      ]);
+    } finally {
+      await pool.query(
+        "insert into role_permissions (tenant_id, role_id, permission, scope) values ($1, $2, 'role.assign', 'organization')",
+        [alNoor, legalAdminRoleId],
+      );
+    }
   });
 });
 

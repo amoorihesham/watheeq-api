@@ -13,12 +13,21 @@ import {
 } from "@/modules/auth/index.js";
 import { assertSeatAvailable } from "@/modules/subscriptions/index.js";
 import {
+  assertGrantsHeld,
+  type GrantMapType,
+  grantListOf,
+  loadRoleGrants,
+  type TenantPermissionType,
+} from "@/modules/tenant-access/index.js";
+import {
+  assignRoleRequestSchema,
   inviteUserRequestSchema,
   listUsersQuerySchema,
   updateUserRequestSchema,
   userIdSchema,
 } from "./users.schemas.js";
 import type {
+  AssignRoleRequestType,
   CallerType,
   InviteUserRequestType,
   ListUsersResponseType,
@@ -75,10 +84,29 @@ export function createUsersService({
     }
   }
 
-  async function assertRole(executor: Executor, tenantId: string, roleId: string) {
-    if (!(await repo.roleExists(executor, tenantId, roleId)).length) {
+  async function grantsOfRole(executor: Executor, tenantId: string, roleId: string) {
+    const grants = await loadRoleGrants(executor, tenantId, roleId);
+    if (!grants) {
       throw new AppError("VALIDATION_FAILED", [{ path: "roleId", code: "unknown_role" }]);
     }
+    return grants;
+  }
+
+  /**
+   * The subset rule for users (R3.10, P3.11): the caller must hold the route's permission and every grant of each
+   * role involved, as their role is now (R3.12).
+   */
+  function assertWithinCaller(
+    tx: Tx,
+    tenantId: string,
+    caller: CallerType,
+    permission: TenantPermissionType,
+    roles: GrantMapType[],
+  ) {
+    return assertGrantsHeld(tx, tenantId, caller.id, [
+      { key: permission, scope: "organization" },
+      ...roles.flatMap(grantListOf),
+    ]);
   }
 
   async function loadUser(executor: Executor, tenantId: string, userId: string) {
@@ -129,7 +157,8 @@ export function createUsersService({
       }
       const { user, token, tenantName } = await withTx(db, async (tx) => {
         await assertUnit(tx, tenantId, body.unitId);
-        await assertRole(tx, tenantId, body.roleId);
+        const role = await grantsOfRole(tx, tenantId, body.roleId);
+        await assertWithinCaller(tx, tenantId, caller, "user.create", [role]);
         await assertSeatAvailable(tx, tenantId);
         const created = await insertPendingUser(tx, { email: body.email, userName: body.userName });
         await repo.insertMember(tx, {
@@ -182,29 +211,19 @@ export function createUsersService({
     },
 
     /**
-     * Changes name, unit, manager flag, and role (R2.11). Moving a manager ends their manager role unless the same
-     * request sets it again (R2.7). The owner keeps the Tenant Admin role, and nobody changes their own role (R2.13).
+     * Changes name, unit, and manager flag (R2.11); the role has its own endpoint (P3.12). Moving a manager ends
+     * their manager role unless the same request sets it again (R2.7).
      */
     update(
       tenantId: string,
       userId: string,
       input: UpdateUserRequestType,
-      caller: CallerType,
       context: AuditContextType,
     ): Promise<UserType> {
       const id = existingUserId(userId);
       const body = validate(updateUserRequestSchema, input);
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
-        if (body.roleId !== undefined && body.roleId !== before.roleId) {
-          if (id === caller.id) {
-            throw new AppError("SELF_CHANGE_FORBIDDEN");
-          }
-          if (before.isOwner) {
-            throw new AppError("OWNER_PROTECTED");
-          }
-          await assertRole(tx, tenantId, body.roleId);
-        }
         const unitId = body.unitId === undefined ? before.unitId : body.unitId;
         if (unitId !== before.unitId) {
           await assertUnit(tx, tenantId, unitId);
@@ -218,7 +237,6 @@ export function createUsersService({
           userName: body.userName ?? before.userName,
           unitId,
           isManager,
-          roleId: body.roleId ?? before.roleId,
         };
         const changed = (Object.keys(next) as (keyof typeof next)[]).filter(
           (key) => next[key] !== before[key],
@@ -250,6 +268,50 @@ export function createUsersService({
       });
     },
 
+    /**
+     * Gives the user another role (R3.9). Both the current and the new role must be within the caller's grants
+     * (R3.10); nobody changes their own role (R3.11), and the owner keeps the Tenant Admin role (R3.3).
+     */
+    assignRole(
+      tenantId: string,
+      userId: string,
+      input: AssignRoleRequestType,
+      caller: CallerType,
+      context: AuditContextType,
+    ): Promise<UserType> {
+      const id = existingUserId(userId);
+      const { roleId } = validate(assignRoleRequestSchema, input);
+      return withTx(db, async (tx) => {
+        const before = await lockUser(tx, tenantId, id);
+        if (id === caller.id) {
+          throw new AppError("SELF_CHANGE_FORBIDDEN");
+        }
+        if (before.isOwner && roleId !== before.roleId) {
+          throw new AppError("OWNER_PROTECTED");
+        }
+        const role = await grantsOfRole(tx, tenantId, roleId);
+        const current = await grantsOfRole(tx, tenantId, before.roleId);
+        await assertWithinCaller(tx, tenantId, caller, "role.assign", [current, role]);
+        if (roleId === before.roleId) {
+          return toUser(before);
+        }
+        await repo.updateMember(tx, tenantId, id, { roleId });
+        const after = toUser(await loadUser(tx, tenantId, id));
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "user.role_assigned",
+          resourceType: "user",
+          resourceId: id,
+          details: {
+            before: { roleId: before.roleId, roleName: before.roleName },
+            after: { roleId: after.role.id, roleName: after.role.name },
+          },
+        });
+        return after;
+      });
+    },
+
     /** Frees the seat and ends the manager role, every link, and every session (R2.12). Repeating it is a no-op. */
     deactivate(
       tenantId: string,
@@ -266,6 +328,8 @@ export function createUsersService({
         if (before.isOwner) {
           throw new AppError("OWNER_PROTECTED");
         }
+        const role = await grantsOfRole(tx, tenantId, before.roleId);
+        await assertWithinCaller(tx, tenantId, caller, "user.deactivate", [role]);
         if (!before.isActive) {
           return toUser(before);
         }
@@ -288,11 +352,21 @@ export function createUsersService({
       });
     },
 
-    /** Takes a seat again (R2.12, R1.12); the user comes back as a plain member of their unit. */
-    reactivate(tenantId: string, userId: string, context: AuditContextType): Promise<UserType> {
+    /**
+     * Takes a seat again (R2.12, R1.12); the user comes back as a plain member of their unit. Their role must be
+     * within the caller's grants, since reactivating gives its powers back (P3.11).
+     */
+    reactivate(
+      tenantId: string,
+      userId: string,
+      caller: CallerType,
+      context: AuditContextType,
+    ): Promise<UserType> {
       const id = existingUserId(userId);
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
+        const role = await grantsOfRole(tx, tenantId, before.roleId);
+        await assertWithinCaller(tx, tenantId, caller, "user.deactivate", [role]);
         if (before.isActive) {
           return toUser(before);
         }

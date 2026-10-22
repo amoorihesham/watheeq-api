@@ -22,10 +22,11 @@ export const updateUserRequestSchema = z
     userName: userNameSchema,
     unitId: z.uuid().nullable(),
     isManager: z.boolean(),
-    roleId: z.uuid(),
   })
   .partial()
   .refine((body) => Object.keys(body).length > 0, { message: "at least one field" });
+
+export const assignRoleRequestSchema = z.object({ roleId: z.uuid() });
 
 export const listUsersQuerySchema = z.object({
   // "none" lists the members directly under the organization (P2.13).

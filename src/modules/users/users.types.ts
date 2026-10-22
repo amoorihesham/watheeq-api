@@ -7,6 +7,7 @@ import type { USER_STATUSES } from "./users.config.js";
 import type { createUsersController } from "./users.controller.js";
 import type { createUsersRepository } from "./users.repository.js";
 import type {
+  assignRoleRequestSchema,
   inviteUserRequestSchema,
   listUsersQuerySchema,
   updateUserRequestSchema,
@@ -69,9 +70,10 @@ export interface MemberChangesType {
 
 export type InviteUserRequestType = z.input<typeof inviteUserRequestSchema>;
 export type UpdateUserRequestType = z.input<typeof updateUserRequestSchema>;
+export type AssignRoleRequestType = z.input<typeof assignRoleRequestSchema>;
 export type ListUsersQueryType = z.output<typeof listUsersQuerySchema>;
 
-/** The signed-in Tenant Admin acting on a user. */
+/** The signed-in user acting on another user. */
 export interface CallerType {
   id: string;
   userName: string;

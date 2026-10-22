@@ -27,6 +27,7 @@ export function createUsersRouter({ db, config, emailSender }: UsersRouterDepsTy
   router.post("/", requireTenantPermission("user.create"), controller.invite);
   router.get("/:userId", requireTenantPermission("user.view"), controller.get);
   router.patch("/:userId", requireTenantPermission("user.update"), controller.update);
+  router.put("/:userId/role", requireTenantPermission("role.assign"), controller.assignRole);
   router.post(
     "/:userId/deactivate",
     requireTenantPermission("user.deactivate"),

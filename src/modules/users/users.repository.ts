@@ -103,13 +103,6 @@ export function createUsersRepository() {
         .where(and(eq(orgUnits.tenantId, tenantId), eq(orgUnits.id, unitId)));
     },
 
-    roleExists(db: Executor, tenantId: string, roleId: string): Promise<{ id: string }[]> {
-      return db
-        .select({ id: roles.id })
-        .from(roles)
-        .where(and(eq(roles.tenantId, tenantId), eq(roles.id, roleId)));
-    },
-
     tenantName(db: Executor, tenantId: string): Promise<{ name: string }[]> {
       return db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId));
     },

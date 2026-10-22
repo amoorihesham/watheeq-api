@@ -43,6 +43,16 @@ export function createUsersController({ service }: { service: UsersServiceType }
         tenantOf(req),
         userIdOf(req),
         req.body,
+        auditContextOf(req),
+      );
+      res.status(200).json({ user } satisfies UserResponseType);
+    }) satisfies RequestHandler,
+
+    assignRole: (async (req, res) => {
+      const user = await service.assignRole(
+        tenantOf(req),
+        userIdOf(req),
+        req.body,
         callerOf(req),
         auditContextOf(req),
       );
@@ -60,7 +70,12 @@ export function createUsersController({ service }: { service: UsersServiceType }
     }) satisfies RequestHandler,
 
     reactivate: (async (req, res) => {
-      const user = await service.reactivate(tenantOf(req), userIdOf(req), auditContextOf(req));
+      const user = await service.reactivate(
+        tenantOf(req),
+        userIdOf(req),
+        callerOf(req),
+        auditContextOf(req),
+      );
       res.status(200).json({ user } satisfies UserResponseType);
     }) satisfies RequestHandler,
 

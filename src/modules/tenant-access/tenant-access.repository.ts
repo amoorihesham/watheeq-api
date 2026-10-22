@@ -4,6 +4,29 @@ import { rolePermissions, roles, tenantMembers, users } from "@/db/schema/index.
 
 export function createTenantAccessRepository() {
   return {
+    /** One row per stored grant of the role; a role with no grants gives one row with nulls, a missing role none. */
+    roleGrants(
+      db: Executor,
+      tenantId: string,
+      roleId: string,
+    ): Promise<
+      {
+        isSystem: boolean;
+        permission: string | null;
+        scope: (typeof rolePermissions.$inferSelect)["scope"] | null;
+      }[]
+    > {
+      return db
+        .select({
+          isSystem: roles.isSystem,
+          permission: rolePermissions.permission,
+          scope: rolePermissions.scope,
+        })
+        .from(roles)
+        .leftJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
+        .where(and(eq(roles.tenantId, tenantId), eq(roles.id, roleId)));
+    },
+
     /** One row per stored grant of the member's role; a role with no grants gives one row with nulls. */
     memberRoleGrants(
       db: Executor,
