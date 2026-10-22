@@ -18,8 +18,10 @@
 - **Known open items:** the KSA hosting provider must offer PostgreSQL 18 with ICU, and an SMTP email provider must be chosen before production (`TECHNICAL_DECISIONS.md`, deferred decisions).
 - **Phase 2 (org structure & users) implemented** (`docs/specs/phase-2-org-structure-users.md`): departments and sections under the organization, zero or more managers per unit, users invited by email (they set their own password), edit, deactivate and reactivate with owner and self protections, password change and reset, and tenant permissions declared on every route (interim role table until Phase 3).
   Its main decisions are D18-D20 in `MVP_SCOPE.md` and T21-T24 in `TECHNICAL_DECISIONS.md`. Migration `0004` replaces `email_verifications` with `password_tokens`, so pending verification links in a local database must be resent.
-- **Phase 3 (roles & authorization) in implementation** (`docs/specs/phase-3-roles-authorization.md`, approved 2026-10-22).
-- **Next action:** implement Phase 3 step by step, starting with step 3.1 (roles in the data model and the token).
+- **Phase 3 (roles & authorization) implemented** (`docs/specs/phase-3-roles-authorization.md`): a code-held permission catalog with scopes, tenant-defined roles, a protected Tenant Admin role with computed permissions, role management and assignment under the subset rule checked against the actor's current role, and the user directory limited by `user.view` scope resolved in SQL from the caller's current unit.
+  Its main decisions are D21-D23 in `MVP_SCOPE.md` and T26-T29 in `TECHNICAL_DECISIONS.md`; T25 (request bodies reject unknown fields) was added during the phase. Migration `0005` adds a required `role_id` to members, so a local database migrated earlier must be recreated (`docker compose down -v`).
+- **Known test flake:** about one full test run in three loses a Vitest worker to an external SIGKILL (not memory, not Vitest itself; seen on the Phase 3 step 3.1 commit too). The sender is not yet identified; tracing it needs `strace`.
+- **Next action:** draft the Phase 4 spec (working calendar) when the owner asks.
 
 ---
 
@@ -33,7 +35,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 0.5 | Layered architecture            | Routes → controller → service → repository convention, central middleware, test helpers   | 0          | Implemented                             |
 | 1   | Platform, plans & subscriptions | Tenants, plans, subscriptions, Active → Grace → Read-only, user limit, email verification | 0, 0.5     | Implemented                                    |
 | 2   | Org structure & users           | Department/section tree, managers, membership                                               | 1          | Implemented                             |
-| 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                                   | 2          | In Implementation                       |
+| 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                                   | 2          | Implemented                             |
 | 4   | Working calendar                | Working days, holidays, working-day deadline calculation                                    | 1          | Not started                             |
 | 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | Not started                             |
 | 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure                          | 5          | Not started                             |

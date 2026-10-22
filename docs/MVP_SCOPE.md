@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Status:** Agreed scope baseline (last updated 2026-10-21). Implementation progress is tracked in `ROADMAP_AND_STATUS.md`.
+**Status:** Agreed scope baseline (last updated 2026-10-22). Implementation progress is tracked in `ROADMAP_AND_STATUS.md`.
 **Relationship to other docs:** `PRODUCT_VISION.md` describes the long-term product. This document defines what the first release must do. When they differ, this document governs the MVP.
 
 ---
@@ -81,10 +81,12 @@ Renewal by the operator returns the tenant to Active.
 
 - Each user holds exactly one role within the organization.
 - A role is a set of permissions selected from the system permission catalog.
-- A permission defines an operation on a resource, and may carry a scope (e.g. own / section / department / organization). Concrete scope resolution comes from the user's position in the organization structure.
+- A permission defines an operation on a resource, and is granted at a scope: own (the user), section (the user's own unit), department (the user's department and its sections), or organization. Concrete scope resolution comes from the user's current position in the organization structure; a user with no unit reaches only themselves below organization scope.
+- Every tenant has a protected Tenant Admin role, held by the owner, that always holds every permission (D21).
 - **Anti-privilege-escalation rules:**
-  - Anyone holding `role.create` may create a role, but only with permissions (and scopes) they themselves hold.
-  - The same subset rule applies to editing a role and to assigning a role to a user.
+  - Anyone holding `role.manage` may create a role, but only with permissions (and scopes) they themselves hold.
+  - The same subset rule applies to editing and deleting a role (its current and its new permissions) and to assigning a role to a user (the user's current role and the new one); deactivating or reactivating a user also requires the user's role to be within the actor's (D22).
+  - Changing a user's role is its own permission, `role.assign` (D23).
   - A user cannot change their own role.
 
 #### 3.4 Legal Operations Configuration (Head of Legal)
@@ -183,6 +185,9 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D18 | A department or section has zero or more managers, all equal; a manager is a member of the unit they manage | Real units are often run by more than one person; a unit exists before anyone can manage it, and managers leave. Replaces "exactly one manager" (Phase 2 spec, P2.12). |
 | D19 | A user belongs to at most one unit; a user with no unit sits directly under the organization | The first Tenant Admin exists before any unit, and some people (a CEO, an IT admin) belong to no department (Phase 2 spec, P2.13). |
 | D20 | No department is marked as Legal; legal responsibilities (configuring legal operations, reviewing and owning requests, receiving R0) are permissions; escalation climbs the owner's own units | Authorization stays with roles (D1), and organization administration and legal operations stay separable (Phase 2 spec, P2.14). |
+| D21 | Every tenant has one protected Tenant Admin role, created with the tenant and held by the owner; it always holds every permission, including those added later, and cannot be edited or deleted. A new tenant starts with no other role | The first Tenant Admin holds every permission (3.1) without migrations as the catalog grows; more than one person can be a full admin; no seeded roles drift from what later phases add (Phase 3 spec, P3.8, P3.9). |
+| D22 | The subset rule also protects the target: editing, deleting, or assigning a role requires its current permissions to be within the actor's, and deactivating or reactivating a user requires the user's role to be within the actor's | Nobody can take away powers they do not hold, such as demoting a Tenant Admin or emptying a role with more permissions; extends D2 (Phase 3 spec, P3.11). |
+| D23 | Changing a user's role needs its own permission, `role.assign` | A Head of Legal can give legal roles without being able to rename or move other departments' people (Phase 3 spec, P3.12). |
 
 ---
 
