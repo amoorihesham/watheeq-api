@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NO_FIELDS } from "@/http/validate.js";
 import {
   MAX_DISCOUNT_PERCENT,
   MAX_GRACE_DAYS,
@@ -14,7 +15,7 @@ export const discountPercentSchema = z
   .min(0)
   .max(MAX_DISCOUNT_PERCENT)
   .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-9, {
-    message: "at most two decimals",
+    params: { code: "too_many_decimals" },
   });
 
 const planFields = {
@@ -26,14 +27,14 @@ const planFields = {
   discountPercent: discountPercentSchema,
 };
 
-export const createPlanRequestSchema = z.object({
+export const createPlanRequestSchema = z.strictObject({
   ...planFields,
   discountPercent: planFields.discountPercent.default(0),
 });
 
 export const updatePlanRequestSchema = z
-  .object(planFields)
+  .strictObject(planFields)
   .partial()
-  .refine((body) => Object.keys(body).length > 0, { message: "at least one field" });
+  .refine((body) => Object.keys(body).length > 0, NO_FIELDS);
 
 export const planIdSchema = z.uuid();

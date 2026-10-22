@@ -221,13 +221,13 @@ describe("create a tenant (R1.3, R1.14)", () => {
       "an end date before the start date",
       { endDate: "2000-01-01" },
       "subscription.endDate",
-      "custom",
+      "end_before_start",
     ],
     [
       "a customer discount with three decimals",
       { customerDiscountPercent: 12.345 },
       "subscription.customerDiscountPercent",
-      "custom",
+      "too_many_decimals",
     ],
   ])("rejects %s with 400", async (_label, change, path, code) => {
     const body = tenantBody("tn-al-bad", "bad@tenants-alnoor.test");

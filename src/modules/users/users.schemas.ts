@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NO_FIELDS } from "@/http/validate.js";
 import { emailSchema, userNameSchema } from "@/modules/auth/index.js";
 import {
   DEFAULT_USER_PAGE_SIZE,
@@ -9,7 +10,7 @@ import {
 
 export const userIdSchema = z.uuid();
 
-export const inviteUserRequestSchema = z.object({
+export const inviteUserRequestSchema = z.strictObject({
   email: emailSchema,
   userName: userNameSchema,
   unitId: z.uuid().nullable().default(null),
@@ -18,16 +19,17 @@ export const inviteUserRequestSchema = z.object({
 });
 
 export const updateUserRequestSchema = z
-  .object({
+  .strictObject({
     userName: userNameSchema,
     unitId: z.uuid().nullable(),
     isManager: z.boolean(),
   })
   .partial()
-  .refine((body) => Object.keys(body).length > 0, { message: "at least one field" });
+  .refine((body) => Object.keys(body).length > 0, NO_FIELDS);
 
-export const assignRoleRequestSchema = z.object({ roleId: z.uuid() });
+export const assignRoleRequestSchema = z.strictObject({ roleId: z.uuid() });
 
+// Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listUsersQuerySchema = z.object({
   // "none" lists the members directly under the organization (P2.13).
   unitId: z.union([z.uuid(), z.literal("none")]).optional(),

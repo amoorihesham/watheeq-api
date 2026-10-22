@@ -13,32 +13,33 @@ export const userNameSchema = z.string().trim().min(1).max(MAX_USER_NAME_LENGTH)
 
 export const newPasswordSchema = z.string().min(MIN_PASSWORD_LENGTH).max(MAX_PASSWORD_LENGTH);
 
-export const createOperatorRequestSchema = z.object({
+export const createOperatorRequestSchema = z.strictObject({
   email: emailSchema,
   userName: userNameSchema,
   password: newPasswordSchema,
 });
 
 // No minimum length at login: the policy applies when a password is set. The cap stops hashing huge inputs.
-export const loginRequestSchema = z.object({
+export const loginRequestSchema = z.strictObject({
   email: emailSchema,
   password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
 });
 
-export const verifyEmailRequestSchema = z.object({
+export const verifyEmailRequestSchema = z.strictObject({
   token: z.string().min(1).max(200),
   password: newPasswordSchema,
 });
 
-export const changePasswordRequestSchema = z.object({
+export const changePasswordRequestSchema = z.strictObject({
   currentPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH),
   newPassword: newPasswordSchema,
 });
 
-export const passwordResetRequestSchema = z.object({ email: emailSchema });
+export const passwordResetRequestSchema = z.strictObject({ email: emailSchema });
 
 export const resetPasswordRequestSchema = verifyEmailRequestSchema;
 
+// Token schemas stay lenient: a JWT carries standard claims (iss, iat, exp) these do not list.
 export const tenantClaimSchema = z.object({
   id: z.uuid(),
   roleId: z.uuid(),

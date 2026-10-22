@@ -424,12 +424,15 @@ describe("editing (R2.11, R2.13, R2.18)", () => {
     });
   });
 
-  it("no longer changes a role (P3.12)", async () => {
+  it("names a field it does not accept, such as a role (P3.12), and changes nothing", async () => {
     const id = await invite({ userName: "Kept" });
-    expect((await as(sara).patch(`/users/${id}`, { roleId: adminRoleId })).status).toBe(400);
     const res = await as(sara).patch(`/users/${id}`, { userName: "Kept 2", roleId: adminRoleId });
-    expect(res.status).toBe(200);
-    expect(res.body.user.role).toEqual(memberRole());
+    expect(res.status).toBe(400);
+    expect(res.body.error.details).toEqual([{ path: "roleId", code: "unknown_field" }]);
+    expect((await as(sara).get(`/users/${id}`)).body.user).toMatchObject({
+      userName: "Kept",
+      role: memberRole(),
+    });
   });
 
   it("writes no audit entry when nothing changes", async () => {
@@ -452,7 +455,9 @@ describe("editing (R2.11, R2.13, R2.18)", () => {
     const id = await invite();
     const unknown = await as(sara).patch(`/users/${id}`, { unitId: rashidUnit });
     expect(unknown.body.error.details).toEqual([{ path: "unitId", code: "unknown_unit" }]);
-    expect((await as(sara).patch(`/users/${id}`, {})).status).toBe(400);
+    const empty = await as(sara).patch(`/users/${id}`, {});
+    expect(empty.status).toBe(400);
+    expect(empty.body.error.details).toEqual([{ path: "", code: "no_fields" }]);
   });
 
   it("refuses a member", async () => {

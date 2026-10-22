@@ -3,8 +3,8 @@
 ## Watheeq - Legal Affairs Management System
 
 **Status:** Revised 2026-10-21 to match the simplified MVP codebase.
-The full design for T1-T13 is in `docs/specs/phase-0-foundations.md`, T14 in `docs/specs/phase-0.5-refactor.md`, T15-T20 in `docs/specs/phase-1-platform-subscriptions.md`, and T21-T24 in `docs/specs/phase-2-org-structure-users.md`.
-**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D17).
+The full design for T1-T13 is in `docs/specs/phase-0-foundations.md`, T14 in `docs/specs/phase-0.5-refactor.md`, T15-T20 in `docs/specs/phase-1-platform-subscriptions.md`, T21-T24 in `docs/specs/phase-2-org-structure-users.md`, and T25 in this log only (a cross-cutting change made during Phase 3).
+**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D20).
 
 **Guiding rule:** for the MVP, choose the simplest design that is correct for the current requirements.
 Hardening that the MVP does not need yet is listed under "Deferred hardening" and added when the product grows.
@@ -48,6 +48,7 @@ Hardening that the MVP does not need yet is listed under "Deferred hardening" an
 | T22 | **Foreign-key violations join the central error map, mapped only on the side that writes into a row that just disappeared** (400 `unknown_unit`); a delete that must find its row empty locks it first (`FOR UPDATE`) (Phase 2, P2.4) | Repositories keep never catching; the concurrency loser gets a meaningful error; the self-referencing key cannot be told apart by table | Telling the two sides apart by the error's table; catching in services |
 | T23 | **Emailed links live in `password_tokens` with a `purpose` (`invitation`, 72 hours; `reset`, 1 hour), stored hashed, single use, retired by a newer link or a deactivation; a reset request answers 204 before looking up the account; a password change or reset signs out the user's other sessions** (Phase 2, P2.5-P2.8) | One table and one consuming `UPDATE` for both links; no account enumeration by response or timing; a stolen session does not survive a password change | Separate tables per link; signed self-contained links (cannot be single use or retired) |
 | T24 | **Tenant routes declare a permission through `requireTenantPermission`**, which reads the token's `permissions`; while the token's `roleId` is null (until Phase 3) it falls back to an interim table by membership role (Phase 2, P2.9) | Routes are written once against their final permission; Phase 3 changes only where permissions come from | Role-name checks in each route |
+| T25 | **Request bodies reject fields they do not accept:** every request-body schema is a zod strict object, and `validate()` reports each unknown key as `{path, code: "unknown_field"}` at its full path (`admin.phone`, `permissions.0.note`); an update that changes nothing is `no_fields`, and other custom checks name their own code (`end_before_start`, `too_many_decimals`). Query strings and token claims stay lenient. A test fails if a `*.schemas.ts` file defines a request body with plain `z.object`. (Owner decision, 2026-10-22, during Phase 3.) | A client that sends a field the API ignores (a typo, or `roleId` on `PATCH /users` after P3.12) is told which field, instead of getting a silent 200 or a 400 with code `custom`; the client can highlight the field. Query strings carry parameters the API does not control (cache-busters, `utm_*`, proxies), and JWTs carry standard claims. | Silently dropping unknown keys (zod default; hides client mistakes); rejecting unknown query parameters too |
 
 ---
 

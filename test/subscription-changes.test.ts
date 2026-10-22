@@ -226,7 +226,7 @@ describe("validation", () => {
       "startDate",
       "in_future",
     ],
-    ["an end date before the start date", { endDate: "2000-01-01" }, "endDate", "custom"],
+    ["an end date before the start date", { endDate: "2000-01-01" }, "endDate", "end_before_start"],
     [
       "an unknown plan",
       { planId: "00000000-0000-4000-8000-000000000000" },
@@ -237,9 +237,10 @@ describe("validation", () => {
       "a customer discount with three decimals",
       { customerDiscountPercent: 12.345 },
       "customerDiscountPercent",
-      "custom",
+      "too_many_decimals",
     ],
     ["a reason over 500 characters", { reason: "x".repeat(501) }, "reason", "too_big"],
+    ["an unknown field", { note: "renewed by phone" }, "note", "unknown_field"],
   ])("rejects %s with 400 and changes nothing", async (_label, override, path, code) => {
     const id = await createTenant(`sc-bad-${path.toLowerCase()}`);
     const res = await change(id, {

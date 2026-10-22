@@ -3,12 +3,12 @@ import { emailSchema, userNameSchema } from "@/modules/auth/index.js";
 import { discountPercentSchema } from "../plans/plans.schemas.js";
 import { MAX_REASON_LENGTH, MAX_TENANT_NAME_LENGTH, SLUG_PATTERN } from "./tenants.config.js";
 
-export const createTenantRequestSchema = z.object({
+export const createTenantRequestSchema = z.strictObject({
   name: z.string().trim().min(1).max(MAX_TENANT_NAME_LENGTH),
   slug: z.string().regex(SLUG_PATTERN),
-  admin: z.object({ email: emailSchema, userName: userNameSchema }),
+  admin: z.strictObject({ email: emailSchema, userName: userNameSchema }),
   subscription: z
-    .object({
+    .strictObject({
       planId: z.uuid(),
       startDate: z.iso.date(),
       endDate: z.iso.date(),
@@ -17,13 +17,13 @@ export const createTenantRequestSchema = z.object({
     // No minimum term (P1.21): one day is enough.
     .refine((s) => s.endDate >= s.startDate, {
       path: ["endDate"],
-      message: "endDate before startDate",
+      params: { code: "end_before_start" },
     }),
 });
 
 // Renew, extend, change plan, and end early are all this one change (Phase 1 spec, 4.3).
 export const changeSubscriptionRequestSchema = z
-  .object({
+  .strictObject({
     planId: z.uuid(),
     startDate: z.iso.date(),
     endDate: z.iso.date(),
@@ -33,7 +33,7 @@ export const changeSubscriptionRequestSchema = z
   })
   .refine((s) => s.endDate >= s.startDate, {
     path: ["endDate"],
-    message: "endDate before startDate",
+    params: { code: "end_before_start" },
   });
 
 export const tenantIdSchema = z.uuid();
