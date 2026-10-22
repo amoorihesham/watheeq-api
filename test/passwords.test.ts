@@ -30,15 +30,17 @@ const app = testApp(pool, createLogger("silent"), { emailSender: gatedSender });
 
 let counter = 0;
 let tenantId = "";
+let memberRoleId = "";
 let passwordHash = "";
 
 /** A verified, active member of Al-Noor with PASSWORD; returns their email. */
 async function newUser(): Promise<string> {
   const address = `user${++counter}@pw-alnoor.test`;
   const id = await seedUser(pool, { email: address, passwordHash });
-  await pool.query("insert into tenant_members (tenant_id, user_id) values ($1, $2)", [
+  await pool.query("insert into tenant_members (tenant_id, user_id, role_id) values ($1, $2, $3)", [
     tenantId,
     id,
+    memberRoleId,
   ]);
   return address;
 }
@@ -81,13 +83,11 @@ const idOf = async (address: string) =>
 beforeAll(async () => {
   passwordHash = await hashPassword(PASSWORD);
   await seedUser(pool, { email: OMAR, passwordHash, role: "operator" });
-  tenantId = (
-    await seedSubscribedTenant(pool, "pw-al-noor", [
-      { email: SARA, passwordHash },
-      { email: INVITED, verified: false },
-      { email: LEFT, passwordHash, isActive: false },
-    ])
-  ).id;
+  ({ id: tenantId, memberRoleId } = await seedSubscribedTenant(pool, "pw-al-noor", [
+    { email: SARA, passwordHash },
+    { email: INVITED, verified: false },
+    { email: LEFT, passwordHash, isActive: false },
+  ]));
 });
 
 afterAll(async () => {
@@ -295,7 +295,7 @@ describe("using a reset link (R2.17)", () => {
     await request(app)
       .post("/users")
       .set("Cookie", accessCookie(admin.access))
-      .send({ email: invitee, userName: "Invitee", role: "member" });
+      .send({ email: invitee, userName: "Invitee", roleId: memberRoleId });
     expect((await reset(email.lastTokenFor(invitee))).body.error.code).toBe("VERIFICATION_INVALID");
   });
 

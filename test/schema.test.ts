@@ -1,12 +1,20 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { connectToTestDb, rejectionText, seedTenant, seedUser } from "./helpers/db.js";
+import {
+  connectToTestDb,
+  rejectionText,
+  type SeededTenant,
+  seedRole,
+  seedTenant,
+  seedUser,
+} from "./helpers/db.js";
 
 const pool = connectToTestDb();
 
-let alRashid = { id: "", userIds: [] as string[] };
+let alNoor: SeededTenant;
+let alRashid: SeededTenant;
 
 beforeAll(async () => {
-  await seedTenant(pool, "al-noor", [{ email: "sara@alnoor.test" }]);
+  alNoor = await seedTenant(pool, "al-noor", [{ email: "sara@alnoor.test" }]);
   alRashid = await seedTenant(pool, "al-rashid", [
     { email: "nasser@alrashid.test" },
     { email: "khalid@alrashid.test" },
@@ -28,6 +36,8 @@ describe("database baseline", () => {
       "password_tokens",
       "plans",
       "refresh_tokens",
+      "role_permissions",
+      "roles",
       "subscriptions",
       "tenant_members",
       "tenants",
@@ -37,39 +47,65 @@ describe("database baseline", () => {
 
   it("refuses a second membership for a user (R0.8)", async () => {
     const khalid = alRashid.userIds[1];
-    const alNoor = await pool.query<{ id: string }>(
-      "select id from tenants where slug = 'al-noor'",
-    );
     const err = await rejectionText(
-      pool.query("insert into tenant_members (tenant_id, user_id) values ($1, $2)", [
-        alNoor.rows[0]?.id,
+      pool.query("insert into tenant_members (tenant_id, user_id, role_id) values ($1, $2, $3)", [
+        alNoor.id,
         khalid,
+        alNoor.memberRoleId,
       ]),
     );
     expect(err).toMatch(/tenant_members_user_unique/);
   });
 
-  it("gives a membership the role member unless told otherwise (R0.8a)", async () => {
+  it("requires a role for every membership (P3.2)", async () => {
     const userId = await seedUser(pool, { email: "huda@alrashid.test" });
-    await pool.query("insert into tenant_members (tenant_id, user_id) values ($1, $2)", [
-      alRashid.id,
-      userId,
-    ]);
-    const { rows } = await pool.query("select role from tenant_members where user_id = $1", [
-      userId,
-    ]);
-    expect(rows[0].role).toBe("member");
-  });
-
-  it("refuses a membership role outside admin and member", async () => {
-    const userId = await seedUser(pool, { email: "faisal@alrashid.test" });
     const err = await rejectionText(
-      pool.query("insert into tenant_members (tenant_id, user_id, role) values ($1, $2, 'owner')", [
+      pool.query("insert into tenant_members (tenant_id, user_id) values ($1, $2)", [
         alRashid.id,
         userId,
       ]),
     );
-    expect(err).toMatch(/invalid input value for enum tenant_member_roles/);
+    expect(err).toMatch(/null value in column "role_id"/);
+  });
+
+  it("refuses a membership holding another tenant's role", async () => {
+    const userId = await seedUser(pool, { email: "faisal@alrashid.test" });
+    const err = await rejectionText(
+      pool.query("insert into tenant_members (tenant_id, user_id, role_id) values ($1, $2, $3)", [
+        alRashid.id,
+        userId,
+        alNoor.memberRoleId,
+      ]),
+    );
+    expect(err).toMatch(/tenant_members_role_fk/);
+  });
+
+  it("allows one system role per tenant (R3.2)", async () => {
+    const err = await rejectionText(
+      seedRole(pool, alNoor.id, { name: "Second Admin", isSystem: true }),
+    );
+    expect(err).toMatch(/roles_system_unique/);
+  });
+
+  it("keeps role names unique within a tenant, ignoring case (R3.5)", async () => {
+    const err = await rejectionText(seedRole(pool, alNoor.id, { name: "MEMBER" }));
+    expect(err).toMatch(/roles_name_unique/);
+    await expect(seedRole(pool, alRashid.id, { name: "Contracts Clerk" })).resolves.toBeTruthy();
+    await expect(seedRole(pool, alNoor.id, { name: "Contracts Clerk" })).resolves.toBeTruthy();
+  });
+
+  it("refuses a malformed permission key and a grant on another tenant's role", async () => {
+    const insertGrant = (tenantId: string, roleId: string, key: string) =>
+      pool.query(
+        "insert into role_permissions (tenant_id, role_id, permission, scope) values ($1, $2, $3, 'organization')",
+        [tenantId, roleId, key],
+      );
+    expect(await rejectionText(insertGrant(alNoor.id, alNoor.memberRoleId, "Org View"))).toMatch(
+      /role_permissions_key_format/,
+    );
+    expect(await rejectionText(insertGrant(alRashid.id, alNoor.memberRoleId, "role.view"))).toMatch(
+      /role_permissions_role_fk/,
+    );
   });
 
   it("refuses an email that is not lowercased and trimmed", async () => {

@@ -3,6 +3,7 @@ import { decodeJwt, SignJWT } from "jose";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { authenticate, principalOf, requireRole } from "../src/modules/auth/index.js";
+import { TENANT_PERMISSIONS } from "../src/modules/tenant-access/index.js";
 import { testApp } from "./helpers/app.js";
 import {
   ACCESS_COOKIE,
@@ -42,6 +43,8 @@ operatorOnly.get(
 const app = testApp(pool, capture.logger, { routers: [operatorOnly] });
 
 let alNoor = "";
+let adminRoleId = "";
+let memberRoleId = "";
 let saraId = "";
 let khalidId = "";
 
@@ -51,7 +54,7 @@ beforeAll(async () => {
     { email: SARA, userName: "Sara Al-Qahtani", passwordHash },
     { email: KHALID, userName: "Khalid Al-Otaibi", passwordHash },
   ]);
-  alNoor = tenant.id;
+  ({ id: alNoor, adminRoleId, memberRoleId } = tenant);
   [saraId = "", khalidId = ""] = tenant.userIds;
   await seedUser(pool, { email: INACTIVE, passwordHash, isActive: false });
   const created = await runCreateOperator([OMAR, "Omar Al-Harbi"], { OPERATOR_PASSWORD: PASSWORD });
@@ -88,7 +91,12 @@ describe("login (R0.10, R0.11)", () => {
         email: SARA,
         userName: "Sara Al-Qahtani",
         role: "user",
-        tenant: { id: alNoor, roleId: null, roleName: "admin", permissions: [] },
+        tenant: {
+          id: alNoor,
+          roleId: adminRoleId,
+          roleName: "Tenant Admin",
+          permissions: TENANT_PERMISSIONS,
+        },
       },
     });
     expect(res.headers["cache-control"]).toBe("no-store");
@@ -110,7 +118,12 @@ describe("login (R0.10, R0.11)", () => {
       username: "Sara Al-Qahtani",
       email: SARA,
       role: "user",
-      tenant: { id: alNoor, roleId: null, roleName: "admin", permissions: [] },
+      tenant: {
+        id: alNoor,
+        roleId: adminRoleId,
+        roleName: "Tenant Admin",
+        permissions: TENANT_PERMISSIONS,
+      },
     });
     expect((payload.exp ?? 0) - (payload.iat ?? 0)).toBe(1800);
     const row = await refreshRow(refreshToken);
@@ -122,9 +135,12 @@ describe("login (R0.10, R0.11)", () => {
     expect(rows[0].n).toBe(0);
   });
 
-  it("gives Khalid the member role", async () => {
+  it("gives Khalid his role and exactly its permissions (R3.13)", async () => {
     const { access } = await login(app, KHALID, PASSWORD);
-    expect(decodeJwt(access)).toMatchObject({ sub: khalidId, tenant: { roleName: "member" } });
+    expect(decodeJwt(access)).toMatchObject({
+      sub: khalidId,
+      tenant: { roleId: memberRoleId, roleName: "Member", permissions: ["org.view", "user.view"] },
+    });
   });
 
   it("logs in an operator created by the CLI, with no tenant (R0.13)", async () => {
@@ -182,7 +198,7 @@ describe("access token (R0.11)", () => {
     const { access } = await login(app, SARA, PASSWORD);
     const res = await me(access);
     expect(res.status).toBe(200);
-    expect(res.body.user).toMatchObject({ id: saraId, tenant: { roleName: "admin" } });
+    expect(res.body.user).toMatchObject({ id: saraId, tenant: { roleName: "Tenant Admin" } });
   });
 
   const sign = (
@@ -215,6 +231,15 @@ describe("access token (R0.11)", () => {
     ],
     ["a token with unexpected claims", () => sign({ role: "superuser" }, TEST_JWT_SECRET, "30m")],
     ["a token from another issuer", () => sign(claims, TEST_JWT_SECRET, "30m", "another_api")],
+    [
+      "a pre-Phase-3 token with no role id",
+      () =>
+        sign(
+          { ...claims, tenant: { id: alNoor, roleId: null, roleName: "admin", permissions: [] } },
+          TEST_JWT_SECRET,
+          "30m",
+        ),
+    ],
   ])("rejects %s with 401 UNAUTHENTICATED", async (_label, tokenFor) => {
     const token = await tokenFor();
     const res = token ? await me(token) : await request(app).get("/auth/me");
@@ -283,17 +308,24 @@ describe("refresh (R0.12a)", () => {
   it("carries a role change into the next access token", async () => {
     const passwordHash = await hashPassword(PASSWORD);
     const userId = await seedUser(pool, { email: "promoted@auth-alnoor.test", passwordHash });
-    await pool.query("insert into tenant_members (tenant_id, user_id) values ($1, $2)", [
-      alNoor,
-      userId,
-    ]);
+    await pool.query(
+      "insert into tenant_members (tenant_id, user_id, role_id) values ($1, $2, $3)",
+      [alNoor, userId, memberRoleId],
+    );
     const session = await login(app, "promoted@auth-alnoor.test", PASSWORD);
-    expect(decodeJwt(session.access)).toMatchObject({ tenant: { roleName: "member" } });
+    expect(decodeJwt(session.access)).toMatchObject({
+      tenant: { roleId: memberRoleId, roleName: "Member", permissions: ["org.view", "user.view"] },
+    });
 
-    await pool.query("update tenant_members set role = 'admin' where user_id = $1", [userId]);
+    await pool.query("update tenant_members set role_id = $2 where user_id = $1", [
+      userId,
+      adminRoleId,
+    ]);
     const res = await refresh(session.refresh);
     const access = cookieValue(setCookiesOf(res)[ACCESS_COOKIE]);
-    expect(decodeJwt(access)).toMatchObject({ tenant: { roleName: "admin" } });
+    expect(decodeJwt(access)).toMatchObject({
+      tenant: { roleId: adminRoleId, roleName: "Tenant Admin", permissions: TENANT_PERMISSIONS },
+    });
   });
 
   it("lets exactly one of two concurrent refreshes with the same token succeed", async () => {

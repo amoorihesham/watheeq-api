@@ -41,7 +41,7 @@ export const resetPasswordRequestSchema = verifyEmailRequestSchema;
 
 export const tenantClaimSchema = z.object({
   id: z.uuid(),
-  roleId: z.uuid().nullable(),
+  roleId: z.uuid(),
   roleName: z.string(),
   permissions: z.array(z.string()),
 });

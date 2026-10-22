@@ -23,6 +23,9 @@ let majed = "";
 let khalid = "";
 let rashid = "";
 let alNoor = "";
+let adminRoleId = "";
+let memberRoleId = "";
+let rashidRoleId = "";
 let saraId = "";
 let majedId = "";
 let khalidId = "";
@@ -41,13 +44,15 @@ const as = (access: string) => ({
 });
 
 const nextEmail = () => `user${++counter}@us-alnoor.test`;
+const adminRole = () => ({ id: adminRoleId, name: "Tenant Admin", isSystem: true });
+const memberRole = () => ({ id: memberRoleId, name: "Member", isSystem: false });
 
 /** Invites a user into Al-Noor as Sara; returns their id. */
 async function invite(body: Record<string, unknown> = {}): Promise<string> {
   const res = await as(sara).post("/users", {
     email: nextEmail(),
     userName: `User ${counter}`,
-    role: "member",
+    roleId: memberRoleId,
     ...body,
   });
   expect(res.status).toBe(201);
@@ -92,10 +97,15 @@ beforeAll(async () => {
     ],
     200,
   );
-  alNoor = tenant.id;
+  ({ id: alNoor, adminRoleId, memberRoleId } = tenant);
   [saraId = "", majedId = "", khalidId = ""] = tenant.userIds;
-  await pool.query("update tenant_members set role = 'admin' where user_id = $1", [majedId]);
-  await seedSubscribedTenant(pool, "us-al-rashid", [{ email: RASHID_ADMIN, passwordHash }]);
+  await pool.query("update tenant_members set role_id = $2 where user_id = $1", [
+    majedId,
+    adminRoleId,
+  ]);
+  ({ memberRoleId: rashidRoleId } = await seedSubscribedTenant(pool, "us-al-rashid", [
+    { email: RASHID_ADMIN, passwordHash },
+  ]));
   sara = (await login(app, SARA, PASSWORD)).access;
   majed = (await login(app, MAJED, PASSWORD)).access;
   khalid = (await login(app, KHALID, PASSWORD)).access;
@@ -117,7 +127,7 @@ describe("inviting a user (R2.8)", () => {
       userName: "Huda",
       unitId: legal,
       isManager: true,
-      role: "member",
+      roleId: memberRoleId,
     });
     expect(res.status).toBe(201);
     expect(res.headers["cache-control"]).toBe("no-store");
@@ -126,7 +136,7 @@ describe("inviting a user (R2.8)", () => {
       userName: "Huda",
       unit: { id: legal, name: "Legal Affairs", kind: "department" },
       isManager: true,
-      role: "member",
+      role: memberRole(),
       isOwner: false,
       status: "invited",
     });
@@ -143,7 +153,8 @@ describe("inviting a user (R2.8)", () => {
           userName: "Huda",
           unitId: legal,
           isManager: true,
-          role: "member",
+          roleId: memberRoleId,
+          roleName: "Member",
         },
       },
     ]);
@@ -153,7 +164,7 @@ describe("inviting a user (R2.8)", () => {
     const { id, email: address } = await inviteActive({ unitId: procurement });
     const session = await login(app, address, PASSWORD);
     expect(session.res.status).toBe(200);
-    expect(session.res.body.user.tenant).toMatchObject({ id: alNoor, roleName: "member" });
+    expect(session.res.body.user.tenant).toMatchObject({ id: alNoor, roleId: memberRoleId });
     expect((await as(sara).get(`/users/${id}`)).body.user.status).toBe("active");
   });
 
@@ -167,7 +178,7 @@ describe("inviting a user (R2.8)", () => {
       const res = await as(sara).post("/users", {
         email: taken,
         userName: "Duplicate Invitee",
-        role: "member",
+        roleId: memberRoleId,
       });
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe("EMAIL_TAKEN");
@@ -184,7 +195,7 @@ describe("inviting a user (R2.8)", () => {
         email: nextEmail(),
         userName: "X",
         unitId,
-        role: "member",
+        roleId: memberRoleId,
       });
       expect(res.status).toBe(400);
       expect(res.body.error.details).toEqual([{ path: "unitId", code: "unknown_unit" }]);
@@ -196,20 +207,29 @@ describe("inviting a user (R2.8)", () => {
       email: nextEmail(),
       userName: "X",
       isManager: true,
-      role: "member",
+      roleId: memberRoleId,
     });
     expect(res.status).toBe(400);
     expect(res.body.error.details).toEqual([{ path: "isManager", code: "manager_needs_unit" }]);
   });
 
-  it("refuses an unknown role, a missing name, and a bad email", async () => {
+  it("refuses a malformed role, a missing role or name, and a bad email", async () => {
     const bodies = [
-      { email: nextEmail(), userName: "X", role: "owner" },
-      { email: nextEmail(), role: "member" },
-      { email: "not-an-email", userName: "X", role: "member" },
+      { email: nextEmail(), userName: "X", roleId: "member" },
+      { email: nextEmail(), userName: "X" },
+      { email: nextEmail(), roleId: memberRoleId },
+      { email: "not-an-email", userName: "X", roleId: memberRoleId },
     ];
     for (const body of bodies) {
       expect((await as(sara).post("/users", body)).status).toBe(400);
+    }
+  });
+
+  it("refuses a role of another tenant or an unknown one (R3.18)", async () => {
+    for (const roleId of [rashidRoleId, "00000000-0000-4000-8000-000000000000"]) {
+      const res = await as(sara).post("/users", { email: nextEmail(), userName: "X", roleId });
+      expect(res.status).toBe(400);
+      expect(res.body.error.details).toEqual([{ path: "roleId", code: "unknown_role" }]);
     }
   });
 
@@ -217,7 +237,7 @@ describe("inviting a user (R2.8)", () => {
     const res = await as(khalid).post("/users", {
       email: nextEmail(),
       userName: "X",
-      role: "member",
+      roleId: memberRoleId,
     });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("FORBIDDEN");
@@ -229,7 +249,7 @@ describe("inviting a user (R2.8)", () => {
     const res = await as(sara).post("/users", {
       email: address,
       userName: "Unlucky",
-      role: "member",
+      roleId: memberRoleId,
     });
     expect(res.status).toBe(201);
     expect(email.lastTokenFor(address)).toBe("");
@@ -241,7 +261,7 @@ describe("inviting a user (R2.8)", () => {
 describe("seats (R2.9)", () => {
   it("refuses an invitation at the limit, and gives the last seat to one of two concurrent invitations", async () => {
     const passwordHash = await hashPassword(PASSWORD);
-    await seedSubscribedTenant(
+    const { memberRoleId: smallRoleId } = await seedSubscribedTenant(
       pool,
       "us-small",
       [{ email: "admin@us-small.test", passwordHash }],
@@ -249,7 +269,11 @@ describe("seats (R2.9)", () => {
     );
     const admin = (await login(app, "admin@us-small.test", PASSWORD)).access;
     const inviteInto = (n: number) =>
-      as(admin).post("/users", { email: `u${n}@us-small.test`, userName: `U${n}`, role: "member" });
+      as(admin).post("/users", {
+        email: `u${n}@us-small.test`,
+        userName: `U${n}`,
+        roleId: smallRoleId,
+      });
     expect((await inviteInto(1)).status).toBe(201);
     const results = await Promise.all([inviteInto(2), inviteInto(3)]);
     expect(results.map((res) => res.status).sort()).toEqual([201, 409]);
@@ -335,7 +359,7 @@ describe("listing and viewing (R2.15)", () => {
     expect((await as(khalid).get(`/users/${saraId}`)).body.user).toMatchObject({
       email: SARA,
       isOwner: true,
-      role: "admin",
+      role: adminRole(),
     });
   });
 
@@ -356,35 +380,42 @@ describe("editing (R2.11, R2.13, R2.18)", () => {
     const res = await as(sara).patch(`/users/${id}`, {
       userName: "After",
       unitId: finance,
-      role: "admin",
+      roleId: adminRoleId,
     });
     expect(res.status).toBe(200);
     expect(res.body.user).toMatchObject({
       userName: "After",
       unit: { id: finance, kind: "department" },
-      role: "admin",
+      role: adminRole(),
     });
     expect((await auditOf(id)).at(-1)).toMatchObject({
       action: "user.updated",
       actor_id: saraId,
       details: {
-        before: { userName: "Before", unitId: procurement, role: "member" },
-        after: { userName: "After", unitId: finance, role: "admin" },
+        before: { userName: "Before", unitId: procurement, roleId: memberRoleId },
+        after: { userName: "After", unitId: finance, roleId: adminRoleId },
       },
     });
+  });
+
+  it("refuses moving a user onto another tenant's role", async () => {
+    const id = await invite();
+    const res = await as(sara).patch(`/users/${id}`, { roleId: rashidRoleId });
+    expect(res.status).toBe(400);
+    expect(res.body.error.details).toEqual([{ path: "roleId", code: "unknown_role" }]);
   });
 
   it("writes no audit entry when nothing changes", async () => {
     const id = await invite({ userName: "Same" });
     const before = (await auditOf(id)).length;
     expect(
-      (await as(sara).patch(`/users/${id}`, { userName: "Same", role: "member" })).status,
+      (await as(sara).patch(`/users/${id}`, { userName: "Same", roleId: memberRoleId })).status,
     ).toBe(200);
     expect((await auditOf(id)).length).toBe(before);
   });
 
   it("refuses changing one's own role, but allows one's own name and unit", async () => {
-    const own = await as(majed).patch(`/users/${majedId}`, { role: "member" });
+    const own = await as(majed).patch(`/users/${majedId}`, { roleId: memberRoleId });
     expect(own.status).toBe(403);
     expect(own.body.error.code).toBe("SELF_CHANGE_FORBIDDEN");
     const rename = await as(majed).patch(`/users/${majedId}`, {
@@ -396,7 +427,7 @@ describe("editing (R2.11, R2.13, R2.18)", () => {
   });
 
   it("never demotes the owner", async () => {
-    const res = await as(majed).patch(`/users/${saraId}`, { role: "member" });
+    const res = await as(majed).patch(`/users/${saraId}`, { roleId: memberRoleId });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("OWNER_PROTECTED");
   });
@@ -567,7 +598,7 @@ describe("deactivating and reactivating (R2.12, R2.13)", () => {
         await as(admin).post("/users", {
           email: "new@us-full.test",
           userName: "New",
-          role: "member",
+          roleId: small.memberRoleId,
         })
       ).status,
     ).toBe(201);
@@ -626,7 +657,7 @@ describe("Read-only tenant", () => {
     const res = await as(admin).post("/users", {
       email: "x@us-read-only.test",
       userName: "X",
-      role: "member",
+      roleId: tenant.memberRoleId,
     });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("SUBSCRIPTION_READ_ONLY");

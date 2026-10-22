@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
-import { subscriptions, tenantMembers, tenants, users } from "@/db/schema/index.js";
+import { roles, subscriptions, tenantMembers, tenants, users } from "@/db/schema/index.js";
 import { riyadhToday } from "@/modules/subscriptions/index.js";
 import type { NewTenantType, TenantOwnerType, TenantType } from "./tenants.types.js";
 
@@ -25,8 +25,15 @@ export function createTenantsRepository() {
       return db.insert(tenants).values(values).returning();
     },
 
-    insertAdminMember(db: Executor, tenantId: string, userId: string) {
-      return db.insert(tenantMembers).values({ tenantId, userId, role: "admin" });
+    insertSystemRole(db: Executor, tenantId: string, name: string): Promise<{ id: string }[]> {
+      return db
+        .insert(roles)
+        .values({ tenantId, name, isSystem: true })
+        .returning({ id: roles.id });
+    },
+
+    insertAdminMember(db: Executor, tenantId: string, userId: string, roleId: string) {
+      return db.insert(tenantMembers).values({ tenantId, userId, roleId });
     },
 
     list(db: Executor) {

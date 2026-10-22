@@ -11,7 +11,7 @@ import {
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login, refreshCookie } from "./helpers/auth.js";
 import { TEST_JWT_SECRET } from "./helpers/config.js";
-import { connectToTestDb, seedUser } from "./helpers/db.js";
+import { connectToTestDb, MEMBER_ROLE, seedRole, seedUser } from "./helpers/db.js";
 
 const PASSWORD = "correct horse battery staple";
 const SARA = "sara@sg-alnoor.test";
@@ -236,9 +236,10 @@ describe("GET /subscription (R1.11, P1.23)", () => {
     await setState("active");
     const passwordHash = await hashPassword(PASSWORD);
     const khalidId = await seedUser(pool, { email: "khalid@sg-alnoor.test", passwordHash });
+    const memberRoleId = await seedRole(pool, tenantId, MEMBER_ROLE);
     await pool.query(
-      "insert into tenant_members (tenant_id, user_id, role) values ($1, $2, 'member')",
-      [tenantId, khalidId],
+      "insert into tenant_members (tenant_id, user_id, role_id) values ($1, $2, $3)",
+      [tenantId, khalidId, memberRoleId],
     );
     const khalid = (await login(app, "khalid@sg-alnoor.test", PASSWORD)).access;
     const res = await request(app).get("/subscription").set("Cookie", accessCookie(khalid));

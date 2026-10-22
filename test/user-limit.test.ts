@@ -59,7 +59,8 @@ async function addMember(tx: Tx, tenantId: string, email: string): Promise<void>
     insert into users (email, user_name, password_hash, email_verified_at)
     values (${email}, ${email.split("@")[0]}, ${passwordHash}, now()) returning id`);
   await tx.execute(
-    sql`insert into tenant_members (tenant_id, user_id) values (${tenantId}, ${rows[0]?.id})`,
+    sql`insert into tenant_members (tenant_id, user_id, role_id)
+        select ${tenantId}, ${rows[0]?.id}, id from roles where tenant_id = ${tenantId} and is_system`,
   );
 }
 

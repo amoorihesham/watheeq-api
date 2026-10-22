@@ -1,21 +1,23 @@
-import type { TenantMemberRoleType } from "@/modules/auth/auth.types.js";
+import type { PermissionScopeType, TenantPermissionType } from "./tenant-access.types.js";
 
-// The permissions Phase 2 routes declare; Phase 3 grows this into the tenant permission catalog.
-export const TENANT_PERMISSIONS = [
-  "org.view",
-  "org.manage",
-  "user.view",
-  "user.create",
-  "user.update",
-  "user.deactivate",
-  "subscription.view",
-] as const;
+/**
+ * The tenant permission catalog: each permission and the scopes a role may grant it at (Phase 3 spec, P3.1).
+ * A permission is added here with the route that requires it; tenants cannot add their own.
+ */
+export const PERMISSION_CATALOG = {
+  "org.view": ["organization"],
+  "org.manage": ["organization"],
+  "user.view": ["own", "section", "department", "organization"],
+  "user.create": ["organization"],
+  "user.update": ["organization"],
+  "user.deactivate": ["organization"],
+  "subscription.view": ["organization"],
+  "role.view": ["organization"],
+  "role.manage": ["organization"],
+  "role.assign": ["organization"],
+} as const satisfies Record<string, readonly PermissionScopeType[]>;
 
-// Until Phase 3 puts tenant-defined roles in the token, permissions come from the membership role (Phase 2 spec, P2.9).
-export const INTERIM_PERMISSIONS_BY_ROLE: Record<
-  TenantMemberRoleType,
-  readonly (typeof TENANT_PERMISSIONS)[number][]
-> = {
-  admin: TENANT_PERMISSIONS,
-  member: ["org.view", "user.view"],
-};
+export const TENANT_PERMISSIONS = Object.keys(PERMISSION_CATALOG) as TenantPermissionType[];
+
+/** The name the Tenant Admin role is created with; clients label it from `isSystem` (P3.8). */
+export const SYSTEM_ROLE_NAME = "Tenant Admin";

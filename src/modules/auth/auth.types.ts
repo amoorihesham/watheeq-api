@@ -2,7 +2,6 @@ import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { passwordTokenPurposes } from "@/db/schema/password-tokens.js";
-import type { tenantMemberRoles } from "@/db/schema/tenant-members.js";
 import type { userRoles } from "@/db/schema/users.js";
 import type { EmailSenderType } from "@/email/index.js";
 import type { SubscriptionStatusType } from "@/modules/subscriptions/index.js";
@@ -21,7 +20,6 @@ import type {
 import type { createAuthService } from "./auth.service.js";
 
 export type UserRoleType = (typeof userRoles.enumValues)[number];
-export type TenantMemberRoleType = (typeof tenantMemberRoles.enumValues)[number];
 
 export interface NewUserType {
   email: string;
@@ -48,10 +46,14 @@ export interface AccountType {
   isActive: boolean;
   emailVerifiedAt: Date | null;
   tenantId: string | null;
-  tenantRole: TenantMemberRoleType | null;
+  roleId: string | null;
+  roleName: string | null;
+  roleIsSystem: boolean | null;
+  /** The keys stored for the role; the system role has none (P3.8). */
+  rolePermissions: string[] | null;
 }
 
-/** Until Phase 3: `roleId` is null, `roleName` is the membership enum, `permissions` is empty (Phase 0 spec, P0.18). */
+/** The user's role and its permission keys, read at login and refresh (Phase 3 spec, R3.13). */
 export type TenantClaimType = z.infer<typeof tenantClaimSchema>;
 
 export type AccessTokenPayloadType = z.infer<typeof accessTokenPayloadSchema>;

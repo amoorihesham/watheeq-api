@@ -6,6 +6,7 @@ import { AppError } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
 import { toSubscriptionStatus } from "@/modules/subscriptions/index.js";
+import { grantedPermissions } from "@/modules/tenant-access/index.js";
 import { DUMMY_PASSWORD_HASH } from "./auth.config.js";
 import { createAuthRepository } from "./auth.repository.js";
 import {
@@ -35,15 +36,22 @@ import { issuePasswordToken, passwordResetEmail } from "./shared/onboarding.js";
 import { hashPassword, verifyPassword } from "./shared/passwords.js";
 import { generateOpaqueToken, hashToken, signAccessToken } from "./shared/tokens.js";
 
-/** Until Phase 3 there are no tenant-defined roles: no role id, the membership enum as the name, no permissions (P0.18). */
 const toAuthUser = (account: AccountType): AuthUserType => ({
   id: account.id,
   email: account.email,
   userName: account.userName,
   role: account.role,
   tenant:
-    account.tenantId && account.tenantRole
-      ? { id: account.tenantId, roleId: null, roleName: account.tenantRole, permissions: [] }
+    account.tenantId && account.roleId && account.roleName
+      ? {
+          id: account.tenantId,
+          roleId: account.roleId,
+          roleName: account.roleName,
+          permissions: grantedPermissions({
+            isSystem: account.roleIsSystem ?? false,
+            permissions: account.rolePermissions ?? [],
+          }),
+        }
       : null,
 });
 

@@ -46,12 +46,24 @@ testRouter.post("/duplicate-membership", async (_req, res) => {
   const tenant = await pool.query<{ id: string }>(
     "insert into tenants (name, slug) values ('Dup', 'dup-member') on conflict (slug) do update set name = 'Dup' returning id",
   );
+  const role = await pool.query<{ id: string }>(
+    "insert into roles (tenant_id, name) values ($1, 'Dup') on conflict do nothing returning id",
+    [tenant.rows[0]?.id],
+  );
+  const roleId =
+    role.rows[0]?.id ??
+    (
+      await pool.query<{ id: string }>("select id from roles where tenant_id = $1", [
+        tenant.rows[0]?.id,
+      ])
+    ).rows[0]?.id;
   const insert =
-    "insert into tenant_members (tenant_id, user_id) values ($1, $2) on conflict do nothing";
-  await pool.query(insert, [tenant.rows[0]?.id, userId]);
-  await pool.query("insert into tenant_members (tenant_id, user_id) values ($1, $2)", [
+    "insert into tenant_members (tenant_id, user_id, role_id) values ($1, $2, $3) on conflict do nothing";
+  await pool.query(insert, [tenant.rows[0]?.id, userId, roleId]);
+  await pool.query("insert into tenant_members (tenant_id, user_id, role_id) values ($1, $2, $3)", [
     tenant.rows[0]?.id,
     userId,
+    roleId,
   ]);
   res.json({});
 });

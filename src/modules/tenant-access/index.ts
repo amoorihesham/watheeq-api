@@ -1,4 +1,13 @@
 export { requireTenantPermission } from "./shared/middlewares.js";
-export { tenantPermissionsOf } from "./shared/permissions.js";
-export { INTERIM_PERMISSIONS_BY_ROLE, TENANT_PERMISSIONS } from "./tenant-access.config.js";
-export type { TenantPermissionsOfType, TenantPermissionType } from "./tenant-access.types.js";
+export { grantedPermissions, systemRoleGrants, tenantPermissionsOf } from "./shared/permissions.js";
+export {
+  PERMISSION_CATALOG,
+  SYSTEM_ROLE_NAME,
+  TENANT_PERMISSIONS,
+} from "./tenant-access.config.js";
+export type {
+  GrantType,
+  PermissionScopeType,
+  TenantPermissionsOfType,
+  TenantPermissionType,
+} from "./tenant-access.types.js";

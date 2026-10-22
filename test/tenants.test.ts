@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "../src/db/pool.js";
 import { withTx } from "../src/db/tx.js";
 import { assertSeatAvailable } from "../src/modules/subscriptions/index.js";
+import { systemRoleGrants, TENANT_PERMISSIONS } from "../src/modules/tenant-access/index.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
 import { TEST_APP_BASE_URL } from "./helpers/config.js";
@@ -126,23 +127,36 @@ describe("create a tenant (R1.3, R1.14)", () => {
       email_verified_at: null,
       role: "user",
     });
+    // The only role a new tenant starts with is Tenant Admin, and the owner holds it (R3.2, P3.9).
+    const roles = await pool.query("select id, name, is_system from roles where tenant_id = $1", [
+      tenant.id,
+    ]);
+    expect(roles.rows).toEqual([{ id: expect.any(String), name: "Tenant Admin", is_system: true }]);
     const member = await pool.query(
-      "select tenant_id, role from tenant_members where user_id = $1",
+      "select tenant_id, role_id from tenant_members where user_id = $1",
       [admin.id],
     );
-    expect(member.rows[0]).toEqual({ tenant_id: tenant.id, role: "admin" });
+    expect(member.rows[0]).toEqual({ tenant_id: tenant.id, role_id: roles.rows[0].id });
 
     const audit = await pool.query(
       "select action, actor_type, actor_id from audit_log where tenant_id = $1 order by id",
       [tenant.id],
     );
     expect(audit.rows).toEqual(
-      ["tenant.created", "subscription.assigned", "user.created"].map((action) => ({
+      ["tenant.created", "subscription.assigned", "role.created", "user.created"].map((action) => ({
         action,
         actor_type: "operator",
         actor_id: omarId,
       })),
     );
+    const roleAudit = await pool.query(
+      "select resource_id, details from audit_log where tenant_id = $1 and action = 'role.created'",
+      [tenant.id],
+    );
+    expect(roleAudit.rows[0]).toEqual({
+      resource_id: roles.rows[0].id,
+      details: { name: "Tenant Admin", isSystem: true, permissions: systemRoleGrants() },
+    });
   });
 
   it("emails Sara a link to the web app, and stores only the token's hash", async () => {
@@ -286,7 +300,7 @@ describe("verify email and log in (R1.4)", () => {
     expect(session.res.status).toBe(200);
     expect(session.res.body.user).toMatchObject({
       userName: "Sara Al-Qahtani",
-      tenant: { roleName: "admin" },
+      tenant: { roleName: "Tenant Admin", permissions: TENANT_PERMISSIONS },
     });
 
     const audit = await pool.query(

@@ -12,6 +12,7 @@ import {
   toSubscriptionView,
   toUsage,
 } from "@/modules/subscriptions/index.js";
+import { SYSTEM_ROLE_NAME, systemRoleGrants } from "@/modules/tenant-access/index.js";
 import { createPlansRepository } from "../plans/plans.repository.js";
 import {
   changeSubscriptionRequestSchema,
@@ -113,7 +114,12 @@ export function createTenantsService({
           throw new Error("insert returned no row");
         }
         await assertSeatAvailable(tx, tenant.id);
-        await repo.insertAdminMember(tx, tenant.id, admin.id);
+        // The owner holds the Tenant Admin role, the only role a new tenant starts with (P3.8, P3.9).
+        const [adminRole] = await repo.insertSystemRole(tx, tenant.id, SYSTEM_ROLE_NAME);
+        if (!adminRole) {
+          throw new Error("insert returned no row");
+        }
+        await repo.insertAdminMember(tx, tenant.id, admin.id, adminRole.id);
         const token = await issuePasswordToken(
           tx,
           admin.id,
@@ -138,10 +144,17 @@ export function createTenantsService({
         });
         await writeAuditEntry(tx, {
           ...entry,
+          action: "role.created",
+          resourceType: "role",
+          resourceId: adminRole.id,
+          details: { name: SYSTEM_ROLE_NAME, isSystem: true, permissions: systemRoleGrants() },
+        });
+        await writeAuditEntry(tx, {
+          ...entry,
           action: "user.created",
           resourceType: "user",
           resourceId: admin.id,
-          details: { after: { ...admin, tenantRole: "admin" } },
+          details: { after: { ...admin, roleId: adminRole.id } },
         });
         return {
           admin,

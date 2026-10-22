@@ -3,6 +3,8 @@ import type { Executor } from "@/db/pool.js";
 import {
   passwordTokens,
   refreshTokens,
+  rolePermissions,
+  roles,
   subscriptions,
   tenantMembers,
   users,
@@ -26,8 +28,18 @@ const accountColumns = {
   isActive: users.isActive,
   emailVerifiedAt: users.emailVerifiedAt,
   tenantId: tenantMembers.tenantId,
-  tenantRole: tenantMembers.role,
+  roleId: roles.id,
+  roleName: roles.name,
+  roleIsSystem: roles.isSystem,
+  rolePermissions: sql<string[]>`array(
+    select ${rolePermissions.permission} from ${rolePermissions} where ${rolePermissions.roleId} = ${roles.id}
+  )`,
 };
+
+const roleOfMember = and(
+  eq(roles.tenantId, tenantMembers.tenantId),
+  eq(roles.id, tenantMembers.roleId),
+);
 
 export function createAuthRepository() {
   return {
@@ -43,6 +55,7 @@ export function createAuthRepository() {
         .select(accountColumns)
         .from(users)
         .leftJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .leftJoin(roles, roleOfMember)
         .where(eq(users.email, email));
     },
 
@@ -51,6 +64,7 @@ export function createAuthRepository() {
         .select(accountColumns)
         .from(users)
         .leftJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .leftJoin(roles, roleOfMember)
         .where(eq(users.id, userId));
     },
 

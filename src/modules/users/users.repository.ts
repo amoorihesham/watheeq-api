@@ -1,7 +1,7 @@
 import { and, count, eq, ilike, isNotNull, isNull, or, type SQL, sql } from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
-import { orgUnits, tenantMembers, tenants, users } from "@/db/schema/index.js";
+import { orgUnits, roles, tenantMembers, tenants, users } from "@/db/schema/index.js";
 import type {
   ListUsersQueryType,
   MemberChangesType,
@@ -16,7 +16,9 @@ const userColumns = {
   isActive: users.isActive,
   emailVerifiedAt: users.emailVerifiedAt,
   createdAt: users.createdAt,
-  role: tenantMembers.role,
+  roleId: tenantMembers.roleId,
+  roleName: roles.name,
+  roleIsSystem: roles.isSystem,
   unitId: tenantMembers.unitId,
   isManager: tenantMembers.isManager,
   unitName: orgUnits.name,
@@ -41,6 +43,7 @@ function listFilter(tenantId: string, query: ListUsersQueryType): SQL | undefine
     query.unitId === "none" ? isNull(tenantMembers.unitId) : undefined,
     query.unitId && query.unitId !== "none" ? eq(tenantMembers.unitId, query.unitId) : undefined,
     query.managers ? eq(tenantMembers.isManager, query.managers === "true") : undefined,
+    query.roleId ? eq(tenantMembers.roleId, query.roleId) : undefined,
     query.q
       ? or(ilike(users.userName, containing(query.q)), ilike(users.email, containing(query.q)))
       : undefined,
@@ -55,6 +58,10 @@ export function createUsersRepository() {
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))
       .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+      .innerJoin(
+        roles,
+        and(eq(roles.tenantId, tenantMembers.tenantId), eq(roles.id, tenantMembers.roleId)),
+      )
       .leftJoin(orgUnits, eq(orgUnits.id, tenantMembers.unitId));
 
   return {
@@ -94,6 +101,13 @@ export function createUsersRepository() {
         .select({ id: orgUnits.id })
         .from(orgUnits)
         .where(and(eq(orgUnits.tenantId, tenantId), eq(orgUnits.id, unitId)));
+    },
+
+    roleExists(db: Executor, tenantId: string, roleId: string): Promise<{ id: string }[]> {
+      return db
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(eq(roles.tenantId, tenantId), eq(roles.id, roleId)));
     },
 
     tenantName(db: Executor, tenantId: string): Promise<{ name: string }[]> {

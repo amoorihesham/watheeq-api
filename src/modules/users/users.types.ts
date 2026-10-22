@@ -2,7 +2,6 @@ import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { EmailSenderType } from "@/email/index.js";
-import type { TenantMemberRoleType } from "@/modules/auth/index.js";
 import type { OrgUnitKindType } from "@/modules/org/index.js";
 import type { USER_STATUSES } from "./users.config.js";
 import type { createUsersController } from "./users.controller.js";
@@ -17,6 +16,12 @@ import type { createUsersService } from "./users.service.js";
 /** `invited`: has not set a password yet; `inactive`: deactivated. */
 export type UserStatusType = (typeof USER_STATUSES)[number];
 
+export interface UserRoleSummaryType {
+  id: string;
+  name: string;
+  isSystem: boolean;
+}
+
 /** A tenant user as the API returns it. */
 export interface UserType {
   id: string;
@@ -24,7 +29,7 @@ export interface UserType {
   userName: string;
   unit: { id: string; name: string; kind: OrgUnitKindType } | null;
   isManager: boolean;
-  role: TenantMemberRoleType;
+  role: UserRoleSummaryType;
   isOwner: boolean;
   status: UserStatusType;
   createdAt: Date;
@@ -38,7 +43,9 @@ export interface UserRowType {
   isActive: boolean;
   emailVerifiedAt: Date | null;
   createdAt: Date;
-  role: TenantMemberRoleType;
+  roleId: string;
+  roleName: string;
+  roleIsSystem: boolean;
   unitId: string | null;
   isManager: boolean;
   unitName: string | null;
@@ -51,13 +58,13 @@ export interface NewMemberType {
   userId: string;
   unitId: string | null;
   isManager: boolean;
-  role: TenantMemberRoleType;
+  roleId: string;
 }
 
 export interface MemberChangesType {
   unitId?: string | null;
   isManager?: boolean;
-  role?: TenantMemberRoleType;
+  roleId?: string;
 }
 
 export type InviteUserRequestType = z.input<typeof inviteUserRequestSchema>;

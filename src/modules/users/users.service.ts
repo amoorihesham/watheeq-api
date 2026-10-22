@@ -48,7 +48,7 @@ function toUser(row: UserRowType): UserType {
         ? { id: row.unitId, name: row.unitName, kind: row.unitKind }
         : null,
     isManager: row.isManager,
-    role: row.role,
+    role: { id: row.roleId, name: row.roleName, isSystem: row.roleIsSystem },
     isOwner: row.isOwner,
     status: !row.isActive ? "inactive" : row.emailVerifiedAt ? "active" : "invited",
     createdAt: row.createdAt,
@@ -72,6 +72,12 @@ export function createUsersService({
   async function assertUnit(executor: Executor, tenantId: string, unitId: string | null) {
     if (unitId && !(await repo.unitExists(executor, tenantId, unitId)).length) {
       throw new AppError("VALIDATION_FAILED", [{ path: "unitId", code: "unknown_unit" }]);
+    }
+  }
+
+  async function assertRole(executor: Executor, tenantId: string, roleId: string) {
+    if (!(await repo.roleExists(executor, tenantId, roleId)).length) {
+      throw new AppError("VALIDATION_FAILED", [{ path: "roleId", code: "unknown_role" }]);
     }
   }
 
@@ -123,6 +129,7 @@ export function createUsersService({
       }
       const { user, token, tenantName } = await withTx(db, async (tx) => {
         await assertUnit(tx, tenantId, body.unitId);
+        await assertRole(tx, tenantId, body.roleId);
         await assertSeatAvailable(tx, tenantId);
         const created = await insertPendingUser(tx, { email: body.email, userName: body.userName });
         await repo.insertMember(tx, {
@@ -130,7 +137,7 @@ export function createUsersService({
           userId: created.id,
           unitId: body.unitId,
           isManager: body.isManager,
-          role: body.role,
+          roleId: body.roleId,
         });
         const token = await issuePasswordToken(
           tx,
@@ -138,6 +145,7 @@ export function createUsersService({
           "invitation",
           settings.invitationTtlSeconds,
         );
+        const user = toUser(await loadUser(tx, tenantId, created.id));
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
@@ -149,11 +157,11 @@ export function createUsersService({
             userName: body.userName,
             unitId: body.unitId,
             isManager: body.isManager,
-            role: body.role,
+            roleId: user.role.id,
+            roleName: user.role.name,
           },
         });
         const [tenant] = await repo.tenantName(tx, tenantId);
-        const user = toUser(await loadUser(tx, tenantId, created.id));
         return { user, token, tenantName: tenant?.name ?? "" };
       });
 
@@ -175,7 +183,7 @@ export function createUsersService({
 
     /**
      * Changes name, unit, manager flag, and role (R2.11). Moving a manager ends their manager role unless the same
-     * request sets it again (R2.7). The owner stays admin, and nobody changes their own role (R2.13).
+     * request sets it again (R2.7). The owner keeps the Tenant Admin role, and nobody changes their own role (R2.13).
      */
     update(
       tenantId: string,
@@ -188,13 +196,14 @@ export function createUsersService({
       const body = validate(updateUserRequestSchema, input);
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
-        if (body.role !== undefined && body.role !== before.role) {
+        if (body.roleId !== undefined && body.roleId !== before.roleId) {
           if (id === caller.id) {
             throw new AppError("SELF_CHANGE_FORBIDDEN");
           }
           if (before.isOwner) {
             throw new AppError("OWNER_PROTECTED");
           }
+          await assertRole(tx, tenantId, body.roleId);
         }
         const unitId = body.unitId === undefined ? before.unitId : body.unitId;
         if (unitId !== before.unitId) {
@@ -209,7 +218,7 @@ export function createUsersService({
           userName: body.userName ?? before.userName,
           unitId,
           isManager,
-          role: body.role ?? before.role,
+          roleId: body.roleId ?? before.roleId,
         };
         const changed = (Object.keys(next) as (keyof typeof next)[]).filter(
           (key) => next[key] !== before[key],

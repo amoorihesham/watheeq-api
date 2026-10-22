@@ -6,7 +6,6 @@ export type {
   AuthUserType,
   PasswordTokenPurposeType,
   TenantClaimType,
-  TenantMemberRoleType,
   UserRoleType,
 } from "./auth.types.js";
 export { auditContextOf } from "./shared/audit-context.js";

@@ -7,8 +7,6 @@ import {
   USER_STATUSES,
 } from "./users.config.js";
 
-const memberRole = z.enum(["admin", "member"]);
-
 export const userIdSchema = z.uuid();
 
 export const inviteUserRequestSchema = z.object({
@@ -16,7 +14,7 @@ export const inviteUserRequestSchema = z.object({
   userName: userNameSchema,
   unitId: z.uuid().nullable().default(null),
   isManager: z.boolean().default(false),
-  role: memberRole,
+  roleId: z.uuid(),
 });
 
 export const updateUserRequestSchema = z
@@ -24,7 +22,7 @@ export const updateUserRequestSchema = z
     userName: userNameSchema,
     unitId: z.uuid().nullable(),
     isManager: z.boolean(),
-    role: memberRole,
+    roleId: z.uuid(),
   })
   .partial()
   .refine((body) => Object.keys(body).length > 0, { message: "at least one field" });
@@ -33,6 +31,7 @@ export const listUsersQuerySchema = z.object({
   // "none" lists the members directly under the organization (P2.13).
   unitId: z.union([z.uuid(), z.literal("none")]).optional(),
   managers: z.enum(["true", "false"]).optional(),
+  roleId: z.uuid().optional(),
   status: z.enum([...USER_STATUSES, "all"]).default("active"),
   q: z.string().trim().min(1).max(MAX_USER_SEARCH_LENGTH).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_USER_PAGE_SIZE).default(DEFAULT_USER_PAGE_SIZE),

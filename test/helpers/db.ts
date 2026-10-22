@@ -47,15 +47,60 @@ export async function seedUser(db: pg.Pool | pg.PoolClient, user: SeedUser): Pro
   return rows[0]?.id ?? "";
 }
 
+export interface SeedRole {
+  name: string;
+  isSystem?: boolean;
+  /** Permission keys with their scope; defaults to none. */
+  permissions?: { key: string; scope: string }[];
+}
+
+/** Inserts one role and its grants. Returns the role id. */
+export async function seedRole(
+  db: pg.Pool | pg.PoolClient,
+  tenantId: string,
+  role: SeedRole,
+): Promise<string> {
+  const { rows } = await db.query<{ id: string }>(
+    "insert into roles (tenant_id, name, is_system) values ($1, $2, $3) returning id",
+    [tenantId, role.name, role.isSystem ?? false],
+  );
+  const roleId = rows[0]?.id ?? "";
+  for (const { key, scope } of role.permissions ?? []) {
+    await db.query(
+      "insert into role_permissions (tenant_id, role_id, permission, scope) values ($1, $2, $3, $4)",
+      [tenantId, roleId, key, scope],
+    );
+  }
+  return roleId;
+}
+
+/** What Phase 2's `member` could do: read the structure and the directory, nothing else. */
+export const MEMBER_ROLE: SeedRole = {
+  name: "Member",
+  permissions: [
+    { key: "org.view", scope: "organization" },
+    { key: "user.view", scope: "organization" },
+  ],
+};
+
+export interface SeededTenant {
+  id: string;
+  userIds: string[];
+  /** The Tenant Admin system role, held by the owner. */
+  adminRoleId: string;
+  /** `MEMBER_ROLE`, held by everyone else. */
+  memberRoleId: string;
+}
+
 /**
  * Inserts a tenant whose owner is the first user, with every user as a member, in one transaction.
- * The owner's membership role is `admin`; the others are `member`.
+ * The owner holds the Tenant Admin role; the others hold `MEMBER_ROLE`.
  */
 export async function seedTenant(
   pool: pg.Pool,
   slug: string,
   members: SeedUser[],
-): Promise<{ id: string; userIds: string[] }> {
+): Promise<SeededTenant> {
   const client = await pool.connect();
   try {
     await client.query("begin");
@@ -68,14 +113,16 @@ export async function seedTenant(
       [slug, userIds[0] ?? null],
     );
     const id = rows[0]?.id ?? "";
+    const adminRoleId = await seedRole(client, id, { name: "Tenant Admin", isSystem: true });
+    const memberRoleId = await seedRole(client, id, MEMBER_ROLE);
     for (const [index, userId] of userIds.entries()) {
       await client.query(
-        "insert into tenant_members (tenant_id, user_id, role) values ($1, $2, $3)",
-        [id, userId, index === 0 ? "admin" : "member"],
+        "insert into tenant_members (tenant_id, user_id, role_id) values ($1, $2, $3)",
+        [id, userId, index === 0 ? adminRoleId : memberRoleId],
       );
     }
     await client.query("commit");
-    return { id, userIds };
+    return { id, userIds, adminRoleId, memberRoleId };
   } catch (err) {
     await client.query("rollback");
     throw err;
@@ -93,7 +140,7 @@ export async function seedSubscribedTenant(
   slug: string,
   members: SeedUser[],
   userLimit = 50,
-): Promise<{ id: string; userIds: string[] }> {
+): Promise<SeededTenant> {
   const tenant = await seedTenant(pool, slug, members);
   await pool.query(
     `with plan as (
