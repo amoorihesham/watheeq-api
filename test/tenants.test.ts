@@ -3,6 +3,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "../src/db/pool.js";
 import { withTx } from "../src/db/tx.js";
+import { DEFAULT_WEEK } from "../src/modules/calendar/index.js";
 import { assertSeatAvailable } from "../src/modules/subscriptions/index.js";
 import { systemRoleGrants, TENANT_PERMISSIONS } from "../src/modules/tenant-access/index.js";
 import { testApp } from "./helpers/app.js";
@@ -143,7 +144,13 @@ describe("create a tenant (R1.3, R1.14)", () => {
       [tenant.id],
     );
     expect(audit.rows).toEqual(
-      ["tenant.created", "subscription.assigned", "role.created", "user.created"].map((action) => ({
+      [
+        "tenant.created",
+        "subscription.assigned",
+        "role.created",
+        "user.created",
+        "calendar.hours_set",
+      ].map((action) => ({
         action,
         actor_type: "operator",
         actor_id: omarId,
@@ -157,6 +164,13 @@ describe("create a tenant (R1.3, R1.14)", () => {
       resource_id: roles.rows[0].id,
       details: { name: "Tenant Admin", isSystem: true, permissions: systemRoleGrants() },
     });
+
+    // The calendar starts with the default normal hours from today (R4.1).
+    const hours = await pool.query(
+      "select effective_from::text, week from working_hours where tenant_id = $1",
+      [tenant.id],
+    );
+    expect(hours.rows).toEqual([{ effective_from: today, week: DEFAULT_WEEK }]);
   });
 
   it("emails Sara a link to the web app, and stores only the token's hash", async () => {

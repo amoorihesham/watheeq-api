@@ -57,3 +57,10 @@ export function timeToMs(time: string): number {
   const [hours = 0, minutes = 0] = time.split(":").map(Number);
   return hours * 3_600_000 + minutes * 60_000;
 }
+
+/** Milliseconds since midnight as `HH:MM`; midnight at the end of the day is 24:00. */
+export function msToTime(ms: number): string {
+  const minutes = Math.floor(ms / 60_000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}

@@ -6,6 +6,7 @@ import { AppError } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
 import { insertPendingUser, issuePasswordToken, verificationEmail } from "@/modules/auth/index.js";
+import { insertDefaultHours } from "@/modules/calendar/index.js";
 import {
   assertSeatAvailable,
   createSubscriptionsRepository,
@@ -156,6 +157,8 @@ export function createTenantsService({
           resourceId: admin.id,
           details: { after: { ...admin, roleId: adminRole.id } },
         });
+        // The tenant's calendar starts with the default normal hours (R4.1).
+        await insertDefaultHours(tx, tenant.id, today, context);
         return {
           admin,
           token,

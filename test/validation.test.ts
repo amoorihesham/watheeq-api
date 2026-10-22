@@ -54,7 +54,13 @@ describe("validate", () => {
 describe("request schemas", () => {
   // Request bodies reject unknown fields (T25). Only these may accept them: token claims carry standard JWT
   // fields, and query strings carry parameters the API does not control.
-  const LENIENT = ["tenantClaimSchema", "accessTokenPayloadSchema", "listUsersQuerySchema"];
+  const LENIENT = [
+    "tenantClaimSchema",
+    "accessTokenPayloadSchema",
+    "listUsersQuerySchema",
+    "calendarQuerySchema",
+    "dayViewQueryFields",
+  ];
 
   const schemaFiles = (dir: string): string[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

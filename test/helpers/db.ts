@@ -2,6 +2,7 @@ import type pg from "pg";
 import { inject } from "vitest";
 import { createPool } from "../../src/db/pool.js";
 import { createLogger, type Logger } from "../../src/logging/logger.js";
+import { DEFAULT_WEEK } from "../../src/modules/calendar/index.js";
 
 /** A pool connected to the test database, as the application connects. */
 export function connectToTestDb(logger: Logger = createLogger("silent")): pg.Pool {
@@ -121,6 +122,12 @@ export async function seedTenant(
         [id, userId, index === 0 ? adminRoleId : memberRoleId],
       );
     }
+    // What tenant creation does (R4.1): the default normal hours from today.
+    await client.query(
+      `insert into working_hours (tenant_id, effective_from, week)
+       values ($1, (now() at time zone 'Asia/Riyadh')::date, $2)`,
+      [id, JSON.stringify(DEFAULT_WEEK)],
+    );
     await client.query("commit");
     return { id, userIds, adminRoleId, memberRoleId };
   } catch (err) {

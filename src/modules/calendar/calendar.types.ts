@@ -1,4 +1,9 @@
+import type { Config } from "@/config/config.js";
+import type { Db } from "@/db/pool.js";
 import type { WEEKDAYS } from "./calendar.config.js";
+import type { createCalendarController } from "./calendar.controller.js";
+import type { createCalendarRepository } from "./calendar.repository.js";
+import type { createCalendarService } from "./calendar.service.js";
 
 export type WeekdayType = (typeof WEEKDAYS)[number];
 
@@ -77,3 +82,44 @@ export interface DayHoursType {
   start: number;
   end: number;
 }
+
+/** A holiday or season as the API returns it. */
+export type PeriodViewType = CalendarPeriodType & {
+  replacesId: string | null;
+  /** The first occurrence not yet over, after adjustments, so clients need no Hijri conversion. */
+  next: DateRangeType | null;
+};
+
+export interface CalendarResponseType {
+  today: string;
+  hours: HoursVersionType[];
+  periods: PeriodViewType[];
+}
+
+export interface HoursVersionResponseType {
+  version: HoursVersionType;
+}
+
+/** One date of the day view (R4.11). */
+export interface CalendarDayType {
+  date: string;
+  hijriDate: HijriDateType;
+  working: boolean;
+  start?: string;
+  end?: string;
+  holidays: { id: string; name: string }[];
+  season?: { id: string; name: string };
+}
+
+export interface CalendarDaysResponseType {
+  days: CalendarDayType[];
+}
+
+export interface CalendarRouterDepsType {
+  db: Db;
+  config: Config;
+}
+
+export type CalendarRepositoryType = ReturnType<typeof createCalendarRepository>;
+export type CalendarServiceType = ReturnType<typeof createCalendarService>;
+export type CalendarControllerType = ReturnType<typeof createCalendarController>;

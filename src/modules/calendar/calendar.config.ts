@@ -1,3 +1,5 @@
+import type { WeekShapeType } from "./calendar.types.js";
+
 /** Every calendar date and time is a Riyadh one (Phase 4 spec, P4.1). */
 export const CALENDAR_TIME_ZONE = "Asia/Riyadh";
 
@@ -13,3 +15,23 @@ export const HIJRI_MAX_YEAR = 1600;
 
 /** Safety net for the next-working-day search; validation makes it unreachable (P4.12). */
 export const MAX_WORKING_DAY_SEARCH_DAYS = 3660;
+
+/** A new tenant's normal hours (R4.1); migration 0007 gives existing tenants the same week. */
+export const DEFAULT_WEEK = {
+  start: "08:00",
+  end: "16:00",
+  days: {
+    sun: "default",
+    mon: "default",
+    tue: "default",
+    wed: "default",
+    thu: "default",
+    fri: "off",
+    sat: "off",
+  },
+} as const satisfies WeekShapeType;
+
+/** How far after today a dated change may reach: five years (P4.12). */
+export const MAX_DAYS_AHEAD = 1826;
+
+export const MAX_DAY_VIEW_DAYS = 366;

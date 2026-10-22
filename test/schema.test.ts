@@ -32,6 +32,8 @@ describe("database baseline", () => {
     );
     expect(rows.map((r) => r.table_name)).toEqual([
       "audit_log",
+      "calendar_period_overrides",
+      "calendar_periods",
       "org_units",
       "password_tokens",
       "plans",
@@ -42,6 +44,7 @@ describe("database baseline", () => {
       "tenant_members",
       "tenants",
       "users",
+      "working_hours",
     ]);
   });
 

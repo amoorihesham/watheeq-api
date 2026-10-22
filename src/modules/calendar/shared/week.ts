@@ -28,9 +28,14 @@ function versionOn(calendar: CalendarType, date: string): WeekShapeType | null {
   return found?.week ?? null;
 }
 
-function topSeason(periods: CalendarPeriodType[], date: string) {
+/** The holidays covering `date`, working day or not. */
+export const holidaysOn = (calendar: CalendarType, date: string): CalendarPeriodType[] =>
+  calendar.periods.filter((p) => p.kind === "holiday" && coversDate(p, date));
+
+/** The highest-ranked season covering `date` (P4.9), whether or not the date is a working day. */
+export function seasonOn(calendar: CalendarType, date: string) {
   let top: Extract<CalendarPeriodType, { kind: "season" }> | null = null;
-  for (const period of periods) {
+  for (const period of calendar.periods) {
     if (period.kind === "season" && (!top || period.rank > top.rank) && coversDate(period, date)) {
       top = period;
     }
@@ -51,7 +56,7 @@ export function dayHours(calendar: CalendarType, date: string): DayHoursType | n
   if (calendar.periods.some((p) => p.kind === "holiday" && coversDate(p, date))) {
     return null;
   }
-  const season = topSeason(calendar.periods, date);
+  const season = seasonOn(calendar, date);
   const span = season ? spanOn(season.week, date) : normal;
   return span && { start: timeToMs(span.start), end: timeToMs(span.end) };
 }

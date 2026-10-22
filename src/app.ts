@@ -10,6 +10,7 @@ import { jsonBody } from "./middleware/json-body.js";
 import { notFoundHandler } from "./middleware/not-found.js";
 import { requestLogger } from "./middleware/request-logger.js";
 import { createAuthRouter } from "./modules/auth/index.js";
+import { createCalendarRouter } from "./modules/calendar/index.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
@@ -48,6 +49,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/users", createUsersRouter({ db, config, emailSender }));
   app.use("/roles", createRolesRouter({ db, config }));
   app.use("/permissions", createPermissionsRouter({ db, config }));
+  app.use("/calendar", createCalendarRouter({ db, config }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

@@ -1,4 +1,12 @@
 export { auditLog } from "./audit-log.js";
+export {
+  calendarOverrideActions,
+  calendarPeriodKinds,
+  calendarPeriodOverrides,
+  calendarPeriods,
+  calendarRecurrences,
+  workingHours,
+} from "./calendar.js";
 export { orgUnitKinds, orgUnits } from "./org-units.js";
 export { passwordTokenPurposes, passwordTokens } from "./password-tokens.js";
 export { paymentPeriods, plans } from "./plans.js";

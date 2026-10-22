@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { TIME_PATTERN } from "./calendar.config.js";
+import { MAX_DAY_VIEW_DAYS, TIME_PATTERN } from "./calendar.config.js";
+import { daysBetweenDates } from "./shared/riyadh-time.js";
 
 const time = z.string().regex(TIME_PATTERN);
 
@@ -32,3 +33,28 @@ export const weekShapeSchema = z
     path: ["days"],
     params: { code: "no_working_day" },
   });
+
+export const calendarDateSchema = z.iso.date();
+
+// Query strings stay lenient: links and proxies add parameters the API does not control.
+export const calendarQuerySchema = z.object({
+  includeEnded: z.enum(["true", "false"]).default("false"),
+});
+
+const isDate = (value: unknown) => calendarDateSchema.safeParse(value).success;
+const wellFormed = (range: { from: string; to: string }) => isDate(range.from) && isDate(range.to);
+
+const dayViewQueryFields = z.object({ from: calendarDateSchema, to: calendarDateSchema });
+
+export const dayViewQuerySchema = dayViewQueryFields
+  .refine((range) => !wellFormed(range) || range.to >= range.from, {
+    path: ["to"],
+    params: { code: "end_before_start" },
+  })
+  .refine(
+    (range) => !wellFormed(range) || daysBetweenDates(range.from, range.to) < MAX_DAY_VIEW_DAYS,
+    {
+      path: ["to"],
+      params: { code: "range_too_long" },
+    },
+  );

@@ -62,3 +62,20 @@ export function coversDate(period: CalendarPeriodType, date: string): boolean {
   }
   return false;
 }
+
+/** The first occurrence that has not ended by `today`, after adjustments, or null. */
+export function nextOccurrence(period: CalendarPeriodType, today: string): DateRangeType | null {
+  if (period.recurrence === "once") {
+    return period.endDate >= today
+      ? { startDate: period.startDate, endDate: period.endDate }
+      : null;
+  }
+  const year = period.recurrence === "hijri" ? toHijri(today).year : Number(today.slice(0, 4));
+  for (let candidate = year - 1; candidate <= year + 2; candidate++) {
+    const occurrence = occurrenceOf(period, candidate);
+    if (occurrence && occurrence.endDate >= today) {
+      return occurrence;
+    }
+  }
+  return null;
+}
