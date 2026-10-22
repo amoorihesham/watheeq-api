@@ -2,6 +2,7 @@ import { and, count, eq, ilike, isNotNull, isNull, or, type SQL, sql } from "dri
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import { orgUnits, roles, tenantMembers, tenants, users } from "@/db/schema/index.js";
+import { withinScope } from "@/modules/tenant-access/index.js";
 import type {
   ListUsersQueryType,
   MemberChangesType,
@@ -65,25 +66,52 @@ export function createUsersRepository() {
       .leftJoin(orgUnits, eq(orgUnits.id, tenantMembers.unitId));
 
   return {
-    list(db: Executor, tenantId: string, query: ListUsersQueryType): Promise<UserRowType[]> {
+    /** The members the caller may see in the directory: their `user.view` scope (R3.15). */
+    visibleTo(tenantId: string, callerId: string): SQL {
+      return withinScope({
+        tenantId,
+        callerId,
+        permission: "user.view",
+        ownerId: tenantMembers.userId,
+        unitId: tenantMembers.unitId,
+      });
+    },
+
+    list(
+      db: Executor,
+      tenantId: string,
+      query: ListUsersQueryType,
+      visible: SQL,
+    ): Promise<UserRowType[]> {
       return selectUsers(db)
-        .where(listFilter(tenantId, query))
+        .where(and(listFilter(tenantId, query), visible))
         .orderBy(byName(users.userName), users.id)
         .limit(query.limit)
         .offset(query.offset);
     },
 
-    count(db: Executor, tenantId: string, query: ListUsersQueryType): Promise<{ total: number }[]> {
+    count(
+      db: Executor,
+      tenantId: string,
+      query: ListUsersQueryType,
+      visible: SQL,
+    ): Promise<{ total: number }[]> {
       return db
         .select({ total: count() })
         .from(tenantMembers)
         .innerJoin(users, eq(users.id, tenantMembers.userId))
-        .where(listFilter(tenantId, query));
+        .where(and(listFilter(tenantId, query), visible));
     },
 
-    findById(db: Executor, tenantId: string, userId: string): Promise<UserRowType[]> {
+    /** `visible` limits the lookup to users within the caller's scope (R3.15). */
+    findById(
+      db: Executor,
+      tenantId: string,
+      userId: string,
+      visible?: SQL,
+    ): Promise<UserRowType[]> {
       return selectUsers(db).where(
-        and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)),
+        and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId), visible),
       );
     },
 

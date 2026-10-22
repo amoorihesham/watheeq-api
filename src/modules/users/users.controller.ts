@@ -18,12 +18,12 @@ const userIdOf = (req: Request) => String(req.params.userId);
 export function createUsersController({ service }: { service: UsersServiceType }) {
   return {
     list: (async (req, res) => {
-      const page = await service.list(tenantOf(req), req.query);
+      const page = await service.list(tenantOf(req), callerOf(req).id, req.query);
       res.status(200).json(page satisfies ListUsersResponseType);
     }) satisfies RequestHandler,
 
     get: (async (req, res) => {
-      const user = await service.get(tenantOf(req), userIdOf(req));
+      const user = await service.get(tenantOf(req), callerOf(req).id, userIdOf(req));
       res.status(200).json({ user } satisfies UserResponseType);
     }) satisfies RequestHandler,
 

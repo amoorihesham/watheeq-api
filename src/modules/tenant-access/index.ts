@@ -8,6 +8,7 @@ export {
 } from "./shared/grants.js";
 export { requireTenantPermission } from "./shared/middlewares.js";
 export { grantedPermissions, systemRoleGrants, tenantPermissionsOf } from "./shared/permissions.js";
+export { withinScope } from "./shared/scopes.js";
 export {
   PERMISSION_CATALOG,
   PERMISSION_SCOPES,

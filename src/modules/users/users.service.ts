@@ -1,3 +1,4 @@
+import type { SQL } from "drizzle-orm";
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor, Tx } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
@@ -109,8 +110,8 @@ export function createUsersService({
     ]);
   }
 
-  async function loadUser(executor: Executor, tenantId: string, userId: string) {
-    const [row] = await repo.findById(executor, tenantId, userId);
+  async function loadUser(executor: Executor, tenantId: string, userId: string, visible?: SQL) {
+    const [row] = await repo.findById(executor, tenantId, userId, visible);
     if (!row) {
       throw new AppError("NOT_FOUND");
     }
@@ -118,26 +119,30 @@ export function createUsersService({
   }
 
   /** Locks the user's membership, then reads them: every change to one user runs after the previous one. */
-  async function lockUser(tx: Tx, tenantId: string, userId: string) {
+  async function lockUser(tx: Tx, tenantId: string, userId: string, visible?: SQL) {
     const [locked] = await repo.lockMember(tx, tenantId, userId);
     if (!locked) {
       throw new AppError("NOT_FOUND");
     }
-    return loadUser(tx, tenantId, userId);
+    return loadUser(tx, tenantId, userId, visible);
   }
 
   return {
-    async list(tenantId: string, input: unknown): Promise<ListUsersResponseType> {
+    async list(tenantId: string, callerId: string, input: unknown): Promise<ListUsersResponseType> {
       const query = validate(listUsersQuerySchema, input);
+      const visible = repo.visibleTo(tenantId, callerId);
       const [rows, [counted]] = await Promise.all([
-        repo.list(db, tenantId, query),
-        repo.count(db, tenantId, query),
+        repo.list(db, tenantId, query, visible),
+        repo.count(db, tenantId, query, visible),
       ]);
       return { users: rows.map(toUser), total: counted?.total ?? 0 };
     },
 
-    async get(tenantId: string, userId: string): Promise<UserType> {
-      return toUser(await loadUser(db, tenantId, existingUserId(userId)));
+    /** A user outside the caller's scope is 404, like one of another tenant (R3.15). */
+    async get(tenantId: string, callerId: string, userId: string): Promise<UserType> {
+      return toUser(
+        await loadUser(db, tenantId, existingUserId(userId), repo.visibleTo(tenantId, callerId)),
+      );
     },
 
     /**
@@ -282,7 +287,8 @@ export function createUsersService({
       const id = existingUserId(userId);
       const { roleId } = validate(assignRoleRequestSchema, input);
       return withTx(db, async (tx) => {
-        const before = await lockUser(tx, tenantId, id);
+        // The caller's directory scope bounds whom they can reach (Phase 3 spec, step 3.4).
+        const before = await lockUser(tx, tenantId, id, repo.visibleTo(tenantId, caller.id));
         if (id === caller.id) {
           throw new AppError("SELF_CHANGE_FORBIDDEN");
         }
