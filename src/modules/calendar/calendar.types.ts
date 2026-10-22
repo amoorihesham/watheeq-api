@@ -96,6 +96,10 @@ export interface CalendarResponseType {
   periods: PeriodViewType[];
 }
 
+export interface PeriodResponseType {
+  period: PeriodViewType;
+}
+
 export interface HoursVersionResponseType {
   version: HoursVersionType;
 }

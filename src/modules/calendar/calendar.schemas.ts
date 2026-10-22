@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { MAX_DAY_VIEW_DAYS, TIME_PATTERN } from "./calendar.config.js";
+import { NO_FIELDS } from "@/http/validate.js";
+import {
+  MAX_DAY_VIEW_DAYS,
+  MAX_PERIOD_NAME_LENGTH,
+  MAX_SEASON_RANK,
+  PERIOD_KINDS,
+  PERIOD_RECURRENCES,
+  TIME_PATTERN,
+} from "./calendar.config.js";
 import { daysBetweenDates } from "./shared/riyadh-time.js";
 
 const time = z.string().regex(TIME_PATTERN);
@@ -58,3 +66,50 @@ export const dayViewQuerySchema = dayViewQueryFields
       params: { code: "range_too_long" },
     },
   );
+
+const monthDay = z.strictObject({
+  month: z.number().int().min(1).max(12),
+  day: z.number().int().min(1).max(31),
+});
+
+// Which fields a kind and a recurrence need is checked on the whole definition by the service, so a PATCH is
+// judged on the period it produces (R4.4, R4.5).
+const periodFields = {
+  name: z.string().trim().min(1).max(MAX_PERIOD_NAME_LENGTH),
+  startDate: calendarDateSchema,
+  endDate: calendarDateSchema,
+  start: monthDay,
+  end: monthDay,
+  week: weekShapeSchema,
+  rank: z.number().int().min(0).max(MAX_SEASON_RANK),
+};
+
+export const createPeriodRequestSchema = z
+  .strictObject(periodFields)
+  .partial()
+  .extend({
+    kind: z.enum(PERIOD_KINDS),
+    recurrence: z.enum(PERIOD_RECURRENCES),
+    name: periodFields.name,
+  });
+
+// `kind` and `recurrence` never change: a different kind of period is a new period.
+export const updatePeriodRequestSchema = z
+  .strictObject(periodFields)
+  .partial()
+  .refine((body) => Object.keys(body).length > 0, NO_FIELDS);
+
+export const periodOverrideRequestSchema = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.literal("skip") }),
+  z.strictObject({
+    action: z.literal("move"),
+    startDate: calendarDateSchema,
+    endDate: calendarDateSchema,
+  }),
+]);
+
+export const periodIdSchema = z.uuid();
+
+export const overrideYearSchema = z.strictObject({
+  year: z.coerce.number().int().min(1).max(9999),
+});

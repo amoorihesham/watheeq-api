@@ -27,5 +27,26 @@ export function createCalendarRouter({ db, config }: CalendarRouterDepsType): Ro
     requireTenantPermission("calendar.manage"),
     controller.deleteHours,
   );
+  router.post("/periods", requireTenantPermission("calendar.manage"), controller.createPeriod);
+  router.patch(
+    "/periods/:periodId",
+    requireTenantPermission("calendar.manage"),
+    controller.updatePeriod,
+  );
+  router.delete(
+    "/periods/:periodId",
+    requireTenantPermission("calendar.manage"),
+    controller.deletePeriod,
+  );
+  router.put(
+    "/periods/:periodId/overrides/:year",
+    requireTenantPermission("calendar.manage"),
+    controller.setOverride,
+  );
+  router.delete(
+    "/periods/:periodId/overrides/:year",
+    requireTenantPermission("calendar.manage"),
+    controller.deleteOverride,
+  );
   return router;
 }

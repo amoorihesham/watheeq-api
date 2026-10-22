@@ -1,8 +1,11 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import { calendarPeriodOverrides, calendarPeriods, workingHours } from "@/db/schema/index.js";
 import { riyadhToday } from "@/modules/subscriptions/index.js";
 import type { HoursVersionType, WeekShapeType } from "./calendar.types.js";
+
+type NewPeriodRowType = typeof calendarPeriods.$inferInsert;
+type NewOverrideRowType = typeof calendarPeriodOverrides.$inferInsert;
 
 const hoursColumns = { effectiveFrom: workingHours.effectiveFrom, week: workingHours.week };
 
@@ -64,6 +67,79 @@ export function createCalendarRepository() {
         .from(calendarPeriods)
         .where(eq(calendarPeriods.tenantId, tenantId))
         .orderBy(asc(calendarPeriods.createdAt), asc(calendarPeriods.id));
+    },
+
+    findPeriod(db: Executor, tenantId: string, periodId: string) {
+      return db
+        .select()
+        .from(calendarPeriods)
+        .where(and(eq(calendarPeriods.tenantId, tenantId), eq(calendarPeriods.id, periodId)));
+    },
+
+    insertPeriod(db: Executor, values: NewPeriodRowType) {
+      return db.insert(calendarPeriods).values(values).returning();
+    },
+
+    updatePeriod(
+      db: Executor,
+      tenantId: string,
+      periodId: string,
+      values: Partial<NewPeriodRowType>,
+    ) {
+      return db
+        .update(calendarPeriods)
+        .set({ ...values, updatedAt: sql`now()` })
+        .where(and(eq(calendarPeriods.tenantId, tenantId), eq(calendarPeriods.id, periodId)))
+        .returning();
+    },
+
+    deletePeriod(db: Executor, tenantId: string, periodId: string) {
+      return db
+        .delete(calendarPeriods)
+        .where(and(eq(calendarPeriods.tenantId, tenantId), eq(calendarPeriods.id, periodId)));
+    },
+
+    upsertOverride(db: Executor, values: NewOverrideRowType) {
+      return db
+        .insert(calendarPeriodOverrides)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [calendarPeriodOverrides.periodId, calendarPeriodOverrides.year],
+          set: { action: values.action, startDate: values.startDate, endDate: values.endDate },
+        });
+    },
+
+    deleteOverride(db: Executor, tenantId: string, periodId: string, year: number) {
+      return db
+        .delete(calendarPeriodOverrides)
+        .where(
+          and(
+            eq(calendarPeriodOverrides.tenantId, tenantId),
+            eq(calendarPeriodOverrides.periodId, periodId),
+            eq(calendarPeriodOverrides.year, year),
+          ),
+        );
+    },
+
+    /** Moves adjustments to a replacement version (P4.8), or deletes them when `toPeriodId` is null. */
+    async moveOverrides(
+      db: Executor,
+      tenantId: string,
+      fromPeriodId: string,
+      years: number[],
+      toPeriodId: string | null,
+    ) {
+      if (years.length === 0) {
+        return;
+      }
+      const ofYears = and(
+        eq(calendarPeriodOverrides.tenantId, tenantId),
+        eq(calendarPeriodOverrides.periodId, fromPeriodId),
+        inArray(calendarPeriodOverrides.year, years),
+      );
+      await (toPeriodId === null
+        ? db.delete(calendarPeriodOverrides).where(ofYears)
+        : db.update(calendarPeriodOverrides).set({ periodId: toPeriodId }).where(ofYears));
     },
 
     listOverrides(db: Executor, tenantId: string) {

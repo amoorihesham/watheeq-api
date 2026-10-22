@@ -35,3 +35,12 @@ export const DEFAULT_WEEK = {
 export const MAX_DAYS_AHEAD = 1826;
 
 export const MAX_DAY_VIEW_DAYS = 366;
+
+export const PERIOD_KINDS = ["holiday", "season"] as const;
+export const PERIOD_RECURRENCES = ["once", "gregorian", "hijri"] as const;
+
+export const MAX_PERIOD_NAME_LENGTH = 100;
+export const MAX_SEASON_RANK = 100;
+
+/** The longest occurrence of each kind (P4.12). */
+export const MAX_PERIOD_DAYS = { holiday: 30, season: 184 } as const;
