@@ -39,7 +39,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     res.err = err instanceof Error ? err : new Error(String(err));
   }
   const body: ErrorBody = { error: { code: resolved.code, requestId: String(req.id) } };
-  if (resolved.code === "VALIDATION_FAILED" && resolved.details) {
+  if (resolved.details) {
     body.error.details = resolved.details;
   }
   res.status(resolved.status).json(body);

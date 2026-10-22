@@ -13,6 +13,7 @@ import { createAuthRouter } from "./modules/auth/index.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
+import { createPermissionsRouter, createRolesRouter } from "./modules/roles/index.js";
 import { createSubscriptionsRouter } from "./modules/subscriptions/index.js";
 import { createUsersRouter } from "./modules/users/index.js";
 
@@ -45,6 +46,8 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/subscription", createSubscriptionsRouter({ db, config }));
   app.use("/org-units", createOrgRouter({ db, config }));
   app.use("/users", createUsersRouter({ db, config, emailSender }));
+  app.use("/roles", createRolesRouter({ db, config }));
+  app.use("/permissions", createPermissionsRouter({ db, config }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

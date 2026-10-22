@@ -11,4 +11,7 @@ export interface GrantType {
   scope: PermissionScopeType;
 }
 
+/** What one role holds: each permission it grants, at its scope. */
+export type GrantMapType = ReadonlyMap<TenantPermissionType, PermissionScopeType>;
+
 export type TenantPermissionsOfType = (user: AuthUserType) => ReadonlySet<string>;

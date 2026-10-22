@@ -7,6 +7,7 @@ import { authenticate } from "../src/modules/auth/index.js";
 import { signAccessToken } from "../src/modules/auth/shared/tokens.js";
 import {
   grantedPermissions,
+  missingGrants,
   PERMISSION_CATALOG,
   requireTenantPermission,
   systemRoleGrants,
@@ -193,5 +194,36 @@ describe("the permission catalog (R3.1)", () => {
   it("gives an operator none", () => {
     const operator = { id: "x", email: "x@y.z", userName: "X", role: "operator" as const };
     expect(tenantPermissionsOf({ ...operator, tenant: null }).size).toBe(0);
+  });
+});
+
+describe("missingGrants (D2, P3.3)", () => {
+  const held = new Map([
+    ["org.view", "organization"],
+    ["user.view", "department"],
+  ] as const);
+
+  it("covers the same permission at the same or a narrower scope", () => {
+    expect(
+      missingGrants(held, [
+        { key: "org.view", scope: "organization" },
+        { key: "user.view", scope: "department" },
+        { key: "user.view", scope: "own" },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("names each grant not covered once, at the widest scope wanted", () => {
+    expect(
+      missingGrants(held, [
+        { key: "user.view", scope: "section" },
+        { key: "user.view", scope: "organization" },
+        { key: "user.create", scope: "organization" },
+        { key: "user.create", scope: "organization" },
+      ]),
+    ).toEqual([
+      { key: "user.view", scope: "organization" },
+      { key: "user.create", scope: "organization" },
+    ]);
   });
 });
