@@ -105,7 +105,9 @@ beforeAll(async () => {
         [alNoor, ids[person], roleAt.organization, unit ? units[unit] : null],
       );
     }
-    tokens[person] = (await login(app, `${person.toLowerCase()}@scope-alnoor.test`, PASSWORD)).access;
+    tokens[person] = (
+      await login(app, `${person.toLowerCase()}@scope-alnoor.test`, PASSWORD)
+    ).access;
   }
 
   const other = await seedSubscribedTenant(pool, "scope-al-rashid", [
