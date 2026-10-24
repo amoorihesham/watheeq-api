@@ -11,13 +11,13 @@ Each phase follows this lifecycle:
 1. **Draft:** when I ask, create `docs/specs/phase-<N>-<name>.md` from `templates/SPEC_TEMPLATE.md`. Status: `Draft`.
 2. **Review:** we discuss it. Resolve open questions, record decisions in the spec, and revise it. Status stays `Draft` (or `In Review`).
 3. **Approved:** I change the status to `Approved`. Only now may implementation start.
-4. **Implement:** one step at a time, in the order the spec defines. Stop after each step, show the verification results against that step's acceptance criteria, and wait for my go-ahead before the next step.
-5. **Change during implementation:** if implementation shows the spec is wrong or incomplete, stop, propose the spec change, and continue only after I approve it. Do not silently deviate from the spec.
-6. **Done:** when all steps pass, set the status to `Implemented`, promote decisions to the relevant decision logs, and update `ROADMAP_AND_STATUS.md`.
+4. **Implement:** the whole spec is implemented by two sub-agents, each in its own git worktree, with the spec's steps split between them along their dependencies and built in the order the spec defines. There is no review gate between steps. After the whole spec is implemented, you review everything once (every step's acceptance criteria, the full test suite, mutation checks for locks and races, and an end-to-end check against a running server) and report to me with the verification results per step.
+5. **Change during implementation:** if implementation shows the spec is wrong or incomplete, do not silently deviate. Make the smallest reasonable choice and list it as "proposed for owner approval" in the final report; if the gap blocks a correct implementation, stop and ask me before continuing.
+6. **Done:** after I approve the report and its proposals, fold them into the spec, set the status to `Implemented`, promote decisions to the relevant decision logs, and update `ROADMAP_AND_STATUS.md`.
 
 Follow the engineering principles below on every task. In particular:
 
-- **Approval gates.** Do not start a phase, a spec, or a step without my explicit go-ahead.
+- **Approval gates.** Do not start a phase, a spec, or an implementation without my explicit go-ahead.
 - **Requirements → design → implementation**, in that order.
 - **Explain with concrete examples** from this project (requests, owners, tenants, roles), not abstract definitions.
 - **A step is done only when its acceptance criteria are verified**, not when code is written.
