@@ -23,7 +23,8 @@
 - **Known test flake:** about one full test run in three loses a Vitest worker to an external SIGKILL (not memory, not Vitest itself; seen on the Phase 3 step 3.1 commit too). The sender is not yet identified; tracing it needs `strace`.
 - **Phase 4 (working calendar) implemented** (`docs/specs/phase-4-working-calendar.md`): per-tenant working hours with weekday spans, seasonal hours with explicit ranks, holidays one-off or recurring on Gregorian or Umm al-Qura dates with one-year adjustments, versioned rules whose past never changes, a day view, and the working-time functions Phases 6 and 7 use (`loadCalendar`, `addWorkingDays`, `workingDaysBetween`).
   Its main decisions are D24-D27 in `MVP_SCOPE.md` and T30-T33 in `TECHNICAL_DECISIONS.md`. Migrations `0006` and `0007` add the calendar tables and give existing tenants the default hours.
-- **Next action:** draft the Phase 5 spec (legal configuration) when the owner asks; its dependencies, Phases 3 and 4, are implemented.
+- **Phase 5 (legal configuration) spec drafted** (`docs/specs/phase-5-legal-configuration.md`): positions bound to org units, versioned linear workflows, services with allowed workflows, priorities, and escalation settings; Q1-Q17 resolved in the pre-spec discussion.
+- **Next action:** Phase 5 spec approved 2026-10-24; step 5.1 (positions and the assignee resolver) in implementation.
 
 ---
 
@@ -39,7 +40,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 2   | Org structure & users           | Department/section tree, managers, membership                                               | 1          | Implemented                             |
 | 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                                   | 2          | Implemented                             |
 | 4   | Working calendar                | Working hours, seasons, holidays, working-day deadline calculation                          | 1          | Implemented                             |
-| 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | Not started                             |
+| 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | In Implementation                       |
 | 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure                          | 5          | Not started                             |
 | 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | Not started                             |
 
