@@ -72,8 +72,8 @@ The two sides of a request are the **requester** (who submitted it) and the **ha
 
 | ID    | Requirement                                                                                                                                                                                                                                                                                                                                                             | Example                                                                                                                                                                                                       |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R5.1  | A position has a name and belongs to one department or section. Names are unique within the tenant, ignoring case. A position's unit never changes.                                                                                                                                                                                                                     | _Huda creates "Contracts Supervisor" in Contracts. A second "contracts supervisor" anywhere in Al-Noor: 409 `POSITION_NAME_TAKEN`._                                                                           |
-| R5.2  | A position's holders are active members of its unit. A person holds at most one position. Being a unit manager is not a position, so a manager may also hold one.                                                                                                                                                                                                       | _Huda makes Faisal (manager of Contracts) the Contracts Supervisor. Making Nora (Contracts) the Procurement Reviewer: 400 `not_unit_member`. Making Faisal the Legal Intake too: 400 `holds_other_position`._ |
+| R5.1  | A position has a name and belongs to one department or section. Names are unique among the tenant's active positions, ignoring case. A position's unit never changes.                                                                                                                                                                                                                     | _Huda creates "Contracts Supervisor" in Contracts. A second "contracts supervisor" anywhere in Al-Noor: 409 `POSITION_NAME_TAKEN`._                                                                           |
+| R5.2  | A position's holders are active members of its unit. A person holds at most one position. Being a unit manager is not a position, so a manager may also hold one.                                                                                                                                                                                                       | _Huda makes Faisal (manager of Contracts) the Contracts Supervisor. Making Nora (Contracts) the Procurement Reviewer: 400 `not_unit_member`. Huda adds a second position, "Contracts Reviewer", in Contracts; making Faisal its holder too: 400 `holds_other_position`._ |
 | R5.3  | A holder who moves to another unit or is deactivated stops holding the position, in the same transaction.                                                                                                                                                                                                                                                               | _Sara moves Khalid from Procurement to Finance: Procurement Reviewer has no holder._                                                                                                                          |
 | R5.4  | The built-in positions are Handler, Requester, Handler's unit managers, Handler's department managers, Requester's unit managers, and Requester's department managers. A person's **unit** is the section or department they sit in; their **department** is that unit if it is a department, or its parent.                                                            | _For a request from Khalid (Procurement), Requester's unit managers is Reem; Requester's department managers is Majed._                                                                                       |
 | R5.5  | The resolver turns a position into the active people who may act: a tenant position's holders, the built-in person, or the managers of the built-in unit.                                                                                                                                                                                                               | _"Contracts Supervisor" resolves to Faisal._                                                                                                                                                                  |
@@ -105,17 +105,19 @@ The two sides of a request are the **requester** (who submitted it) and the **ha
 | `id`                       | `uuid` PK     |                                                                                                                   |
 | `tenant_id`                | `uuid`        | FK to `tenants`, not null.                                                                                        |
 | `unit_id`                  | `uuid`        | Composite FK `(tenant_id, unit_id)` → `org_units`. Null only for a retired position whose unit was deleted (4.3). |
-| `name`                     | `text`        | Trimmed, 1-100 characters (check); unique `(tenant_id, lower(name))`.                                             |
+| `name`                     | `text`        | Trimmed, 1-100 characters (check); unique `(tenant_id, lower(name))` among active positions.                                            |
 | `retired_at`               | `timestamptz` | Null while active.                                                                                                |
 | `created_at`, `updated_at` | `timestamptz` |                                                                                                                   |
 
 Check: `unit_id is not null or retired_at is not null`.
+Name uniqueness is a partial index `where retired_at is null`, so a retired position's name can be reused, and restoring it then meets `POSITION_NAME_TAKEN`; the same holds for workflows, services, and priorities.
 Unique `(tenant_id, id)` and `(tenant_id, unit_id, id)` are targets of the foreign keys below.
 
 **`tenant_members.position_id`** (new column, nullable): the position the member holds.
 Composite FK `(tenant_id, unit_id, position_id)` → `positions (tenant_id, unit_id, id)`.
 Because the key includes `unit_id`, the database refuses a holder outside the position's unit, and refuses a move to another unit that forgets to clear the position.
 One column means one position per person (Q8) with no extra constraint.
+A composite foreign key is not enforced when one of its columns is null, so a check `position_id is null or unit_id is not null` keeps a member with no unit from holding a position.
 
 Why a column on the membership and not a holders table: it is the same reasoning as `is_manager` (T21): the rule "a holder is a member of the unit" becomes a foreign key, and a move must clear it.
 
@@ -135,7 +137,7 @@ The built-ins are an enum, not seeded position rows: they have no unit, no holde
 
 #### Workflows and versions
 
-**`workflows`**: `id`, `tenant_id`, `name` (unique `(tenant_id, lower(name))`), `current_version_id`, `retired_at`, `created_at`, `updated_at`.
+**`workflows`**: `id`, `tenant_id`, `name` (unique `(tenant_id, lower(name))` among active rows), `current_version_id`, `retired_at`, `created_at`, `updated_at`.
 
 **`workflow_versions`** (never updated): `id`, `tenant_id`, `workflow_id` (composite FK), `number` (1, 2, 3, ...; unique `(workflow_id, number)`), `created_by`, `created_at`.
 
@@ -164,14 +166,14 @@ Why rows, not a JSON list (Q3): request stages and stage targets are referenced 
 
 #### Services
 
-**`services`**: `id`, `tenant_id`, `name` (unique `(tenant_id, lower(name))`), `description` (nullable, up to 2,000 characters), `retired_at`, `created_at`, `updated_at`.
+**`services`**: `id`, `tenant_id`, `name` (unique `(tenant_id, lower(name))` among active rows), `description` (nullable, up to 2,000 characters), `retired_at`, `created_at`, `updated_at`.
 
 **`service_workflows`**: `tenant_id`, `service_id`, `workflow_id` (composite FKs), `is_default`; primary key `(service_id, workflow_id)`; unique `(service_id) where is_default`.
 "At least one, exactly one default" is checked by the service, because a constraint cannot count rows across a table.
 
 #### Priorities
 
-**`priorities`**: `id`, `tenant_id`, `name` (unique `(tenant_id, lower(name))`), `days` (`smallint`, 1-365, check), `sort_order` (`smallint`, null while retired), `retired_at`, `created_at`, `updated_at`.
+**`priorities`**: `id`, `tenant_id`, `name` (unique `(tenant_id, lower(name))` among active rows), `days` (`smallint`, 1-365, check), `sort_order` (`smallint`, null while retired), `retired_at`, `created_at`, `updated_at`.
 Unique `(tenant_id, sort_order)`, deferrable, so a reorder can swap values in one statement.
 
 #### Escalation settings
@@ -250,6 +252,9 @@ Shapes:
 - **Escalation:** `{r0: {enabled, days, recipients:[target]}, r1: {enabled, percent, recipients}, r2: {enabled, recipients}}`, replaced as a whole.
 
 Lists are ordered by name (T20), except priorities (display order) and stages (ordinal).
+`PUT /positions/:id/holders` replaces the holders: a user listed twice counts once, an empty list vacates the position, and each refused entry is reported at `userIds.<index>`.
+The holder and unit foreign keys map to `not_unit_member` (path `userIds`) and `unknown_unit` (path `unitId`) (T22).
+`resolveAssignees` and `nextLevel` return `{level, userIds}`, so a caller that climbs does not resolve again; the context's `handlerId` may be null, as before acceptance (R0).
 `PUT /workflows/:id` with the same stages as the current version creates no version; with the same name too, it returns 200 with no audit entry.
 `PUT /priorities/order` must list exactly the active priorities (`order_mismatch` otherwise); retiring removes a priority from the order, restoring appends it.
 
@@ -315,6 +320,7 @@ Services take `FOR SHARE` on the workflows they list, as workflows do on positio
 Retiring a position also sets `position_id` to null for its holders.
 
 Deleting a unit (Phase 2) is refused with the existing 409 `UNIT_NOT_EMPTY` while the unit has an active position; its retired positions get `unit_id` null in the same transaction and can no longer be restored (`POSITION_UNIT_GONE`).
+Restoring a position takes a key-share lock on its unit before locking the position, the same order a unit delete takes them, so a restore and a delete running together cannot leave an active position pointing at a deleted unit.
 
 #### Moving or deactivating a member (changed, Phase 2)
 
@@ -471,3 +477,4 @@ Promote at close-out: P5.1-P5.3, P5.6, P5.8, P5.10-P5.12 to `MVP_SCOPE.md` (with
 | 2026-10-24 | Initial draft, with Q1-Q17 resolved in the pre-spec discussion.                                                                                                                                                                      | Phase 5 spec requested. |
 | 2026-10-24 | Resolved Q18 (climbing ends after department managers, then the stage holds), Q19 (a required per-stage "exclude the parties"), and Q20 (position names unique in the tenant), each with the recommended option (P5.12, P5.6, P5.3). | Owner review.           |
 | 2026-10-24 | Spec approved; implementation started. | Owner approval. |
+| 2026-10-24 | Step 5.1 implemented and verified: migration `0008_positions`, `position.view` and `position.manage`, the `/positions` endpoints, holders, clearing on move, deactivation, and retire, the unit-delete rule, `resolveAssignees` and `nextLevel`, audit. Approved by the owner: name uniqueness among active rows only (also for workflows, services, priorities); the `tenant_members_position_has_unit` check; the R5.2 example corrected; the restore lock order; holder-list, error-mapping, and resolver return details (4.1-4.3). | Acceptance criteria met; 75 new tests, full suite 609 passing on Node 24; mutation checks: dropping either exclusion, the unit in the holder key, the clear on move, or the restore lock each fail the matching tests. |
