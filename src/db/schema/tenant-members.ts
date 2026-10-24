@@ -11,6 +11,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { orgUnits } from "./org-units.js";
+import { positions } from "./positions.js";
 import { roles } from "./roles.js";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
@@ -29,6 +30,8 @@ export const tenantMembers = pgTable(
     unitId: uuid("unit_id"),
     // Managers are members of the unit they manage, so the flag lives on the membership (Phase 2 spec, P2.3).
     isManager: boolean("is_manager").notNull().default(false),
+    // The position the member holds; one column means one position per person (Phase 5 spec, R5.2).
+    positionId: uuid("position_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -49,6 +52,18 @@ export const tenantMembers = pgTable(
       foreignColumns: [roles.tenantId, roles.id],
     }),
     index("tenant_members_role_idx").on(t.tenantId, t.roleId),
+    // Includes unit_id, so the database refuses a holder outside the position's unit, and a move that forgets
+    // to clear the position (R5.2, R5.3).
+    foreignKey({
+      name: "tenant_members_position_fk",
+      columns: [t.tenantId, t.unitId, t.positionId],
+      foreignColumns: [positions.tenantId, positions.unitId, positions.id],
+    }),
+    // A foreign key with a null column is not checked, so a holder with no unit would escape the key above.
+    check(
+      "tenant_members_position_has_unit",
+      sql`${t.positionId} is null or ${t.unitId} is not null`,
+    ),
     check("tenant_members_manager_has_unit", sql`not ${t.isManager} or ${t.unitId} is not null`),
   ],
 );

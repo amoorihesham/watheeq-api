@@ -37,6 +37,7 @@ describe("database baseline", () => {
       "org_units",
       "password_tokens",
       "plans",
+      "positions",
       "refresh_tokens",
       "role_permissions",
       "roles",

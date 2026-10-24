@@ -59,6 +59,7 @@ describe("request schemas", () => {
     "accessTokenPayloadSchema",
     "listUsersQuerySchema",
     "calendarQuerySchema",
+    "listPositionsQuerySchema",
     "dayViewQueryFields",
   ];
 

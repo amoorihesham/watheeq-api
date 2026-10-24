@@ -10,6 +10,7 @@ export {
 export { orgUnitKinds, orgUnits } from "./org-units.js";
 export { passwordTokenPurposes, passwordTokens } from "./password-tokens.js";
 export { paymentPeriods, plans } from "./plans.js";
+export { assigneeBuiltins, positions } from "./positions.js";
 export { refreshTokens } from "./refresh-tokens.js";
 export { permissionScopes, rolePermissions, roles } from "./roles.js";
 export { subscriptions } from "./subscriptions.js";

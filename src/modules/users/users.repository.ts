@@ -22,6 +22,7 @@ const userColumns = {
   roleIsSystem: roles.isSystem,
   unitId: tenantMembers.unitId,
   isManager: tenantMembers.isManager,
+  positionId: tenantMembers.positionId,
   unitName: orgUnits.name,
   unitKind: orgUnits.kind,
   isOwner: sql<boolean>`${tenants.ownerId} = ${users.id}`,

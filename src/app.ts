@@ -14,6 +14,7 @@ import { createCalendarRouter } from "./modules/calendar/index.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
+import { createPositionsRouter } from "./modules/positions/index.js";
 import { createPermissionsRouter, createRolesRouter } from "./modules/roles/index.js";
 import { createSubscriptionsRouter } from "./modules/subscriptions/index.js";
 import { createUsersRouter } from "./modules/users/index.js";
@@ -50,6 +51,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/roles", createRolesRouter({ db, config }));
   app.use("/permissions", createPermissionsRouter({ db, config }));
   app.use("/calendar", createCalendarRouter({ db, config }));
+  app.use("/positions", createPositionsRouter({ db, config }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

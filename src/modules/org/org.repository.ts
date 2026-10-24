@@ -1,7 +1,7 @@
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
-import { orgUnits, tenantMembers, users } from "@/db/schema/index.js";
+import { orgUnits, positions, tenantMembers, users } from "@/db/schema/index.js";
 import type { NewOrgUnitType, OrgUnitType, UnitChangesType } from "./org.types.js";
 
 const unitColumns = {
@@ -85,6 +85,37 @@ export function createOrgRepository() {
         .select({ total: count() })
         .from(tenantMembers)
         .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.unitId, unitId)));
+    },
+
+    countActivePositions(
+      db: Executor,
+      tenantId: string,
+      unitId: string,
+    ): Promise<{ total: number }[]> {
+      return db
+        .select({ total: count() })
+        .from(positions)
+        .where(
+          and(
+            eq(positions.tenantId, tenantId),
+            eq(positions.unitId, unitId),
+            isNull(positions.retiredAt),
+          ),
+        );
+    },
+
+    /** Retired positions outlive their unit with no unit, and can no longer be restored (Phase 5 spec, 4.3). */
+    detachRetiredPositions(db: Executor, tenantId: string, unitId: string) {
+      return db
+        .update(positions)
+        .set({ unitId: null })
+        .where(
+          and(
+            eq(positions.tenantId, tenantId),
+            eq(positions.unitId, unitId),
+            isNotNull(positions.retiredAt),
+          ),
+        );
     },
 
     update(

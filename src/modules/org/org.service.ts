@@ -139,7 +139,7 @@ export function createOrgService({ db, repo }: { db: Db; repo: OrgRepositoryType
       });
     },
 
-    /** Deletes a unit with no sections and no members (R2.5). The lock makes the check hold under concurrency. */
+    /** Deletes a unit with no sections, no members, and no active positions (R2.5, R5.15). The lock makes the check hold under concurrency. */
     delete(tenantId: string, unitId: string, context: AuditContextType): Promise<void> {
       const id = existingUnitId(unitId);
       return withTx(db, async (tx) => {
@@ -149,9 +149,15 @@ export function createOrgService({ db, repo }: { db: Db; repo: OrgRepositoryType
         }
         const [sections] = await repo.countSections(tx, tenantId, id);
         const [members] = await repo.countMembers(tx, tenantId, id);
-        if ((sections?.total ?? 0) > 0 || (members?.total ?? 0) > 0) {
+        const [activePositions] = await repo.countActivePositions(tx, tenantId, id);
+        if (
+          (sections?.total ?? 0) > 0 ||
+          (members?.total ?? 0) > 0 ||
+          (activePositions?.total ?? 0) > 0
+        ) {
           throw new AppError("UNIT_NOT_EMPTY");
         }
+        await repo.detachRetiredPositions(tx, tenantId, id);
         await repo.delete(tx, tenantId, id);
         await writeAuditEntry(tx, {
           tenantId,

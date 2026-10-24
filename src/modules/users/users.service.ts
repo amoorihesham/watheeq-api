@@ -255,6 +255,11 @@ export function createUsersService({
         const memberChanges: MemberChangesType = Object.fromEntries(
           changed.filter((key) => key !== "userName").map((key) => [key, next[key]]),
         );
+        // A holder must sit in the position's unit, so a move ends the position (R5.3).
+        const losesPosition = changed.includes("unitId") && before.positionId !== null;
+        if (losesPosition) {
+          memberChanges.positionId = null;
+        }
         if (Object.keys(memberChanges).length > 0) {
           await repo.updateMember(tx, tenantId, id, memberChanges);
         }
@@ -265,8 +270,14 @@ export function createUsersService({
           resourceType: "user",
           resourceId: id,
           details: {
-            before: Object.fromEntries(changed.map((key) => [key, before[key]])),
-            after: Object.fromEntries(changed.map((key) => [key, next[key]])),
+            before: {
+              ...Object.fromEntries(changed.map((key) => [key, before[key]])),
+              ...(losesPosition ? { positionId: before.positionId } : {}),
+            },
+            after: {
+              ...Object.fromEntries(changed.map((key) => [key, next[key]])),
+              ...(losesPosition ? { positionId: null } : {}),
+            },
           },
         });
         return toUser(await loadUser(tx, tenantId, id));
@@ -318,7 +329,7 @@ export function createUsersService({
       });
     },
 
-    /** Frees the seat and ends the manager role, every link, and every session (R2.12). Repeating it is a no-op. */
+    /** Frees the seat and ends the manager role, the position held (R5.3), every link, and every session (R2.12). Repeating it is a no-op. */
     deactivate(
       tenantId: string,
       userId: string,
@@ -340,8 +351,13 @@ export function createUsersService({
           return toUser(before);
         }
         await repo.updateUser(tx, id, { isActive: false });
-        if (before.isManager) {
-          await repo.updateMember(tx, tenantId, id, { isManager: false });
+        const ended: MemberChangesType = {
+          ...(before.isManager ? { isManager: false } : {}),
+          ...(before.positionId ? { positionId: null } : {}),
+        };
+        const hasEnded = Object.keys(ended).length > 0;
+        if (hasEnded) {
+          await repo.updateMember(tx, tenantId, id, ended);
         }
         await endUserAccess(tx, id);
         await writeAuditEntry(tx, {
@@ -350,8 +366,16 @@ export function createUsersService({
           action: "user.deactivated",
           resourceType: "user",
           resourceId: id,
-          ...(before.isManager
-            ? { details: { before: { isManager: true }, after: { isManager: false } } }
+          ...(hasEnded
+            ? {
+                details: {
+                  before: {
+                    ...(before.isManager ? { isManager: true } : {}),
+                    ...(before.positionId ? { positionId: before.positionId } : {}),
+                  },
+                  after: ended,
+                },
+              }
             : {}),
         });
         return toUser(await loadUser(tx, tenantId, id));

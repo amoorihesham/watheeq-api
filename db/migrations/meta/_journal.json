@@ -57,6 +57,13 @@
       "when": 1792683350324,
       "tag": "0007_calendar_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792860253783,
+      "tag": "0008_positions",
+      "breakpoints": true
     }
   ]
 }

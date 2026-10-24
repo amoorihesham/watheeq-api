@@ -26,6 +26,10 @@ const STATUS_BY_CODE = {
   ROLE_PROTECTED: 409,
   CALENDAR_DATE_LOCKED: 409,
   CALENDAR_PERIOD_ENDED: 409,
+  POSITION_NAME_TAKEN: 409,
+  POSITION_IN_USE: 409,
+  POSITION_UNIT_GONE: 409,
+  RESOURCE_RETIRED: 409,
   PAYLOAD_TOO_LARGE: 413,
   UNSUPPORTED_MEDIA_TYPE: 415,
   INTERNAL: 500,
@@ -65,6 +69,7 @@ const CODE_BY_UNIQUE_CONSTRAINT: Record<string, ErrorCode> = {
   org_units_department_name_unique: "UNIT_NAME_TAKEN",
   org_units_section_name_unique: "UNIT_NAME_TAKEN",
   roles_name_unique: "ROLE_NAME_TAKEN",
+  positions_name_unique: "POSITION_NAME_TAKEN",
 };
 
 /**
@@ -76,6 +81,8 @@ const DETAIL_BY_FOREIGN_KEY: Record<string, ErrorDetail> = {
   org_units_parent_fk: { path: "parentId", code: "unknown_unit" },
   tenant_members_unit_fk: { path: "unitId", code: "unknown_unit" },
   tenant_members_role_fk: { path: "roleId", code: "unknown_role" },
+  positions_unit_fk: { path: "unitId", code: "unknown_unit" },
+  tenant_members_position_fk: { path: "userIds", code: "not_unit_member" },
 };
 
 /** The AppError for a known database error, or undefined (which the error handler turns into INTERNAL). */

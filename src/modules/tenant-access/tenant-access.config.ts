@@ -25,6 +25,8 @@ export const PERMISSION_CATALOG = {
   "role.assign": ["organization"],
   "calendar.view": ["organization"],
   "calendar.manage": ["organization"],
+  "position.view": ["organization"],
+  "position.manage": ["organization"],
 } as const satisfies Record<string, readonly PermissionScopeType[]>;
 
 export const TENANT_PERMISSIONS = Object.keys(PERMISSION_CATALOG) as TenantPermissionType[];

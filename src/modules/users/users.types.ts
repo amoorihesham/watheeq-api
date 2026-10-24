@@ -49,6 +49,7 @@ export interface UserRowType {
   roleIsSystem: boolean;
   unitId: string | null;
   isManager: boolean;
+  positionId: string | null;
   unitName: string | null;
   unitKind: OrgUnitKindType | null;
   isOwner: boolean;
@@ -66,6 +67,7 @@ export interface MemberChangesType {
   unitId?: string | null;
   isManager?: boolean;
   roleId?: string;
+  positionId?: null;
 }
 
 export type InviteUserRequestType = z.input<typeof inviteUserRequestSchema>;
