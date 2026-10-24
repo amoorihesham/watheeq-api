@@ -1,7 +1,14 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
-import { positions, workflowStages, workflows, workflowVersions } from "@/db/schema/index.js";
+import {
+  positions,
+  services,
+  serviceWorkflows,
+  workflowStages,
+  workflows,
+  workflowVersions,
+} from "@/db/schema/index.js";
 import type {
   LockedWorkflowRowType,
   PositionStateRowType,
@@ -140,6 +147,31 @@ export function createWorkflowsRepository() {
         .where(and(eq(positions.tenantId, tenantId), inArray(positions.id, positionIds)))
         .orderBy(positions.id)
         .for("share");
+    },
+
+    /** The active services that allow the workflow; any of them makes retiring it refuse (R5.16). */
+    allowedByActiveService(
+      db: Executor,
+      tenantId: string,
+      workflowId: string,
+    ): Promise<{ id: string }[]> {
+      return db
+        .select({ id: services.id })
+        .from(serviceWorkflows)
+        .innerJoin(
+          services,
+          and(
+            eq(services.tenantId, serviceWorkflows.tenantId),
+            eq(services.id, serviceWorkflows.serviceId),
+          ),
+        )
+        .where(
+          and(
+            eq(serviceWorkflows.tenantId, tenantId),
+            eq(serviceWorkflows.workflowId, workflowId),
+            isNull(services.retiredAt),
+          ),
+        );
     },
 
     insertWorkflow(

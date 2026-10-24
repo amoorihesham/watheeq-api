@@ -1,0 +1,62 @@
+import type { z } from "zod";
+import type { Config } from "@/config/config.js";
+import type { Db } from "@/db/pool.js";
+import type { createServicesController } from "./services.controller.js";
+import type { createServicesRepository } from "./services.repository.js";
+import type {
+  createServiceRequestSchema,
+  listServicesQuerySchema,
+  updateServiceRequestSchema,
+} from "./services.schemas.js";
+import type { createServicesService } from "./services.service.js";
+
+export interface ServiceRowType {
+  id: string;
+  name: string;
+  description: string | null;
+  retiredAt: Date | null;
+}
+
+/** A workflow a service allows, with the workflow's name and state. */
+export interface AllowedWorkflowRowType {
+  serviceId: string;
+  id: string;
+  name: string;
+  isDefault: boolean;
+  retiredAt: Date | null;
+}
+
+/** A workflow as a service save reads it under a share lock. */
+export interface WorkflowStateRowType {
+  id: string;
+  retiredAt: Date | null;
+}
+
+export type CreateServiceRequestType = z.input<typeof createServiceRequestSchema>;
+export type UpdateServiceRequestType = z.input<typeof updateServiceRequestSchema>;
+export type ListServicesQueryType = z.output<typeof listServicesQuerySchema>;
+export type WorkflowChoiceType = z.output<typeof createServiceRequestSchema>["workflows"][number];
+
+export interface ServiceType {
+  id: string;
+  name: string;
+  description: string | null;
+  retired: boolean;
+  workflows: { id: string; name: string; isDefault: boolean; retired: boolean }[];
+}
+
+export interface ListServicesResponseType {
+  services: ServiceType[];
+}
+export interface ServiceResponseType {
+  service: ServiceType;
+}
+
+export interface ServicesRouterDepsType {
+  db: Db;
+  config: Config;
+}
+
+export type ServicesRepositoryType = ReturnType<typeof createServicesRepository>;
+export type ServicesServiceType = ReturnType<typeof createServicesService>;
+export type ServicesControllerType = ReturnType<typeof createServicesController>;

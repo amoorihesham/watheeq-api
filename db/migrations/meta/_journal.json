@@ -78,6 +78,13 @@
       "when": 1792861482846,
       "tag": "0010_workflows_deferred_version_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792862372918,
+      "tag": "0011_services_priorities",
+      "breakpoints": true
     }
   ]
 }

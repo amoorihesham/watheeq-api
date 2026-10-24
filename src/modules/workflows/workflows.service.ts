@@ -323,8 +323,11 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
         if (workflow.retiredAt) {
           return loadWorkflow(tx, tenantId, id);
         }
-        // Step 5.3 refuses here with WORKFLOW_IN_USE while an active service allows this workflow (R5.16); the
-        // lock above makes that check hold.
+        // The lock above pairs with the share lock a service save takes, so this check cannot miss a service
+        // being saved (R5.16).
+        if ((await repo.allowedByActiveService(tx, tenantId, id)).length > 0) {
+          throw new AppError("WORKFLOW_IN_USE");
+        }
         await repo.setRetired(tx, tenantId, id, true);
         await writeAuditEntry(tx, {
           tenantId,

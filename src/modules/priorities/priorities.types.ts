@@ -1,0 +1,47 @@
+import type { z } from "zod";
+import type { Config } from "@/config/config.js";
+import type { Db } from "@/db/pool.js";
+import type { createPrioritiesController } from "./priorities.controller.js";
+import type { createPrioritiesRepository } from "./priorities.repository.js";
+import type {
+  createPriorityRequestSchema,
+  listPrioritiesQuerySchema,
+  reorderPrioritiesRequestSchema,
+  updatePriorityRequestSchema,
+} from "./priorities.schemas.js";
+import type { createPrioritiesService } from "./priorities.service.js";
+
+export interface PriorityRowType {
+  id: string;
+  name: string;
+  days: number;
+  retiredAt: Date | null;
+}
+
+export type CreatePriorityRequestType = z.input<typeof createPriorityRequestSchema>;
+export type UpdatePriorityRequestType = z.input<typeof updatePriorityRequestSchema>;
+export type ReorderPrioritiesRequestType = z.input<typeof reorderPrioritiesRequestSchema>;
+export type ListPrioritiesQueryType = z.output<typeof listPrioritiesQuerySchema>;
+
+export interface PriorityType {
+  id: string;
+  name: string;
+  days: number;
+  retired: boolean;
+}
+
+export interface ListPrioritiesResponseType {
+  priorities: PriorityType[];
+}
+export interface PriorityResponseType {
+  priority: PriorityType;
+}
+
+export interface PrioritiesRouterDepsType {
+  db: Db;
+  config: Config;
+}
+
+export type PrioritiesRepositoryType = ReturnType<typeof createPrioritiesRepository>;
+export type PrioritiesServiceType = ReturnType<typeof createPrioritiesService>;
+export type PrioritiesControllerType = ReturnType<typeof createPrioritiesController>;
