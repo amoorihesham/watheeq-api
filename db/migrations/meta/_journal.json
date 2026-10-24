@@ -64,6 +64,20 @@
       "when": 1792860253783,
       "tag": "0008_positions",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792861479259,
+      "tag": "0009_workflows",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792861482846,
+      "tag": "0010_workflows_deferred_version_fk",
+      "breakpoints": true
     }
   ]
 }

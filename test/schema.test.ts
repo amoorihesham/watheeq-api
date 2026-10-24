@@ -45,6 +45,9 @@ describe("database baseline", () => {
       "tenant_members",
       "tenants",
       "users",
+      "workflow_stages",
+      "workflow_versions",
+      "workflows",
       "working_hours",
     ]);
   });

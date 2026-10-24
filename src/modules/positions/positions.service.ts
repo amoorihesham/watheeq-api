@@ -200,8 +200,11 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
         if (position.retiredAt) {
           return loadPosition(tx, tenantId, id);
         }
-        // Steps 5.2 and 5.4 refuse here with POSITION_IN_USE while the current version of an active workflow or an
-        // escalation recipient names this position (R5.16); the lock above makes that check hold.
+        // The lock above pairs with the share lock a workflow save takes, so this check cannot miss a stage
+        // being saved. Step 5.4 adds escalation recipients here (R5.16).
+        if ((await repo.namedByActiveWorkflow(tx, tenantId, id)).length > 0) {
+          throw new AppError("POSITION_IN_USE");
+        }
         const removed = await repo.release(tx, tenantId, id, []);
         await repo.setRetired(tx, tenantId, id, true);
         await writeAuditEntry(tx, {

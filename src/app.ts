@@ -18,6 +18,7 @@ import { createPositionsRouter } from "./modules/positions/index.js";
 import { createPermissionsRouter, createRolesRouter } from "./modules/roles/index.js";
 import { createSubscriptionsRouter } from "./modules/subscriptions/index.js";
 import { createUsersRouter } from "./modules/users/index.js";
+import { createWorkflowsRouter } from "./modules/workflows/index.js";
 
 export interface AppDeps {
   pool: pg.Pool;
@@ -52,6 +53,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/permissions", createPermissionsRouter({ db, config }));
   app.use("/calendar", createCalendarRouter({ db, config }));
   app.use("/positions", createPositionsRouter({ db, config }));
+  app.use("/workflows", createWorkflowsRouter({ db, config }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

@@ -30,6 +30,8 @@ const STATUS_BY_CODE = {
   POSITION_IN_USE: 409,
   POSITION_UNIT_GONE: 409,
   RESOURCE_RETIRED: 409,
+  WORKFLOW_NAME_TAKEN: 409,
+  WORKFLOW_VERSION_CHANGED: 409,
   PAYLOAD_TOO_LARGE: 413,
   UNSUPPORTED_MEDIA_TYPE: 415,
   INTERNAL: 500,
@@ -70,6 +72,7 @@ const CODE_BY_UNIQUE_CONSTRAINT: Record<string, ErrorCode> = {
   org_units_section_name_unique: "UNIT_NAME_TAKEN",
   roles_name_unique: "ROLE_NAME_TAKEN",
   positions_name_unique: "POSITION_NAME_TAKEN",
+  workflows_name_unique: "WORKFLOW_NAME_TAKEN",
 };
 
 /**

@@ -1,7 +1,14 @@
 import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
-import { orgUnits, positions, tenantMembers, users } from "@/db/schema/index.js";
+import {
+  orgUnits,
+  positions,
+  tenantMembers,
+  users,
+  workflowStages,
+  workflows,
+} from "@/db/schema/index.js";
 import type {
   HolderRowType,
   MemberStateRowType,
@@ -59,6 +66,32 @@ export function createPositionsRepository() {
         .from(positions)
         .where(ofTenant(tenantId, positionId))
         .for("update");
+    },
+
+    /** Stages naming the position in the current version of an active workflow; older versions do not count. */
+    namedByActiveWorkflow(
+      db: Executor,
+      tenantId: string,
+      positionId: string,
+    ): Promise<{ id: string }[]> {
+      return db
+        .select({ id: workflowStages.id })
+        .from(workflowStages)
+        .innerJoin(
+          workflows,
+          and(
+            eq(workflows.tenantId, workflowStages.tenantId),
+            eq(workflows.currentVersionId, workflowStages.versionId),
+          ),
+        )
+        .where(
+          and(
+            eq(workflowStages.tenantId, tenantId),
+            eq(workflowStages.targetPositionId, positionId),
+            isNull(workflows.retiredAt),
+          ),
+        )
+        .limit(1);
     },
 
     findUnit(db: Executor, tenantId: string, unitId: string): Promise<UnitRowType[]> {

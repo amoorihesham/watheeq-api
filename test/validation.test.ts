@@ -60,6 +60,7 @@ describe("request schemas", () => {
     "listUsersQuerySchema",
     "calendarQuerySchema",
     "listPositionsQuerySchema",
+    "listWorkflowsQuerySchema",
     "dayViewQueryFields",
   ];
 
