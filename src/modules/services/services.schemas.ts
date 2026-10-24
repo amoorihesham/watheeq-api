@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NO_FIELDS } from "@/http/validate.js";
+import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import { MAX_SERVICE_DESCRIPTION_LENGTH, MAX_SERVICE_NAME_LENGTH } from "./services.config.js";
 
 const serviceName = z.string().trim().min(1).max(MAX_SERVICE_NAME_LENGTH);
@@ -12,10 +12,10 @@ const description = z
   .nullable()
   .transform((value) => (value === "" ? null : value));
 
-export const serviceIdSchema = z.uuid();
+export const serviceIdSchema = idSchema;
 
 const workflowsSchema = z
-  .array(z.strictObject({ id: z.uuid(), isDefault: z.boolean() }))
+  .array(z.strictObject({ id: idSchema, isDefault: z.boolean() }))
   .superRefine((workflows, ctx) => {
     const defaults = workflows.flatMap((workflow, index) => (workflow.isDefault ? [index] : []));
     if (defaults.length === 0) {

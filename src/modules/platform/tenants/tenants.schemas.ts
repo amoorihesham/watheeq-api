@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { idSchema } from "@/http/validate.js";
 import { emailSchema, userNameSchema } from "@/modules/auth/index.js";
 import { discountPercentSchema } from "../plans/plans.schemas.js";
 import { MAX_REASON_LENGTH, MAX_TENANT_NAME_LENGTH, SLUG_PATTERN } from "./tenants.config.js";
@@ -9,7 +10,7 @@ export const createTenantRequestSchema = z.strictObject({
   admin: z.strictObject({ email: emailSchema, userName: userNameSchema }),
   subscription: z
     .strictObject({
-      planId: z.uuid(),
+      planId: idSchema,
       startDate: z.iso.date(),
       endDate: z.iso.date(),
       customerDiscountPercent: discountPercentSchema.default(0),
@@ -24,7 +25,7 @@ export const createTenantRequestSchema = z.strictObject({
 // Renew, extend, change plan, and end early are all this one change (Phase 1 spec, 4.3).
 export const changeSubscriptionRequestSchema = z
   .strictObject({
-    planId: z.uuid(),
+    planId: idSchema,
     startDate: z.iso.date(),
     endDate: z.iso.date(),
     // Omitted keeps the tenant's current customer discount.
@@ -36,4 +37,4 @@ export const changeSubscriptionRequestSchema = z
     params: { code: "end_before_start" },
   });
 
-export const tenantIdSchema = z.uuid();
+export const tenantIdSchema = idSchema;

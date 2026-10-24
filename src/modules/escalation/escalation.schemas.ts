@@ -12,7 +12,7 @@ import {
 type TargetInputType = z.output<typeof assigneeTargetSchema>;
 
 export const targetKey = (target: TargetInputType) =>
-  "position" in target ? `position:${target.position.toLowerCase()}` : `builtin:${target.builtin}`;
+  "position" in target ? `position:${target.position}` : `builtin:${target.builtin}`;
 
 const recipientsSchema = z.array(assigneeTargetSchema).max(MAX_RECIPIENTS_PER_RULE);
 

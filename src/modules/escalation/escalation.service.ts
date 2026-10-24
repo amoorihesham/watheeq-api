@@ -24,9 +24,7 @@ function canonicalRecipients(
 ) {
   return recipients
     .map((target) =>
-      "position" in target
-        ? { position: target.position.toLowerCase() }
-        : { builtin: target.builtin },
+      "position" in target ? { position: target.position } : { builtin: target.builtin },
     )
     .sort((a, b) => targetKey(a).localeCompare(targetKey(b)));
 }
@@ -61,9 +59,7 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
     const named = [
       ...new Set(
         RULES.flatMap((rule) =>
-          settings[rule].recipients.flatMap((t) =>
-            "position" in t ? [t.position.toLowerCase()] : [],
-          ),
+          settings[rule].recipients.flatMap((t) => ("position" in t ? [t.position] : [])),
         ),
       ),
     ];
@@ -79,7 +75,7 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
         if (!("position" in target)) {
           return;
         }
-        const state = states.get(target.position.toLowerCase());
+        const state = states.get(target.position);
         const path = `${rule}.recipients.${index}.position`;
         if (!state) {
           details.push({ path, code: "unknown_position" });

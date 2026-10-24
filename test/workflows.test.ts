@@ -248,6 +248,15 @@ afterAll(async () => {
 });
 
 describe("creating workflows (R5.8)", () => {
+  it("accepts a position id in upper case, as the same position", async () => {
+    const res = await as(huda).post("/workflows", {
+      name: nextName("Upper"),
+      stages: [stage("Sign-off", { position: positionIds.supervisor.toUpperCase() })],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.workflow.version.stages[0].assignee.position).toBe(positionIds.supervisor);
+  });
+
   it("creates Al-Noor's Vendor contract as version 1, and audits it", async () => {
     const stages = vendorStages();
     const res = await as(huda).post("/workflows", { name: "  Vendor contract  ", stages });

@@ -1,5 +1,11 @@
-import type { z } from "zod";
+import { z } from "zod";
 import { AppError, type ErrorDetail } from "./errors.js";
+
+/**
+ * A UUID from untrusted input, lower-cased: PostgreSQL accepts either case, but services compare ids as strings
+ * (a stage's position against the rows locked for it), so an upper-case id would look unknown.
+ */
+export const idSchema = z.uuid().transform((id) => id.toLowerCase());
 
 /** The refine option for "an update must change something"; reported as `no_fields`. */
 export const NO_FIELDS = { params: { code: "no_fields" } };

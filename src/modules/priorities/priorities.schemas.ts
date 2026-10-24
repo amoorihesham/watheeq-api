@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NO_FIELDS } from "@/http/validate.js";
+import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import {
   MAX_PRIORITY_DAYS,
   MAX_PRIORITY_NAME_LENGTH,
@@ -9,7 +9,7 @@ import {
 const priorityName = z.string().trim().min(1).max(MAX_PRIORITY_NAME_LENGTH);
 const days = z.int().min(MIN_PRIORITY_DAYS).max(MAX_PRIORITY_DAYS);
 
-export const priorityIdSchema = z.uuid();
+export const priorityIdSchema = idSchema;
 
 export const createPriorityRequestSchema = z.strictObject({ name: priorityName, days });
 

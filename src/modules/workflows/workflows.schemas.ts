@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { idSchema } from "@/http/validate.js";
 import { assigneeTargetSchema } from "@/modules/positions/index.js";
 import {
   MAX_STAGE_NAME_LENGTH,
@@ -10,7 +11,7 @@ import {
 
 const workflowName = z.string().trim().min(1).max(MAX_WORKFLOW_NAME_LENGTH);
 
-export const workflowIdSchema = z.uuid();
+export const workflowIdSchema = idSchema;
 
 // Every field is required: the builder decides each stage's behavior, with no default (Phase 5 spec, Q10).
 const stageSchema = z.strictObject({

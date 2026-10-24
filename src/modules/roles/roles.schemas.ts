@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NO_FIELDS } from "@/http/validate.js";
+import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import { PERMISSION_SCOPES } from "@/modules/tenant-access/index.js";
 import { MAX_ROLE_NAME_LENGTH, MAX_ROLE_PERMISSIONS } from "./roles.config.js";
 
@@ -10,7 +10,7 @@ const grants = z
   .array(z.strictObject({ key: z.string(), scope: z.enum(PERMISSION_SCOPES) }))
   .max(MAX_ROLE_PERMISSIONS);
 
-export const roleIdSchema = z.uuid();
+export const roleIdSchema = idSchema;
 
 export const createRoleRequestSchema = z.strictObject({ name: roleName, permissions: grants });
 

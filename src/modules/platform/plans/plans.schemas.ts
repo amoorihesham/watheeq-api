@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NO_FIELDS } from "@/http/validate.js";
+import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import {
   MAX_DISCOUNT_PERCENT,
   MAX_GRACE_DAYS,
@@ -37,4 +37,4 @@ export const updatePlanRequestSchema = z
   .partial()
   .refine((body) => Object.keys(body).length > 0, NO_FIELDS);
 
-export const planIdSchema = z.uuid();
+export const planIdSchema = idSchema;

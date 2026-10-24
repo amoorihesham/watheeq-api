@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NO_FIELDS } from "@/http/validate.js";
+import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import {
   MAX_DAY_VIEW_DAYS,
   MAX_PERIOD_NAME_LENGTH,
@@ -108,7 +108,7 @@ export const periodOverrideRequestSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-export const periodIdSchema = z.uuid();
+export const periodIdSchema = idSchema;
 
 export const overrideYearSchema = z.strictObject({
   year: z.coerce.number().int().min(1).max(9999),

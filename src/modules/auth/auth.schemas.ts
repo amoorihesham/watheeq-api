@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { idSchema } from "@/http/validate.js";
 import {
   MAX_EMAIL_LENGTH,
   MAX_PASSWORD_LENGTH,
@@ -41,15 +42,15 @@ export const resetPasswordRequestSchema = verifyEmailRequestSchema;
 
 // Token schemas stay lenient: a JWT carries standard claims (iss, iat, exp) these do not list.
 export const tenantClaimSchema = z.object({
-  id: z.uuid(),
-  roleId: z.uuid(),
+  id: idSchema,
+  roleId: idSchema,
   roleName: z.string(),
   permissions: z.array(z.string()),
 });
 
 /** The claims `authenticate()` relies on; `iss`, `iat`, and `exp` are checked by `jwtVerify` itself. */
 export const accessTokenPayloadSchema = z.object({
-  sub: z.uuid(),
+  sub: idSchema,
   username: z.string(),
   email: z.string(),
   role: z.enum(["user", "operator"]),
