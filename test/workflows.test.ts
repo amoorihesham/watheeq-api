@@ -849,6 +849,28 @@ describe("retiring and restoring (R5.15)", () => {
     expect((await as(huda).get(`/workflows/${old}`)).body.workflow.retired).toBe(true);
   });
 
+  it("refuses to restore a workflow naming a retired position until the position is restored", async () => {
+    const position = await createPosition(nextName("Interim Reviewer"), legal);
+    const id = await createWorkflow(nextName("Interim"), [
+      stage("Review", { builtin: "handler" }),
+      stage("Interim check", { position }),
+    ]);
+    expect((await as(huda).post(`/workflows/${id}/retire`)).status).toBe(200);
+    expect((await as(huda).post(`/positions/${position}/retire`)).status).toBe(200);
+
+    const refused = await as(huda).post(`/workflows/${id}/restore`);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe("WORKFLOW_POSITION_RETIRED");
+    expect(refused.body.error.details).toEqual([
+      { path: "stages.1.assignee.position", code: "position_retired" },
+    ]);
+    expect((await as(huda).get(`/workflows/${id}`)).body.workflow.retired).toBe(true);
+    expect((await auditOf(id)).map((e) => e.action)).not.toContain("workflow.restored");
+
+    expect((await as(huda).post(`/positions/${position}/restore`)).status).toBe(200);
+    expect((await as(huda).post(`/workflows/${id}/restore`)).status).toBe(200);
+  });
+
   it("answers 404 for an unknown workflow", async () => {
     for (const action of ["retire", "restore"]) {
       expect(

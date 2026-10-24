@@ -110,15 +110,19 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
   }
 
   /**
-   * Locks every tenant position the stages name, so none can be retired until this transaction ends, and refuses
+   * Locks every tenant position the stages name, so none can be retired until this transaction ends, and reports
    * the unknown and the retired (R5.10). A position of another tenant is unknown (R5.19).
    */
-  async function lockStagePositions(tx: Executor, tenantId: string, stages: StageInputType[]) {
+  async function lockStagePositions(
+    tx: Executor,
+    tenantId: string,
+    stages: StageInputType[],
+  ): Promise<ErrorDetail[]> {
     const named = [
       ...new Set(stages.flatMap((s) => ("position" in s.assignee ? [s.assignee.position] : []))),
     ];
     if (named.length === 0) {
-      return;
+      return [];
     }
     const states = new Map(
       (await repo.lockPositions(tx, tenantId, named)).map((state) => [state.id, state]),
@@ -136,6 +140,15 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
         details.push({ path, code: "position_retired" });
       }
     });
+    return details;
+  }
+
+  async function assertStagePositionsActive(
+    tx: Executor,
+    tenantId: string,
+    stages: StageInputType[],
+  ) {
+    const details = await lockStagePositions(tx, tenantId, stages);
     if (details.length > 0) {
       throw new AppError("VALIDATION_FAILED", details);
     }
@@ -207,7 +220,7 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
       const body = validate(createWorkflowRequestSchema, input);
       const createdBy = actorOf(context);
       return withTx(db, async (tx) => {
-        await lockStagePositions(tx, tenantId, body.stages);
+        await assertStagePositionsActive(tx, tenantId, body.stages);
         const workflowId = randomUUID();
         const versionId = randomUUID();
         // The workflow names its version before the version exists; the key is checked at commit (migration 0010).
@@ -262,7 +275,7 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
         if (body.baseVersion !== current.number) {
           throw new AppError("WORKFLOW_VERSION_CHANGED");
         }
-        await lockStagePositions(tx, tenantId, body.stages);
+        await assertStagePositionsActive(tx, tenantId, body.stages);
 
         const currentStages = await repo.stagesOfVersion(tx, tenantId, current.id);
         const stagesChanged = stagesKey(body.stages) !== stagesKey(currentStages.map(toStageInput));
@@ -335,6 +348,12 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
         const workflow = await lockWorkflow(tx, tenantId, id);
         if (!workflow.retiredAt) {
           return loadWorkflow(tx, tenantId, id);
+        }
+        // An active workflow never names a retired position, so its positions are restored first.
+        const stages = await repo.stagesOfVersion(tx, tenantId, workflow.currentVersionId);
+        const retired = await lockStagePositions(tx, tenantId, stages.map(toStageInput));
+        if (retired.length > 0) {
+          throw new AppError("WORKFLOW_POSITION_RETIRED", retired);
         }
         await repo.setRetired(tx, tenantId, id, false);
         await writeAuditEntry(tx, {
