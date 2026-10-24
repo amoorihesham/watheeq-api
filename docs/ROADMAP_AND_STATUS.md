@@ -24,7 +24,7 @@
 - **Phase 4 (working calendar) implemented** (`docs/specs/phase-4-working-calendar.md`): per-tenant working hours with weekday spans, seasonal hours with explicit ranks, holidays one-off or recurring on Gregorian or Umm al-Qura dates with one-year adjustments, versioned rules whose past never changes, a day view, and the working-time functions Phases 6 and 7 use (`loadCalendar`, `addWorkingDays`, `workingDaysBetween`).
   Its main decisions are D24-D27 in `MVP_SCOPE.md` and T30-T33 in `TECHNICAL_DECISIONS.md`. Migrations `0006` and `0007` add the calendar tables and give existing tenants the default hours.
 - **Phase 5 (legal configuration) spec drafted** (`docs/specs/phase-5-legal-configuration.md`): positions bound to org units, versioned linear workflows, services with allowed workflows, priorities, and escalation settings; Q1-Q17 resolved in the pre-spec discussion.
-- **Next action:** Phase 5 spec approved 2026-10-24; step 5.1 (positions and the assignee resolver) implemented; step 5.2 (workflows) in implementation.
+- **Next action:** Phase 5 spec approved 2026-10-24; steps 5.1 (positions and the assignee resolver) and 5.2 (workflows) implemented; step 5.3 (services and priorities) in implementation.
 
 ---
 
