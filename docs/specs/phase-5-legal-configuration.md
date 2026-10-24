@@ -170,12 +170,18 @@ Why rows, not a JSON list (Q3): request stages and stage targets are referenced 
 **`services`**: `id`, `tenant_id`, `name` (unique `(tenant_id, lower(name))` among active rows), `description` (nullable, up to 2,000 characters), `retired_at`, `created_at`, `updated_at`.
 
 **`service_workflows`**: `tenant_id`, `service_id`, `workflow_id` (composite FKs), `is_default`; primary key `(service_id, workflow_id)`; unique `(service_id) where is_default`.
-"At least one, exactly one default" is checked by the service, because a constraint cannot count rows across a table.
+"At least one, exactly one default" is checked by the service, because a constraint cannot count rows across a table; an empty list is reported as `no_default` (path `workflows`), a second default as `many_defaults` at its entry, and a workflow listed twice as `duplicate_workflow`.
+An index on `service_workflows.workflow_id` serves the workflow-in-use lookup.
+Names are 1-100 characters; a blank `description` is stored as null, and `PATCH` may clear it.
 
 #### Priorities
 
 **`priorities`**: `id`, `tenant_id`, `name` (unique `(tenant_id, lower(name))` among active rows), `days` (`smallint`, 1-365, check), `sort_order` (`smallint`, null while retired), `retired_at`, `created_at`, `updated_at`.
-Unique `(tenant_id, sort_order)`, deferrable, so a reorder can swap values in one statement.
+Unique `(tenant_id, sort_order)`, not deferrable: a reorder first negates the active rows' places, then assigns 1..n, so no row collides on the way.
+Check `(retired_at is null) = (sort_order is not null)`: a priority has a place exactly while active.
+Retiring leaves a gap in the places, which the next reorder closes; restoring appends at the end.
+Create, reorder, retire, and restore take a per-tenant advisory lock keyed `priorities:<tenant_id>`, as the calendar does (T32).
+With `includeRetired`, retired priorities follow the active ones, ordered by name.
 
 #### Escalation settings
 
@@ -271,7 +277,7 @@ The holder and unit foreign keys map to `not_unit_member` (path `userIds`) and `
 | 409  | `WORKFLOW_VERSION_CHANGED`                                                                | `baseVersion` is not the current version.                          |
 | 409 | `WORKFLOW_POSITION_RETIRED` | Restoring a workflow whose current version names a retired position; its positions are restored first. |
 
-Validation detail codes: `unknown_position`, `position_retired`, `unknown_workflow`, `workflow_retired`, `not_unit_member`, `holds_other_position`, `user_inactive`, `duplicate_name` (stages), `too_many_stages`, `not_allowed` (narrow or exclude on Handler or Requester), `no_default`, `many_defaults`, `not_for_rule`, `no_recipients`, `order_mismatch`.
+Validation detail codes: `duplicate_workflow`, `unknown_position`, `position_retired`, `unknown_workflow`, `workflow_retired`, `not_unit_member`, `holds_other_position`, `user_inactive`, `duplicate_name` (stages), `too_many_stages`, `not_allowed` (narrow or exclude on Handler or Requester), `no_default`, `many_defaults`, `not_for_rule`, `no_recipients`, `order_mismatch`.
 
 ### 4.3 Key flows
 
@@ -481,3 +487,4 @@ Promote at close-out: P5.1-P5.3, P5.6, P5.8, P5.10-P5.12 to `MVP_SCOPE.md` (with
 | 2026-10-24 | Spec approved; implementation started. | Owner approval. |
 | 2026-10-24 | Step 5.1 implemented and verified: migration `0008_positions`, `position.view` and `position.manage`, the `/positions` endpoints, holders, clearing on move, deactivation, and retire, the unit-delete rule, `resolveAssignees` and `nextLevel`, audit. Approved by the owner: name uniqueness among active rows only (also for workflows, services, priorities); the `tenant_members_position_has_unit` check; the R5.2 example corrected; the restore lock order; holder-list, error-mapping, and resolver return details (4.1-4.3). | Acceptance criteria met; 75 new tests, full suite 609 passing on Node 24; mutation checks: dropping either exclusion, the unit in the holder key, the clear on move, or the restore lock each fail the matching tests. |
 | 2026-10-24 | Step 5.2 implemented and verified: migrations `0009_workflows` and `0010_workflows_deferred_version_fk`, `workflow.view` and `workflow.manage`, the `/workflows` endpoints, immutable versions created only when stages change, `baseVersion`, the workflow row lock and the position share lock, the position-in-use check, audit. Approved by the owner: the custom migration `0010` (5.3 and 5.4 move to `0011` and `0012`); the current-version key enforcing that the version belongs to the workflow; stages carry their `id`, the list shows no stages, audit stores stages in request shape; check order 404, retired, base version, positions; a case change in a stage name is a stage change; restoring a workflow is refused with 409 `WORKFLOW_POSITION_RETIRED` until the positions its current version names are restored. | Acceptance criteria met; 56 new tests, full suite 673 passing on Node 24; mutation checks: removing the workflow row lock, the position share lock, the stages-changed comparison, or the restore check each fail the matching tests. |
+| 2026-10-24 | Step 5.3 implemented and verified: migration `0011_services_priorities`, `service.view`, `service.manage`, `priority.view`, `priority.manage`, the `/services` and `/priorities` endpoints, allowed workflows with one default, the display order, `SERVICE_WORKFLOW_RETIRED`, the workflow-in-use check, audit. Approved by the owner: a non-deferrable order key with negate-then-assign reordering; the active-iff-placed check; `duplicate_workflow`; error paths for `no_default` and `many_defaults`; a nullable description; 100-character names; gaps after a retire; retired priorities listed after the active ones; changed-keys-only audit details; an index on `service_workflows.workflow_id` (4.1, 4.2). | Acceptance criteria met; 73 new tests, full suite 762 passing on Node 24; mutation checks: removing the share lock on workflows, the workflow-in-use check, or the order lock each fail the matching tests. |
