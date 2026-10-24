@@ -3,7 +3,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createLogger } from "../src/logging/logger.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
-import { connectToTestDb, seedSubscribedTenant, seedTenant } from "./helpers/db.js";
+import {
+  connectToTestDb,
+  seedSubscribedTenant,
+  seedTenant,
+  waitUntilBlockedOn,
+} from "./helpers/db.js";
 
 const PASSWORD = "correct horse battery staple";
 const SARA = "sara@ou-alnoor.test";
@@ -45,21 +50,6 @@ const auditRows = (resourceId: string) =>
       [resourceId],
     )
     .then((result) => result.rows);
-
-/** True once a backend of this database waits for a lock while running a statement on `table`. */
-async function waitUntilBlockedOn(table: string): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const { rows } = await pool.query(
-      "select count(*)::int as waiting from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query ilike $1",
-      [`%${table}%`],
-    );
-    if (rows[0].waiting > 0) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error(`no statement on ${table} became blocked`);
-}
 
 beforeAll(async () => {
   const passwordHash = await hashPassword(PASSWORD);
@@ -330,7 +320,7 @@ describe("deleting (R2.5)", () => {
       const deletion = as(sara)
         .delete(`/org-units/${dept}`)
         .then((res) => res);
-      await waitUntilBlockedOn("org_units");
+      await waitUntilBlockedOn(pool, "org_units");
       await client.query("commit");
       const res = await deletion;
       expect(res.status).toBe(409);
@@ -349,7 +339,7 @@ describe("deleting (R2.5)", () => {
       const creation = as(sara)
         .post("/org-units", { name: "Orphan", parentId: dept })
         .then((res) => res);
-      await waitUntilBlockedOn("org_units");
+      await waitUntilBlockedOn(pool, "org_units");
       await client.query("delete from org_units where id = $1", [dept]);
       await client.query("commit");
       const res = await creation;

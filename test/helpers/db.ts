@@ -163,3 +163,18 @@ export async function seedSubscribedTenant(
   );
   return tenant;
 }
+
+/** Resolves once a backend of this database waits for a lock while running a statement on `table`. */
+export async function waitUntilBlockedOn(pool: pg.Pool, table: string): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const { rows } = await pool.query(
+      "select count(*)::int as waiting from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query ilike $1",
+      [`%${table}%`],
+    );
+    if (rows[0].waiting > 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`no statement on ${table} became blocked`);
+}

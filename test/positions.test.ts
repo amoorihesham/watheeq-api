@@ -10,6 +10,7 @@ import {
   seedRole,
   seedSubscribedTenant,
   seedUser,
+  waitUntilBlockedOn,
 } from "./helpers/db.js";
 
 const PASSWORD = "correct horse battery staple";
@@ -124,21 +125,6 @@ const auditOf = (resourceId: string) =>
       [resourceId],
     )
     .then((result) => result.rows);
-
-/** True once a backend of this database waits for a lock while running a statement on `table`. */
-async function waitUntilBlockedOn(table: string): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const { rows } = await pool.query(
-      "select count(*)::int as waiting from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query ilike $1",
-      [`%${table}%`],
-    );
-    if (rows[0].waiting > 0) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error(`no statement on ${table} became blocked`);
-}
 
 /**
  * Holds the lock a unit delete takes, runs `during` inside that transaction, then commits it. The lock is
@@ -697,7 +683,7 @@ describe("deleting a unit with positions (R5.15)", () => {
       .post("/positions", { unitId: unit, name: nextName("Race Post") })
       .then((res) => res);
     await whileUnitLocked(unit, async (client) => {
-      await waitUntilBlockedOn("positions");
+      await waitUntilBlockedOn(pool, "positions");
       await client.query("delete from org_units where id = $1", [unit]);
     });
     const res = await creating;
@@ -714,7 +700,7 @@ describe("deleting a unit with positions (R5.15)", () => {
       .post(`/positions/${id}/restore`)
       .then((res) => res);
     await whileUnitLocked(unit, async (client) => {
-      await waitUntilBlockedOn("org_units");
+      await waitUntilBlockedOn(pool, "org_units");
       await client.query("update positions set unit_id = null where id = $1", [id]);
       await client.query("delete from org_units where id = $1", [unit]);
     });

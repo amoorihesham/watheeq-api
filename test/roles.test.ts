@@ -4,7 +4,13 @@ import { createLogger } from "../src/logging/logger.js";
 import { PERMISSION_CATALOG, TENANT_PERMISSIONS } from "../src/modules/tenant-access/index.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
-import { connectToTestDb, seedRole, seedSubscribedTenant, seedUser } from "./helpers/db.js";
+import {
+  connectToTestDb,
+  seedRole,
+  seedSubscribedTenant,
+  seedUser,
+  waitUntilBlockedOn,
+} from "./helpers/db.js";
 
 const PASSWORD = "correct horse battery staple";
 const SARA = "sara@rl-alnoor.test";
@@ -68,21 +74,6 @@ const auditOf = (resourceId: string) =>
       [resourceId],
     )
     .then((result) => result.rows);
-
-/** True once a backend of this database waits for a lock while running a statement on `table`. */
-async function waitUntilBlockedOn(table: string): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const { rows } = await pool.query(
-      "select count(*)::int as waiting from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query ilike $1",
-      [`%${table}%`],
-    );
-    if (rows[0].waiting > 0) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error(`no statement on ${table} became blocked`);
-}
 
 beforeAll(async () => {
   const passwordHash = await hashPassword(PASSWORD);
@@ -496,7 +487,7 @@ describe("concurrency (P3.5)", () => {
       const edit = as(huda)
         .patch(`/roles/${clerk}`, { permissions: [] })
         .then((res) => res);
-      await waitUntilBlockedOn("roles");
+      await waitUntilBlockedOn(pool, "roles");
       await client.query("commit");
       const res = await edit;
       expect(res.status).toBe(403);
@@ -525,7 +516,7 @@ describe("concurrency (P3.5)", () => {
       const deletion = as(sara)
         .delete(`/roles/${id}`)
         .then((res) => res);
-      await waitUntilBlockedOn("roles");
+      await waitUntilBlockedOn(pool, "roles");
       await client.query("commit");
       const res = await deletion;
       expect(res.status).toBe(409);
@@ -548,7 +539,7 @@ describe("concurrency (P3.5)", () => {
           roleId: id,
         })
         .then((res) => res);
-      await waitUntilBlockedOn("tenant_members");
+      await waitUntilBlockedOn(pool, "tenant_members");
       await client.query("delete from roles where id = $1", [id]);
       await client.query("commit");
       const res = await invitation;
