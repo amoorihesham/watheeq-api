@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Last updated:** 2026-10-22
+**Last updated:** 2026-10-24
 
 ### Current Status
 
@@ -23,8 +23,9 @@
 - **Known test flake:** about one full test run in three loses a Vitest worker to an external SIGKILL (not memory, not Vitest itself; seen on the Phase 3 step 3.1 commit too). The sender is not yet identified; tracing it needs `strace`.
 - **Phase 4 (working calendar) implemented** (`docs/specs/phase-4-working-calendar.md`): per-tenant working hours with weekday spans, seasonal hours with explicit ranks, holidays one-off or recurring on Gregorian or Umm al-Qura dates with one-year adjustments, versioned rules whose past never changes, a day view, and the working-time functions Phases 6 and 7 use (`loadCalendar`, `addWorkingDays`, `workingDaysBetween`).
   Its main decisions are D24-D27 in `MVP_SCOPE.md` and T30-T33 in `TECHNICAL_DECISIONS.md`. Migrations `0006` and `0007` add the calendar tables and give existing tenants the default hours.
-- **Phase 5 (legal configuration) spec drafted** (`docs/specs/phase-5-legal-configuration.md`): positions bound to org units, versioned linear workflows, services with allowed workflows, priorities, and escalation settings; Q1-Q17 resolved in the pre-spec discussion.
-- **Next action:** Phase 5 spec approved 2026-10-24; steps 5.1-5.3 (positions and the resolver, workflows, services and priorities) implemented; step 5.4 (escalation settings) in implementation.
+- **Phase 5 (legal configuration) implemented** (`docs/specs/phase-5-legal-configuration.md`): positions placed in org units and held by their members, six built-in positions relative to the handler and the requester, the assignee resolver that Phases 6 and 7 use (`resolveAssignees`, `nextLevel`), linear workflows with immutable versions, services with allowed workflows and a default, priorities with a display order, and escalation settings per rule (on or off, threshold, recipients) that must be saved before requests can be submitted (`isEscalationConfigured`).
+  Its main decisions are D28-D33 in `MVP_SCOPE.md` (resolving open questions 1 and 2) and T34-T37 in `TECHNICAL_DECISIONS.md`. Migrations `0008`-`0012` add the tables; nothing is seeded.
+- **Next action:** draft the Phase 6 spec (request lifecycle) when the owner asks; its dependency, Phase 5, is implemented, and section 4.3 of the Phase 5 spec ("Contract with Phase 6") lists the rules Phase 6 must implement.
 
 ---
 
@@ -40,7 +41,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 2   | Org structure & users           | Department/section tree, managers, membership                                               | 1          | Implemented                             |
 | 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                                   | 2          | Implemented                             |
 | 4   | Working calendar                | Working hours, seasons, holidays, working-day deadline calculation                          | 1          | Implemented                             |
-| 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | In Implementation                       |
+| 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | Implemented                             |
 | 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure                          | 5          | Not started                             |
 | 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | Not started                             |
 

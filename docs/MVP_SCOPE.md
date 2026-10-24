@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Status:** Agreed scope baseline (last updated 2026-10-22). Implementation progress is tracked in `ROADMAP_AND_STATUS.md`.
+**Status:** Agreed scope baseline (last updated 2026-10-24). Implementation progress is tracked in `ROADMAP_AND_STATUS.md`.
 **Relationship to other docs:** `PRODUCT_VISION.md` describes the long-term product. This document defines what the first release must do. When they differ, this document governs the MVP.
 
 ---
@@ -91,20 +91,24 @@ Renewal by the operator returns the tenant to Active.
 
 #### 3.4 Legal Operations Configuration (Head of Legal)
 
-- **Service catalog:** services offered to requesters.
+- **Service catalog:** services offered to requesters; each service lists the workflows it allows, one of them the default (D28).
+- **Positions:** named responsibilities placed in a department or section and held by members of that unit, independent of roles; a person holds at most one. Six built-in positions are relative to the request: the handler, the requester, and the managers of either one's unit or department (D29).
 - **Legal roles:** created under the rules in 3.3.
 - **Priority levels:** priority and SLA are a single concept - a named level with a deadline in working days (e.g. _High = 5 working days_).
-- **Workflows:** ordered, linear stages. No branching or parallel stages.
-- **Escalation settings:** tenant-level, configurable thresholds used by rules R0-R2 (see 3.7), applied equally to all priorities.
+- **Workflows:** ordered, linear stages; no branching or parallel stages. Each stage names a position and the builder's choices for it (D30).
+- **Escalation settings:** for each of R0-R2: on or off, its threshold, and its recipients as positions, applied equally to all priorities (see 3.7, D32). Nothing is seeded; requests cannot be submitted until a tenant has saved them (D33).
+- Services, priorities, workflows, and positions are edited or retired, never deleted.
 
 #### 3.5 Request Lifecycle
 
 1. **Submission** - the requester selects a service and submits a request, choosing a priority.
 2. **Review** - legal reviews the request and may adjust its priority.
 3. **Decision** - legal accepts or rejects the request.
-   - On acceptance, an overall request owner is assigned and the SLA clock starts.
+   - On acceptance, an overall request owner (the **handler**) is assigned, the reviewer picks one of the service's allowed workflows (D28), and the SLA clock starts.
    - On acceptance, priority is **locked**. Priority changes before acceptance are audited with a reason.
 4. **Execution** - the request moves through its workflow's ordered stages.
+   - When a stage starts, its position is resolved to people automatically; any one of them completes it, and may return it to the previous stage (D30, D31).
+   - Where the stage allows it, the handler may narrow the assignees to some of them, or escalate the stage to the next level, with a reason (D30).
    - Legal may request additional information from the requester at any point during execution.
    - If the requester does not respond, legal may close the request as _Rejected - no response_.
 5. **Closure** - the request ends as **Completed** or **Rejected**.
@@ -114,7 +118,7 @@ Workflow-stage assignment does not transfer overall request ownership.
 #### 3.6 SLA and Closure Record
 
 - The SLA clock starts at acceptance and runs continuously in working time until closure; every working day counts as one day whatever its length, and a deadline is an exact moment (D24, D25).
-- **The clock does not pause** while awaiting requester information.
+- **The clock does not pause** while awaiting requester information, nor during requester-side stages.
 - The closure record states: outcome, SLA deadline, actual elapsed time, met or breached, breach duration, and time spent awaiting information (informational only - it does not affect the SLA result).
 
 #### 3.7 Escalation
@@ -123,13 +127,13 @@ Escalation is notification-only in the MVP.
 
 | Rule                    | Fires when                                                              | Notifies                                      |
 | ----------------------- | ----------------------------------------------------------------------- | --------------------------------------------- |
-| **R0 - Review overdue** | A submitted request is not accepted or rejected within _N_ working days | Users who may review requests across the organization |
-| **R1 - At risk**        | _X%_ of the SLA has elapsed                                             | Request owner                                 |
-| **R2 - Breached**       | The SLA deadline passes before closure                                  | Owner, the managers of the owner's section and department |
+| **R0 - Review overdue** | A submitted request is not accepted or rejected within _N_ working days | Its configured recipients; no handler-side positions, since no handler exists yet |
+| **R1 - At risk**        | _X%_ of the SLA has elapsed                                             | Its configured recipients                     |
+| **R2 - Breached**       | The SLA deadline passes before closure                                  | Its configured recipients                     |
 
-- _N_ and _X%_ are configurable per tenant.
+- Each rule can be turned on or off, and _N_, _X%_, and the recipients (as positions) are configurable per tenant (D32).
 - Each rule fires **at most once per request**; firing is recorded.
-- Escalation chain: the managers of the owner's section, then the managers of the owner's department (D20). Every active manager of a level is notified. A level with no manager, or whose only manager is the owner, is skipped.
+- Built-in managers positions (for example, the handler's unit managers) never include the handler or requester they are relative to (D30).
 
 #### 3.8 Notifications
 
@@ -150,6 +154,8 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 - Trial plans.
 - Delegation of permissions.
 - Workflow routing policies.
+- Tenant positions shared across units ("the Approver of the requester's department"); only the built-in positions are relative.
+- Escalation thresholds per priority, additional escalation rules.
 - Branching, conditional, or parallel workflow stages.
 - Positions / job titles.
 - Email, SMS, or push notifications. (Transactional email for account verification is in scope, D16.)
@@ -167,7 +173,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | --- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | D1  | One role per user; scope derived from org structure                                           | Single authorization model; role defines _what_, structure defines _where_.                            |
 | D2  | Create/edit/assign roles only with permissions you hold; no self role change                  | Prevents privilege escalation.                                                                         |
-| D3  | Fixed org tree: departments under the organization, sections under departments; no positions | Sufficient for MVP; positions add no MVP behavior.                                                     |
+| D3  | Fixed org tree: departments under the organization, sections under departments; no job titles | Sufficient for MVP. Positions that work is routed to are a separate concept (D29).                    |
 | D4  | Priority = SLA level, in working days                                                         | One concept instead of two.                                                                            |
 | D5  | Requester sets priority; legal may adjust until acceptance; locked after                      | Prevents post-acceptance changes that would hide SLA breaches.                                         |
 | D6  | Linear workflow stages                                                                        | Simplest correct workflow model.                                                                       |
@@ -192,6 +198,12 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D25 | Every working day counts as one day whatever its length; a deadline keeps the start's fraction of its working day, and a start outside working hours counts from the next opening | SLAs are promised in days (D4), so shorter Ramadan days do not stretch them, and every SLA is exactly N days (Phase 4 spec, P4.2, P4.3). |
 | D26 | The calendar's past is fixed: a change to hours, holidays, or seasons affects only days after today | A calendar edit can never erase a breach or rewrite a closed record, yet a holiday announced the day before still helps open requests (Phase 4 spec, P4.7). |
 | D27 | Where seasons overlap, the one with the higher explicit rank sets the hours | Ramadan moves through the Gregorian year, so seasons overlap only in some years; one ranking holds every year (Phase 4 spec, P4.9). |
+| D28 | A service lists one or more allowed workflows, one of them the default; the reviewer picks one at acceptance | One service can offer a standard and a complex path; resolves open question 1 (Phase 5 spec, P5.1). |
+| D29 | Positions are named responsibilities in one unit, held by members of that unit, independent of roles and permissions, at most one per person; six built-in positions are relative to the handler and the requester | Work is routed to responsibilities, not people or roles: one edit of a position updates every workflow that names it (Phase 5 spec, P5.3). |
+| D30 | A workflow stage names a position, resolved to people when the stage starts. The builder sets per stage what happens when nobody is eligible (escalate to the managers of the unit, then of the department, where the chain ends; skip; or hold), whether the handler may narrow or escalate, and whether the handler and requester are excluded; built-in managers positions always exclude their anchor | Nobody assigns routine work by hand, and nobody approves their own request or work; resolves open question 2 (Phase 5 spec, P5.2, P5.6, P5.12). |
+| D31 | Acting on a stage is authorized by being one of its current resolved assignees, not by a permission; the first action wins | A requester with no legal permissions can confirm their stage, and a Tenant Admin cannot sign a sign-off assigned to others (Phase 5 spec, P5.8). |
+| D32 | Escalation per tenant: each rule on or off, its threshold (R0 1-30 working days, R1 1-99%), and its recipients as positions | Replaces the fixed recipients and chain of 3.7 (Phase 5 spec, P5.10). |
+| D33 | Escalation settings are not seeded; requests cannot be submitted until a tenant saves them | No request exists without escalation monitoring, and no threshold is a guess made for the tenant (Phase 5 spec, P5.11). |
 
 ---
 
@@ -206,8 +218,8 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 
 ### 7. Open Questions (to resolve during design)
 
-1. How services map to workflows (one workflow per service, or chosen at acceptance).
-2. Who a workflow stage is assigned to (a legal role, a specific person, or chosen by the owner).
+1. ~~How services map to workflows (one workflow per service, or chosen at acceptance).~~ Resolved in Phase 5: a service lists its allowed workflows with one default, and the reviewer picks one at acceptance (D28).
+2. ~~Who a workflow stage is assigned to (a legal role, a specific person, or chosen by the owner).~~ Resolved in Phase 5: a stage names a position, resolved to people automatically when it starts (D29, D30).
 3. ~~Deadline calculation precision (end of working day vs. exact time) and whether calendar changes affect already-accepted requests.~~ Resolved in Phase 4: deadlines are exact moments, placed proportionally within working days (D24, D25); calendar changes affect only days after today, so the future deadlines of open requests follow them and past outcomes never change (D26).
 4. Whether a requester can withdraw a request.
 5. ~~Length of the grace period, and whether it is a platform-wide setting or defined per plan.~~ Resolved in Phase 1: defined per plan (`grace_days`, 0-365) and copied into each subscription.

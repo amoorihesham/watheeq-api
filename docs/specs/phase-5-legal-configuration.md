@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                                                                                                                                                    |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status**             | In Implementation                                                                                                                                                                                              |
+| **Status**             | Implemented                                                                                                                                                                                                    |
 | **Approved by / date** | _Amr 24/10/2026 - 19:27 pm_                                                                                                                                                                              |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`), Phase 2 (`phase-2-org-structure-users.md`), Phase 3 (`phase-3-roles-authorization.md`), Phase 4 (`phase-4-working-calendar.md`) |
 | **Related decisions**  | MVP 3.4, 3.5, 3.7, D1, D3, D4, D5, D6, D7, D8, D9, D18, D19, D20, D21; open questions 1 and 2; Technical T2, T8, T14, T16, T20, T21, T22, T24, T25, T26                                                  |
@@ -189,7 +189,8 @@ With `includeRetired`, retired priorities follow the active ones, ordered by nam
 No row means "not configured" (Q17).
 Thresholds are required even for a rule that is off, so turning it back on never needs a value it lost.
 
-**`escalation_recipients`**: `tenant_id`, `rule` (`escalation_rules` enum `r0`, `r1`, `r2`), a target; unique per `(tenant_id, rule, target)`.
+**`escalation_recipients`**: `tenant_id`, `rule` (`escalation_rules` enum `r0`, `r1`, `r2`), a target; unique per `(tenant_id, rule, target)` through two partial unique indexes, one per target kind.
+It has no ID column and no key to `escalation_settings`: a save deletes the tenant's recipients and inserts them again, under a per-tenant advisory lock keyed `escalation:<tenant_id>`.
 
 #### Migrations
 
@@ -257,6 +258,8 @@ Shapes:
 - **Service:** `{id, name, description, retired, workflows:[{id, name, isDefault, retired}]}`.
 - **Priority:** `{id, name, days, retired}`.
 - **Escalation:** `{r0: {enabled, days, recipients:[target]}, r1: {enabled, percent, recipients}, r2: {enabled, recipients}}`, replaced as a whole.
+  A rule has at most 20 recipients; a target listed twice in one rule is `duplicate_recipient` at the second entry; R0 refuses handler-side targets even while it is off, because an off rule keeps its recipients.
+  Responses list built-in targets first, then positions by name; the audit stores the recipients sorted, in request shape, with the tenant ID as resource ID.
 
 Lists are ordered by name (T20), except priorities (display order) and stages (ordinal).
 `PUT /positions/:id/holders` replaces the holders: a user listed twice counts once, an empty list vacates the position, and each refused entry is reported at `userIds.<index>`.
@@ -277,7 +280,7 @@ The holder and unit foreign keys map to `not_unit_member` (path `userIds`) and `
 | 409  | `WORKFLOW_VERSION_CHANGED`                                                                | `baseVersion` is not the current version.                          |
 | 409 | `WORKFLOW_POSITION_RETIRED` | Restoring a workflow whose current version names a retired position; its positions are restored first. |
 
-Validation detail codes: `duplicate_workflow`, `unknown_position`, `position_retired`, `unknown_workflow`, `workflow_retired`, `not_unit_member`, `holds_other_position`, `user_inactive`, `duplicate_name` (stages), `too_many_stages`, `not_allowed` (narrow or exclude on Handler or Requester), `no_default`, `many_defaults`, `not_for_rule`, `no_recipients`, `order_mismatch`.
+Validation detail codes: `duplicate_recipient`, `duplicate_workflow`, `unknown_position`, `position_retired`, `unknown_workflow`, `workflow_retired`, `not_unit_member`, `holds_other_position`, `user_inactive`, `duplicate_name` (stages), `too_many_stages`, `not_allowed` (narrow or exclude on Handler or Requester), `no_default`, `many_defaults`, `not_for_rule`, `no_recipients`, `order_mismatch`.
 
 ### 4.3 Key flows
 
@@ -476,7 +479,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P5.11 | Escalation settings are not seeded; until saved, the tenant is "not configured" and Phase 6 refuses submissions.                                                                                                                     | Owner decision (Q17): no request ever exists without escalation monitoring, and no threshold is a guess made for the tenant.                                   |
 | P5.12 | Climbing ends after the managers of a department; when it finds nobody, the stage holds.                                                                                                                                             | Owner decision (Q18): the organization has no managers (D3), and nobody unrelated to the work approves it; the SLA keeps running, so R1 and R2 show the delay. |
 
-Promote at close-out: P5.1-P5.3, P5.6, P5.8, P5.10-P5.12 to `MVP_SCOPE.md` (with 3.4, 3.5, 3.7, and D3 updated and open questions 1 and 2 struck); P5.3 (storage), P5.4, P5.5, P5.7 to `TECHNICAL_DECISIONS.md`.
+Promoted on 2026-10-24: P5.1, P5.2 with P5.6 and P5.12, P5.3, P5.8, P5.10, and P5.11 to `MVP_SCOPE.md` as D28-D33 (with 3.4-3.7 and D3 updated and open questions 1 and 2 struck); P5.3 (storage), P5.4 with P5.5, and P5.7 to `TECHNICAL_DECISIONS.md` as T34-T36, and the cross-cutting UUID rule found in step 5.4 as T37. Decisions not promoted are detail that stays authoritative here.
 
 ## 11. Change Log
 
@@ -488,3 +491,5 @@ Promote at close-out: P5.1-P5.3, P5.6, P5.8, P5.10-P5.12 to `MVP_SCOPE.md` (with
 | 2026-10-24 | Step 5.1 implemented and verified: migration `0008_positions`, `position.view` and `position.manage`, the `/positions` endpoints, holders, clearing on move, deactivation, and retire, the unit-delete rule, `resolveAssignees` and `nextLevel`, audit. Approved by the owner: name uniqueness among active rows only (also for workflows, services, priorities); the `tenant_members_position_has_unit` check; the R5.2 example corrected; the restore lock order; holder-list, error-mapping, and resolver return details (4.1-4.3). | Acceptance criteria met; 75 new tests, full suite 609 passing on Node 24; mutation checks: dropping either exclusion, the unit in the holder key, the clear on move, or the restore lock each fail the matching tests. |
 | 2026-10-24 | Step 5.2 implemented and verified: migrations `0009_workflows` and `0010_workflows_deferred_version_fk`, `workflow.view` and `workflow.manage`, the `/workflows` endpoints, immutable versions created only when stages change, `baseVersion`, the workflow row lock and the position share lock, the position-in-use check, audit. Approved by the owner: the custom migration `0010` (5.3 and 5.4 move to `0011` and `0012`); the current-version key enforcing that the version belongs to the workflow; stages carry their `id`, the list shows no stages, audit stores stages in request shape; check order 404, retired, base version, positions; a case change in a stage name is a stage change; restoring a workflow is refused with 409 `WORKFLOW_POSITION_RETIRED` until the positions its current version names are restored. | Acceptance criteria met; 56 new tests, full suite 673 passing on Node 24; mutation checks: removing the workflow row lock, the position share lock, the stages-changed comparison, or the restore check each fail the matching tests. |
 | 2026-10-24 | Step 5.3 implemented and verified: migration `0011_services_priorities`, `service.view`, `service.manage`, `priority.view`, `priority.manage`, the `/services` and `/priorities` endpoints, allowed workflows with one default, the display order, `SERVICE_WORKFLOW_RETIRED`, the workflow-in-use check, audit. Approved by the owner: a non-deferrable order key with negate-then-assign reordering; the active-iff-placed check; `duplicate_workflow`; error paths for `no_default` and `many_defaults`; a nullable description; 100-character names; gaps after a retire; retired priorities listed after the active ones; changed-keys-only audit details; an index on `service_workflows.workflow_id` (4.1, 4.2). | Acceptance criteria met; 73 new tests, full suite 762 passing on Node 24; mutation checks: removing the share lock on workflows, the workflow-in-use check, or the order lock each fail the matching tests. |
+| 2026-10-24 | Step 5.4 implemented and verified: migration `0012_escalation`, `escalation.view` and `escalation.manage`, `GET` and `PUT /escalation`, `isEscalationConfigured` and `readEscalation`, the recipient part of `POSITION_IN_USE`, audit; also checked end to end against a running server with Al-Noor's whole configuration from section 3. Found in review and fixed: an upper-case UUID in a body was reported as unknown, because services compare IDs as strings; every UUID schema now lower-cases its input (T37). Approved by the owner: `duplicate_recipient`; at most 20 recipients per rule; R0 refuses handler-side targets while off; response and audit order; no recipient ID column (4.1, 4.2). | Acceptance criteria met; 38 new tests, full suite 809 passing on Node 24; mutation checks: removing the share lock on recipient positions, the recipient in-use check, the R0 refusal, or the UUID lower-casing each fail the matching tests. |
+| 2026-10-24 | Step 5.4 approved; all four steps verified; status set to `Implemented`; decisions promoted (D28-D33, T34-T37). | Phase 5 complete. |
