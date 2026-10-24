@@ -34,6 +34,8 @@ describe("database baseline", () => {
       "audit_log",
       "calendar_period_overrides",
       "calendar_periods",
+      "escalation_recipients",
+      "escalation_settings",
       "org_units",
       "password_tokens",
       "plans",

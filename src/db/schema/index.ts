@@ -7,6 +7,7 @@ export {
   calendarRecurrences,
   workingHours,
 } from "./calendar.js";
+export { escalationRecipients, escalationRules, escalationSettings } from "./escalation.js";
 export { orgUnitKinds, orgUnits } from "./org-units.js";
 export { passwordTokenPurposes, passwordTokens } from "./password-tokens.js";
 export { paymentPeriods, plans } from "./plans.js";

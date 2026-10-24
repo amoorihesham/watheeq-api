@@ -200,9 +200,12 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
         if (position.retiredAt) {
           return loadPosition(tx, tenantId, id);
         }
-        // The lock above pairs with the share lock a workflow save takes, so this check cannot miss a stage
-        // being saved. Step 5.4 adds escalation recipients here (R5.16).
-        if ((await repo.namedByActiveWorkflow(tx, tenantId, id)).length > 0) {
+        // The lock above pairs with the share lock a workflow or escalation save takes, so these checks cannot
+        // miss a save in flight (R5.16).
+        if (
+          (await repo.namedByActiveWorkflow(tx, tenantId, id)).length > 0 ||
+          (await repo.namedByEscalation(tx, tenantId, id)).length > 0
+        ) {
           throw new AppError("POSITION_IN_USE");
         }
         const removed = await repo.release(tx, tenantId, id, []);

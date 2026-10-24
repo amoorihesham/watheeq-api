@@ -2,6 +2,7 @@ import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-or
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import {
+  escalationRecipients,
   orgUnits,
   positions,
   tenantMembers,
@@ -89,6 +90,24 @@ export function createPositionsRepository() {
             eq(workflowStages.tenantId, tenantId),
             eq(workflowStages.targetPositionId, positionId),
             isNull(workflows.retiredAt),
+          ),
+        )
+        .limit(1);
+    },
+
+    /** Escalation recipients naming the position, whether or not the rule is on: its recipients are kept. */
+    namedByEscalation(
+      db: Executor,
+      tenantId: string,
+      positionId: string,
+    ): Promise<{ rule: string }[]> {
+      return db
+        .select({ rule: escalationRecipients.rule })
+        .from(escalationRecipients)
+        .where(
+          and(
+            eq(escalationRecipients.tenantId, tenantId),
+            eq(escalationRecipients.targetPositionId, positionId),
           ),
         )
         .limit(1);

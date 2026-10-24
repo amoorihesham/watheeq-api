@@ -11,6 +11,7 @@ import { notFoundHandler } from "./middleware/not-found.js";
 import { requestLogger } from "./middleware/request-logger.js";
 import { createAuthRouter } from "./modules/auth/index.js";
 import { createCalendarRouter } from "./modules/calendar/index.js";
+import { createEscalationRouter } from "./modules/escalation/index.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
@@ -58,6 +59,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/workflows", createWorkflowsRouter({ db, config }));
   app.use("/services", createServicesRouter({ db, config }));
   app.use("/priorities", createPrioritiesRouter({ db, config }));
+  app.use("/escalation", createEscalationRouter({ db, config }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);
