@@ -50,6 +50,8 @@ export const asUser = (app: express.Express, access: string) => ({
     request(app).post(path).set("Cookie", accessCookie(access)).send(body),
   put: (path: string, body: object) =>
     request(app).put(path).set("Cookie", accessCookie(access)).send(body),
+  patch: (path: string, body: object) =>
+    request(app).patch(path).set("Cookie", accessCookie(access)).send(body),
 });
 
 /**

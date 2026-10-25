@@ -1,5 +1,5 @@
 import { type AnyColumn, and, eq, or, type SQL, sql } from "drizzle-orm";
-import { requests } from "@/db/schema/index.js";
+import { requestStageAssignees, requestStageRuns, requests } from "@/db/schema/index.js";
 import { withinScope } from "@/modules/tenant-access/index.js";
 
 /** The caller's `permission` scope over the request's owner and one of its recorded units (T29). */
@@ -24,15 +24,26 @@ export const reviewableBy = (tenantId: string, callerId: string): SQL =>
     scoped(tenantId, callerId, "request.review", requests.requesterUnitId),
   ) as SQL;
 
+/** The caller is recorded as an assignee of the request's live (active or held) stage run. */
+export const isLiveAssignee = (callerId: string): SQL =>
+  sql`exists (
+    select 1 from ${requestStageRuns}
+    join ${requestStageAssignees} on ${requestStageAssignees.runId} = ${requestStageRuns.id}
+    where ${requestStageRuns.requestId} = ${requests.id}
+      and ${requestStageRuns.state} in ('active', 'held')
+      and ${requestStageAssignees.userId} = ${callerId}
+  )`;
+
 /**
  * The one condition for "the caller may see this request" (R6.7), used by the list, the read, and every action's
  * lookup, so anything outside it is 404. Resolved from the caller's current unit and role, so a move or a role
- * edit applies on the next request. Step 6.2 adds the branch for assignees of the live stage run.
+ * edit applies on the next request.
  */
 export function visibleRequests(tenantId: string, callerId: string): SQL {
   return or(
     eq(requests.requesterId, callerId),
     eq(requests.handlerId, callerId),
+    isLiveAssignee(callerId),
     reviewableBy(tenantId, callerId),
     scoped(tenantId, callerId, "request.view", requests.requesterUnitId),
     scoped(tenantId, callerId, "request.view", requests.handlerUnitId),
@@ -40,9 +51,8 @@ export function visibleRequests(tenantId: string, callerId: string): SQL {
 }
 
 /**
- * "Waiting on me" (R6.8). Step 6.2 adds the stages the caller is an assignee of and 6.3 the open information
- * requests the caller must answer; until then nothing waits on anybody.
+ * "Waiting on me" (R6.8): the caller is an assignee of the live stage run. Step 6.3 adds the open information
+ * requests the caller must answer.
  */
-export function waitingOnMe(_tenantId: string, _callerId: string): SQL {
-  return sql`false`;
-}
+export const waitingOnMe = (_tenantId: string, callerId: string): SQL =>
+  and(eq(requests.state, "in_progress"), isLiveAssignee(callerId)) as SQL;

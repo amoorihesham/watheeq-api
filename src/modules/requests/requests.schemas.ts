@@ -24,6 +24,24 @@ export const submitRequestSchema = z.strictObject({
 export const changePriorityRequestSchema = z.strictObject({ priorityId: idSchema, reason });
 export const acceptRequestSchema = z.strictObject({ handlerId: idSchema, workflowId: idSchema });
 export const reasonRequestSchema = z.strictObject({ reason });
+export const completeStageRequestSchema = z.strictObject({ comment: reason.optional() });
+export const refreshStageRequestSchema = z.strictObject({ reason: reason.optional() });
+export const changeHandlerRequestSchema = z.strictObject({ handlerId: idSchema, reason });
+export const narrowStageRequestSchema = z.strictObject({
+  userIds: z
+    .array(idSchema)
+    .min(1)
+    .superRefine((ids, ctx) => {
+      const seen = new Set<string>();
+      ids.forEach((id, index) => {
+        if (seen.has(id)) {
+          ctx.addIssue({ code: "custom", path: [index], params: { code: "duplicate_user" } });
+        }
+        seen.add(id);
+      });
+    }),
+  reason,
+});
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listRequestsQuerySchema = z.object({

@@ -81,5 +81,31 @@ export function createRequestsController({ service }: { service: RequestsService
       );
       res.status(200).json({ request } satisfies RequestResponseType);
     }) satisfies RequestHandler,
+
+    stageAction: (
+      action: "completeStage" | "returnStage" | "narrowStage" | "escalateStage" | "refreshStage",
+    ) =>
+      (async (req, res) => {
+        const request = await service[action](
+          tenantOf(req),
+          callerOf(req),
+          requestIdOf(req),
+          String(req.params.runId),
+          req.body,
+          auditContextOf(req),
+        );
+        res.status(200).json({ request } satisfies RequestResponseType);
+      }) satisfies RequestHandler,
+
+    changeHandler: (async (req, res) => {
+      const request = await service.changeHandler(
+        tenantOf(req),
+        callerOf(req),
+        requestIdOf(req),
+        req.body,
+        auditContextOf(req),
+      );
+      res.status(200).json({ request } satisfies RequestResponseType);
+    }) satisfies RequestHandler,
   };
 }

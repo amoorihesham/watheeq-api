@@ -36,5 +36,16 @@ export function createRequestsRouter({ db, config }: RequestsRouterDepsType): Ro
   router.post("/:requestId/accept", requireTenantPermission("request.review"), controller.accept);
   router.post("/:requestId/reject", requireTenantPermission("request.review"), controller.reject);
   router.post("/:requestId/withdraw", controller.withdraw);
+  router.put(
+    "/:requestId/handler",
+    requireTenantPermission("request.reassign"),
+    controller.changeHandler,
+  );
+  const stage = (action: string) => `/:requestId/stages/:runId/${action}`;
+  router.post(stage("complete"), controller.stageAction("completeStage"));
+  router.post(stage("return"), controller.stageAction("returnStage"));
+  router.post(stage("narrow"), controller.stageAction("narrowStage"));
+  router.post(stage("escalate"), controller.stageAction("escalateStage"));
+  router.post(stage("refresh"), controller.stageAction("refreshStage"));
   return router;
 }

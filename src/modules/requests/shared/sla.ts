@@ -70,7 +70,7 @@ export type OutcomeType = "completed" | "rejected" | "rejected_no_response" | "w
  * Closes a request, for every closing path (Phase 6 spec, 4.3): freezes the closure record of an accepted request
  * from the calendar as it is now (its past never changes, D26) and returns it; a request closed before acceptance
  * has an outcome and no SLA. The caller holds the request's row lock and audits.
- * Steps 6.2 and 6.3 also end the live stage run and close an open information request here.
+ * It ends the live stage run as cancelled; step 6.3 also closes an open information request here.
  */
 export async function closeRequest(
   tx: Tx,
@@ -78,6 +78,7 @@ export async function closeRequest(
   closure: { outcome: OutcomeType; actorId: string; reason?: string },
 ): Promise<SlaType | null> {
   const closedAt = await repo.now(tx);
+  await repo.cancelLiveRun(tx, request.tenantId, request.id, closedAt, closure.actorId);
   const record = request.acceptedAt
     ? measure(
         await loadCalendar(tx, request.tenantId),

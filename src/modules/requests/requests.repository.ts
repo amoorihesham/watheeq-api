@@ -1,15 +1,29 @@
-import { and, count, desc, eq, getTableColumns, isNull, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+  lt,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import { dateFromEpochMs } from "@/db/rows.js";
 import {
   priorities,
+  requestStageAssignees,
+  requestStageRuns,
   requests,
   services,
   serviceWorkflows,
   tenantMembers,
   users,
+  workflowStages,
   workflows,
 } from "@/db/schema/index.js";
 import type {
@@ -21,6 +35,10 @@ import type {
   RequestSummaryRowType,
   RequestViewType,
   ServiceRowType,
+  StageAssigneeRowType,
+  StageDefRowType,
+  StageRunRowType,
+  StageRunViewRowType,
   WorkflowRowType,
 } from "./requests.types.js";
 import { reviewableBy, waitingOnMe } from "./shared/visibility.js";
@@ -166,8 +184,8 @@ export function createRequestsRepository() {
       tenantId: string,
       requestId: string,
       patch: Partial<typeof requests.$inferInsert>,
-    ) {
-      return db.update(requests).set(patch).where(ofTenant(tenantId, requestId));
+    ): Promise<RequestRowType[]> {
+      return db.update(requests).set(patch).where(ofTenant(tenantId, requestId)).returning();
     },
 
     /** Sets the closing state and moment and the closure record. */
@@ -253,6 +271,169 @@ export function createRequestsRepository() {
             eq(serviceWorkflows.tenantId, tenantId),
             eq(serviceWorkflows.serviceId, serviceId),
             eq(serviceWorkflows.workflowId, workflowId),
+          ),
+        );
+    },
+
+    /** The stages of one workflow version, in order. */
+    stageDefs(db: Executor, tenantId: string, versionId: string): Promise<StageDefRowType[]> {
+      return db
+        .select({
+          id: workflowStages.id,
+          ordinal: workflowStages.ordinal,
+          name: workflowStages.name,
+          targetPositionId: workflowStages.targetPositionId,
+          targetBuiltin: workflowStages.targetBuiltin,
+          whenUnresolved: workflowStages.whenUnresolved,
+          handlerMayNarrow: workflowStages.handlerMayNarrow,
+          handlerMayEscalate: workflowStages.handlerMayEscalate,
+          excludeParties: workflowStages.excludeParties,
+        })
+        .from(workflowStages)
+        .where(and(eq(workflowStages.tenantId, tenantId), eq(workflowStages.versionId, versionId)))
+        .orderBy(workflowStages.ordinal);
+    },
+
+    /** The request's live (active or held) run, if any. */
+    liveRun(db: Executor, tenantId: string, requestId: string): Promise<StageRunRowType[]> {
+      return db
+        .select()
+        .from(requestStageRuns)
+        .where(
+          and(
+            eq(requestStageRuns.tenantId, tenantId),
+            eq(requestStageRuns.requestId, requestId),
+            inArray(requestStageRuns.state, ["active", "held"]),
+          ),
+        );
+    },
+
+    /** Every run of the requests, in the order they started, with the stage's name. */
+    runsOf(
+      db: Executor,
+      tenantId: string,
+      requestIds: string[],
+      liveOnly = false,
+    ): Promise<StageRunViewRowType[]> {
+      if (requestIds.length === 0) {
+        return Promise.resolve([]);
+      }
+      return db
+        .select({
+          ...getTableColumns(requestStageRuns),
+          stageName: workflowStages.name,
+          endedByName: users.userName,
+        })
+        .from(requestStageRuns)
+        .innerJoin(
+          workflowStages,
+          and(
+            eq(workflowStages.tenantId, requestStageRuns.tenantId),
+            eq(workflowStages.id, requestStageRuns.workflowStageId),
+          ),
+        )
+        .leftJoin(users, eq(users.id, requestStageRuns.endedBy))
+        .where(
+          and(
+            eq(requestStageRuns.tenantId, tenantId),
+            inArray(requestStageRuns.requestId, requestIds),
+            liveOnly ? inArray(requestStageRuns.state, ["active", "held"]) : undefined,
+          ),
+        )
+        .orderBy(requestStageRuns.startedAt, requestStageRuns.ordinal);
+    },
+
+    assigneesOf(db: Executor, tenantId: string, runIds: string[]): Promise<StageAssigneeRowType[]> {
+      if (runIds.length === 0) {
+        return Promise.resolve([]);
+      }
+      return db
+        .select({
+          runId: requestStageAssignees.runId,
+          userId: requestStageAssignees.userId,
+          name: users.userName,
+        })
+        .from(requestStageAssignees)
+        .innerJoin(users, eq(users.id, requestStageAssignees.userId))
+        .where(
+          and(
+            eq(requestStageAssignees.tenantId, tenantId),
+            inArray(requestStageAssignees.runId, runIds),
+          ),
+        )
+        .orderBy(byName(users.userName), users.id);
+    },
+
+    insertRun(
+      db: Executor,
+      values: typeof requestStageRuns.$inferInsert,
+    ): Promise<StageRunRowType[]> {
+      return db.insert(requestStageRuns).values(values).returning();
+    },
+
+    updateRun(
+      db: Executor,
+      tenantId: string,
+      runId: string,
+      patch: Partial<typeof requestStageRuns.$inferInsert>,
+    ) {
+      return db
+        .update(requestStageRuns)
+        .set(patch)
+        .where(and(eq(requestStageRuns.tenantId, tenantId), eq(requestStageRuns.id, runId)));
+    },
+
+    async replaceAssignees(db: Executor, tenantId: string, runId: string, userIds: string[]) {
+      await db
+        .delete(requestStageAssignees)
+        .where(
+          and(eq(requestStageAssignees.tenantId, tenantId), eq(requestStageAssignees.runId, runId)),
+        );
+      if (userIds.length > 0) {
+        await db
+          .insert(requestStageAssignees)
+          .values(userIds.map((userId) => ({ tenantId, runId, userId })));
+      }
+    },
+
+    /** The nearest earlier stage that ran to completion: skipped and returned runs are passed over (Q18). */
+    latestCompletedBefore(
+      db: Executor,
+      tenantId: string,
+      requestId: string,
+      ordinal: number,
+    ): Promise<StageRunRowType[]> {
+      return db
+        .select()
+        .from(requestStageRuns)
+        .where(
+          and(
+            eq(requestStageRuns.tenantId, tenantId),
+            eq(requestStageRuns.requestId, requestId),
+            eq(requestStageRuns.state, "completed"),
+            lt(requestStageRuns.ordinal, ordinal),
+          ),
+        )
+        .orderBy(desc(requestStageRuns.ordinal), desc(requestStageRuns.startedAt))
+        .limit(1);
+    },
+
+    /** Ends the live run, if there is one, because the request closed. */
+    cancelLiveRun(
+      db: Executor,
+      tenantId: string,
+      requestId: string,
+      endedAt: Date,
+      endedBy: string,
+    ) {
+      return db
+        .update(requestStageRuns)
+        .set({ state: "cancelled", endedAt, endedBy })
+        .where(
+          and(
+            eq(requestStageRuns.tenantId, tenantId),
+            eq(requestStageRuns.requestId, requestId),
+            inArray(requestStageRuns.state, ["active", "held"]),
           ),
         );
     },

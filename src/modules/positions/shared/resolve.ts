@@ -79,7 +79,7 @@ async function startLevel(
 }
 
 /** The people at one level, after the exclusions of R5.6. */
-async function peopleAt(
+export async function peopleAtLevel(
   db: Executor,
   tenantId: string,
   level: AssigneeLevelType,
@@ -146,7 +146,7 @@ export async function resolveAssignees(
   options: ResolveOptionsType,
 ): Promise<ResolvedAssigneesType> {
   const level = await startLevel(db, tenantId, target, context);
-  return { level, userIds: await peopleAt(db, tenantId, level, context, options) };
+  return { level, userIds: await peopleAtLevel(db, tenantId, level, context, options) };
 }
 
 /**
@@ -162,7 +162,7 @@ export async function nextLevel(
 ): Promise<ResolvedAssigneesType | null> {
   let above = await levelAbove(db, tenantId, level, context);
   while (above) {
-    const userIds = await peopleAt(db, tenantId, above, context, options);
+    const userIds = await peopleAtLevel(db, tenantId, above, context, options);
     if (userIds.length > 0) {
       return { level: above, userIds };
     }

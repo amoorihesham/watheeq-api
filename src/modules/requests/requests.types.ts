@@ -1,7 +1,8 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type { requestStates, requests } from "@/db/schema/index.js";
+import type { requestStageRuns, requestStates, requests } from "@/db/schema/index.js";
+import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { AnswerSnapshotType } from "@/modules/services/shared/answers.js";
 import type { FormFieldType } from "@/modules/services/shared/form.js";
 import type { REQUEST_VIEWS } from "./requests.config.js";
@@ -9,9 +10,13 @@ import type { createRequestsController } from "./requests.controller.js";
 import type { createRequestsRepository } from "./requests.repository.js";
 import type {
   acceptRequestSchema,
+  changeHandlerRequestSchema,
   changePriorityRequestSchema,
+  completeStageRequestSchema,
   listRequestsQuerySchema,
+  narrowStageRequestSchema,
   reasonRequestSchema,
+  refreshStageRequestSchema,
   submitRequestSchema,
 } from "./requests.schemas.js";
 import type { createRequestsService } from "./requests.service.js";
@@ -44,6 +49,32 @@ export type SlaSourceType = Pick<
   | "slaMet"
 >;
 
+export type StageRunRowType = typeof requestStageRuns.$inferSelect;
+
+export type StageRunViewRowType = StageRunRowType & {
+  stageName: string;
+  endedByName: string | null;
+};
+
+export interface StageAssigneeRowType {
+  runId: string;
+  userId: string;
+  name: string;
+}
+
+/** One stage of a workflow version, as a run is started and acted on. */
+export interface StageDefRowType {
+  id: string;
+  ordinal: number;
+  name: string;
+  targetPositionId: string | null;
+  targetBuiltin: AssigneeBuiltinType | null;
+  whenUnresolved: "escalate" | "skip" | "hold";
+  handlerMayNarrow: boolean;
+  handlerMayEscalate: boolean;
+  excludeParties: boolean;
+}
+
 export interface ServiceRowType {
   id: string;
   name: string;
@@ -75,6 +106,10 @@ export type SubmitRequestType = z.input<typeof submitRequestSchema>;
 export type ChangePriorityRequestType = z.input<typeof changePriorityRequestSchema>;
 export type AcceptRequestType = z.input<typeof acceptRequestSchema>;
 export type ReasonRequestType = z.input<typeof reasonRequestSchema>;
+export type CompleteStageRequestType = z.input<typeof completeStageRequestSchema>;
+export type RefreshStageRequestType = z.input<typeof refreshStageRequestSchema>;
+export type ChangeHandlerRequestType = z.input<typeof changeHandlerRequestSchema>;
+export type NarrowStageRequestType = z.input<typeof narrowStageRequestSchema>;
 export type ListRequestsQueryType = z.output<typeof listRequestsQuerySchema>;
 
 /** The SLA as the API returns it: live while in progress, the frozen record once closed (R6.22, R6.23). */
@@ -84,6 +119,26 @@ export interface SlaType {
   met: boolean;
   breachDays: number;
   awaitingInfoDays: number;
+}
+
+/** The stage a request in progress is at, and who it waits on; nobody while held. */
+export interface ActiveStageType {
+  name: string;
+  waitingOn: { id: string; name: string }[];
+}
+
+/** One run of one workflow stage, as the request page lists them in the order they started. */
+export interface StageRunType {
+  id: string;
+  stage: { id: string; name: string; ordinal: number };
+  state: StageRunRowType["state"];
+  narrowed: boolean;
+  escalated: boolean;
+  startedAt: Date;
+  endedAt: Date | null;
+  endedBy: { id: string; name: string } | null;
+  comment: string | null;
+  assignees: { id: string; name: string }[];
 }
 
 export interface RequestSummaryType {
@@ -99,16 +154,15 @@ export interface RequestSummaryType {
   acceptedAt: Date | null;
   closedAt: Date | null;
   deadline: Date | null;
-  /** Step 6.2 fills it. */
-  activeStage: null;
+  activeStage: ActiveStageType | null;
 }
 
 export interface RequestType extends RequestSummaryType {
   answers: AnswerSnapshotType[];
-  /** Steps 6.4, 6.3, and 6.2 replace these three with their own lists. */
+  /** Steps 6.4 and 6.3 replace these two with their own lists. */
   files: unknown[];
-  stages: unknown[];
   informationRequests: unknown[];
+  stages: StageRunType[];
   sla: SlaType | null;
   allowedActions: string[];
 }

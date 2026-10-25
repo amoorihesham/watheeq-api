@@ -14,31 +14,59 @@ import {
 import { NUMBER_PREFIX } from "./requests.config.js";
 import {
   acceptRequestSchema,
+  changeHandlerRequestSchema,
   changePriorityRequestSchema,
+  completeStageRequestSchema,
   listRequestsQuerySchema,
+  narrowStageRequestSchema,
   reasonRequestSchema,
+  refreshStageRequestSchema,
   requestIdSchema,
   submitRequestSchema,
 } from "./requests.schemas.js";
 import type {
   AcceptRequestType,
+  ActiveStageType,
   CatalogType,
+  ChangeHandlerRequestType,
   ChangePriorityRequestType,
+  CompleteStageRequestType,
   ListRequestsResponseType,
+  NarrowStageRequestType,
   ReasonRequestType,
+  RefreshStageRequestType,
   RequestDetailRowType,
   RequestRowType,
   RequestSummaryRowType,
   RequestSummaryType,
   RequestsRepositoryType,
   RequestType,
+  StageAssigneeRowType,
+  StageDefRowType,
+  StageRunRowType,
+  StageRunType,
+  StageRunViewRowType,
   SubmitRequestType,
 } from "./requests.types.js";
 import { nextNumber } from "./shared/numbers.js";
 import { closeRequest, frozenSlaOf, slaOf } from "./shared/sla.js";
+import {
+  type ActorType,
+  assigneeIdsOf,
+  auditCompletion,
+  completeRun,
+  escalateRun,
+  narrowRun,
+  qualifiesFor,
+  refreshRun,
+  returnRun,
+  startStage,
+  type TransitionType,
+} from "./shared/stages.js";
 import { visibleRequests } from "./shared/visibility.js";
 
 const REVIEW = [{ key: "request.review", scope: "organization" }] as const;
+const REASSIGN = [{ key: "request.reassign", scope: "organization" }] as const;
 
 /** A non-UUID id is answered like an unknown one, never as a database cast error. */
 function existingRequestId(requestId: string): string {
@@ -67,9 +95,40 @@ const deadlineOf = (
     ? (slaOf(row, calendar)?.deadline ?? null)
     : (frozenSlaOf(row)?.deadline ?? null);
 
+const isLive = (run: Pick<StageRunRowType, "state">) =>
+  run.state === "active" || run.state === "held";
+
+const peopleOf = (assignees: StageAssigneeRowType[], runId: string) =>
+  assignees
+    .filter((assignee) => assignee.runId === runId)
+    .map(({ userId, name }) => ({ id: userId, name }));
+
+/** The stage the request is at and who it waits on, from the live run among `runs`. */
+function activeStageOf(
+  runs: StageRunViewRowType[],
+  assignees: StageAssigneeRowType[],
+): ActiveStageType | null {
+  const live = runs.find(isLive);
+  return live ? { name: live.stageName, waitingOn: peopleOf(assignees, live.id) } : null;
+}
+
+const toStageRun = (run: StageRunViewRowType, assignees: StageAssigneeRowType[]): StageRunType => ({
+  id: run.id,
+  stage: { id: run.workflowStageId, name: run.stageName, ordinal: run.ordinal },
+  state: run.state,
+  narrowed: run.narrowed,
+  escalated: run.escalated,
+  startedAt: run.startedAt,
+  endedAt: run.endedAt,
+  endedBy: run.endedBy && run.endedByName ? { id: run.endedBy, name: run.endedByName } : null,
+  comment: run.comment,
+  assignees: peopleOf(assignees, run.id),
+});
+
 function toSummary(
   row: RequestSummaryRowType,
   calendar: Awaited<ReturnType<typeof loadCalendar>> | null,
+  activeStage: ActiveStageType | null,
 ): RequestSummaryType {
   return {
     id: row.id,
@@ -84,12 +143,19 @@ function toSummary(
     acceptedAt: row.acceptedAt,
     closedAt: row.closedAt,
     deadline: deadlineOf(row, calendar),
-    activeStage: null,
+    activeStage,
   };
 }
 
-/** What the caller may do with the request now, so the web app shows only valid buttons (4.2). */
-function allowedActionsOf(row: RequestSummaryRowType, callerId: string, grants: GrantMapType) {
+/** The actions the caller may take on the request now, so the web app shows only valid buttons (4.2). */
+async function allowedActionsOf(
+  executor: Executor,
+  repo: RequestsRepositoryType,
+  row: RequestDetailRowType,
+  callerId: string,
+  grants: GrantMapType,
+  runs: StageRunViewRowType[],
+): Promise<string[]> {
   const actions: string[] = [];
   if (row.state === "in_review") {
     if (row.requesterId === callerId) {
@@ -99,13 +165,57 @@ function allowedActionsOf(row: RequestSummaryRowType, callerId: string, grants: 
       actions.push("change_priority", "accept", "reject");
     }
   }
-  if (row.state === "in_progress" && grants.has("request.reassign")) {
+  if (row.state !== "in_progress") {
+    return actions;
+  }
+  if (grants.has("request.reassign")) {
     actions.push("reassign");
+  }
+  const live = runs.find(isLive);
+  if (!live || !row.workflowVersionId) {
+    return actions;
+  }
+  const stage = (await repo.stageDefs(executor, row.tenantId, row.workflowVersionId)).find(
+    (candidate) => candidate.id === live.workflowStageId,
+  );
+  if (!stage) {
+    return actions;
+  }
+  const active = live.state === "active";
+  if (active && (await qualifiesFor(executor, row, live, stage, callerId))) {
+    actions.push("complete");
+    if (runs.some((run) => run.state === "completed" && run.ordinal < live.ordinal)) {
+      actions.push("return");
+    }
+  }
+  if (row.handlerId === callerId) {
+    actions.push("refresh");
+    if (active && stage.handlerMayNarrow) {
+      actions.push("narrow");
+    }
+    if (active && stage.handlerMayEscalate) {
+      actions.push("escalate");
+    }
   }
   return actions;
 }
 
 export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepositoryType }) {
+  async function runsWithAssignees(
+    executor: Executor,
+    tenantId: string,
+    requestIds: string[],
+    liveOnly = false,
+  ) {
+    const runs = await repo.runsOf(executor, tenantId, requestIds, liveOnly);
+    const assignees = await repo.assigneesOf(
+      executor,
+      tenantId,
+      runs.map((run) => run.id),
+    );
+    return { runs, assignees };
+  }
+
   /** The request page for a caller who is already known to see it. */
   async function toRequest(
     executor: Executor,
@@ -115,14 +225,15 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
     const calendar =
       row.state === "in_progress" ? await loadCalendar(executor, row.tenantId) : null;
     const grants = await loadMemberGrants(executor, row.tenantId, callerId);
+    const { runs, assignees } = await runsWithAssignees(executor, row.tenantId, [row.id]);
     return {
-      ...toSummary(row, calendar),
+      ...toSummary(row, calendar, activeStageOf(runs, assignees)),
       answers: row.answers,
       files: [],
-      stages: [],
       informationRequests: [],
+      stages: runs.map((run) => toStageRun(run, assignees)),
       sla: calendar ? slaOf(row, calendar) : frozenSlaOf(row),
-      allowedActions: allowedActionsOf(row, callerId, grants),
+      allowedActions: await allowedActionsOf(executor, repo, row, callerId, grants, runs),
     };
   }
 
@@ -178,6 +289,44 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
     const [member] = await repo.memberUnit(tx, tenantId, handlerId);
     return member?.unitId ?? null;
   }
+
+  const actorOf = (id: string, audit: AuditContextType): ActorType => ({ id, audit });
+
+  /**
+   * The request's live run and its stage, for an action on `runId` (R6.14): the run must be the live run of the
+   * request, and `active` unless the action also works on a held one. A closed request has no live run, so the
+   * second of two completions of the last stage gets STAGE_NOT_ACTIVE too.
+   */
+  async function liveStage(
+    tx: Tx,
+    request: RequestRowType,
+    runId: string,
+    options: { allowHeld?: boolean } = {},
+  ): Promise<{ run: StageRunRowType; stage: StageDefRowType; stages: StageDefRowType[] }> {
+    const [run] = await repo.liveRun(tx, request.tenantId, request.id);
+    if (!run || run.id !== runId || (run.state !== "active" && !options.allowHeld)) {
+      throw new AppError("STAGE_NOT_ACTIVE");
+    }
+    const stages = await repo.stageDefs(tx, request.tenantId, run.workflowVersionId);
+    const stage = stages.find((candidate) => candidate.id === run.workflowStageId);
+    if (!stage) {
+      throw new Error("a run belongs to a stage of its version");
+    }
+    return { run, stage, stages };
+  }
+
+  const assertHandler = (request: RequestRowType, callerId: string) => {
+    if (request.handlerId !== callerId) {
+      throw new AppError("FORBIDDEN");
+    }
+  };
+
+  /** The run's assignees and level as an audit entry shows them. */
+  const standingOf = async (tx: Tx, request: RequestRowType, run: StageRunRowType) => ({
+    state: run.state,
+    assignees: await assigneeIdsOf(tx, request, run),
+    level: run.level,
+  });
 
   return {
     /** The active services with their forms and the active priorities (R6.2). */
@@ -284,7 +433,25 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
       const calendar = rows.some((row) => row.state === "in_progress")
         ? await loadCalendar(db, tenantId)
         : null;
-      return { requests: rows.map((row) => toSummary(row, calendar)), total: counted?.total ?? 0 };
+      const { runs, assignees } = await runsWithAssignees(
+        db,
+        tenantId,
+        rows.map((row) => row.id),
+        true,
+      );
+      return {
+        requests: rows.map((row) =>
+          toSummary(
+            row,
+            calendar,
+            activeStageOf(
+              runs.filter((run) => run.requestId === row.id),
+              assignees,
+            ),
+          ),
+        ),
+        total: counted?.total ?? 0,
+      };
     },
 
     async get(tenantId: string, callerId: string, requestId: string): Promise<RequestType> {
@@ -378,7 +545,7 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
           throw invalid("workflowId", "workflow_not_allowed");
         }
 
-        await repo.update(tx, tenantId, id, {
+        const [accepted] = await repo.update(tx, tenantId, id, {
           state: "in_progress",
           handlerId: body.handlerId,
           handlerUnitId,
@@ -387,6 +554,18 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
           acceptedAt: await repo.now(tx),
           acceptedBy: callerId,
         });
+        if (!accepted) {
+          throw new Error("the accept update returned no row");
+        }
+        const transitions: TransitionType[] = [];
+        const closure = await startStage(
+          tx,
+          accepted,
+          await repo.stageDefs(tx, tenantId, workflow.currentVersionId),
+          0,
+          actorOf(callerId, context),
+          transitions,
+        );
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
@@ -397,8 +576,10 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
             handlerId: body.handlerId,
             workflow: { id: workflow.id, versionId: workflow.currentVersionId },
             priority: { name: request.priorityName, days: request.priorityDays },
+            transitions,
           },
         });
+        await auditCompletion(tx, accepted, actorOf(callerId, context), closure);
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -465,6 +646,287 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
           reason: body.reason,
           details: { reason: body.reason },
         });
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** An assignee who still qualifies completes the active run (R6.14, R6.15). */
+    completeStage(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      runId: string,
+      input: CompleteStageRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const run = existingRequestId(runId);
+      const body = validate(completeStageRequestSchema, input);
+      return withTx(db, async (tx) => {
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        const live = await liveStage(tx, request, run);
+        if (!(await qualifiesFor(tx, request, live.run, live.stage, callerId))) {
+          throw new AppError("FORBIDDEN");
+        }
+        const transitions: TransitionType[] = [];
+        const closure = await completeRun(
+          tx,
+          request,
+          live.stages,
+          live.run,
+          body.comment,
+          actorOf(callerId, context),
+          transitions,
+        );
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.stage_completed",
+          resourceType: "request",
+          resourceId: id,
+          details: {
+            run: live.run.id,
+            stage: live.run.workflowStageId,
+            comment: body.comment ?? null,
+            transitions,
+          },
+        });
+        await auditCompletion(tx, request, actorOf(callerId, context), closure);
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** An assignee who still qualifies returns to the nearest earlier stage that ran (R6.16). */
+    returnStage(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      runId: string,
+      input: ReasonRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const run = existingRequestId(runId);
+      const body = validate(reasonRequestSchema, input);
+      return withTx(db, async (tx) => {
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        const live = await liveStage(tx, request, run);
+        if (!(await qualifiesFor(tx, request, live.run, live.stage, callerId))) {
+          throw new AppError("FORBIDDEN");
+        }
+        const transitions: TransitionType[] = [];
+        const closure = await returnRun(
+          tx,
+          request,
+          live.stages,
+          live.run,
+          body.reason,
+          actorOf(callerId, context),
+          transitions,
+        );
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.stage_returned",
+          resourceType: "request",
+          resourceId: id,
+          reason: body.reason,
+          details: {
+            run: live.run.id,
+            stage: live.run.workflowStageId,
+            reason: body.reason,
+            transitions,
+          },
+        });
+        await auditCompletion(tx, request, actorOf(callerId, context), closure);
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** The handler narrows the assignees to some of them, where the stage allows it (R6.17). */
+    narrowStage(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      runId: string,
+      input: NarrowStageRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const run = existingRequestId(runId);
+      const body = validate(narrowStageRequestSchema, input);
+      return withTx(db, async (tx) => {
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        assertState(request, "in_progress");
+        assertHandler(request, callerId);
+        const live = await liveStage(tx, request, run);
+        if (!live.stage.handlerMayNarrow) {
+          throw new AppError("FORBIDDEN");
+        }
+        const before = await assigneeIdsOf(tx, request, live.run);
+        const notAssigned = body.userIds.flatMap((userId, index) =>
+          before.includes(userId) ? [] : [{ path: `userIds.${index}`, code: "not_assignee" }],
+        );
+        if (notAssigned.length > 0) {
+          throw new AppError("VALIDATION_FAILED", notAssigned);
+        }
+        await narrowRun(tx, request, live.run, body.userIds);
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.stage_narrowed",
+          resourceType: "request",
+          resourceId: id,
+          reason: body.reason,
+          details: {
+            run: live.run.id,
+            before: { assignees: before },
+            after: { assignees: body.userIds },
+            reason: body.reason,
+          },
+        });
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** The handler escalates the run to the next level up, where the stage allows it (R6.17). */
+    escalateStage(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      runId: string,
+      input: ReasonRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const run = existingRequestId(runId);
+      const body = validate(reasonRequestSchema, input);
+      return withTx(db, async (tx) => {
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        assertState(request, "in_progress");
+        assertHandler(request, callerId);
+        const live = await liveStage(tx, request, run);
+        if (!live.stage.handlerMayEscalate) {
+          throw new AppError("FORBIDDEN");
+        }
+        const before = await standingOf(tx, request, live.run);
+        const after = await escalateRun(tx, request, live.stage, live.run);
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.stage_escalated",
+          resourceType: "request",
+          resourceId: id,
+          reason: body.reason,
+          details: {
+            run: live.run.id,
+            before,
+            after: { assignees: after.userIds, level: after.level },
+            reason: body.reason,
+          },
+        });
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** The handler resolves the live stage's assignees again (R6.18). */
+    refreshStage(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      runId: string,
+      input: RefreshStageRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const run = existingRequestId(runId);
+      const body = validate(refreshStageRequestSchema, input);
+      return withTx(db, async (tx) => {
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        assertState(request, "in_progress");
+        assertHandler(request, callerId);
+        const live = await liveStage(tx, request, run, { allowHeld: true });
+        const before = await standingOf(tx, request, live.run);
+        const transitions: TransitionType[] = [];
+        const closure = await refreshRun(
+          tx,
+          request,
+          live.stages,
+          live.run,
+          actorOf(callerId, context),
+          transitions,
+        );
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.stage_refreshed",
+          resourceType: "request",
+          resourceId: id,
+          ...(body.reason ? { reason: body.reason } : {}),
+          details: { run: live.run.id, before, reason: body.reason ?? null, transitions },
+        });
+        await auditCompletion(tx, request, actorOf(callerId, context), closure);
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** A holder of `request.reassign` changes the handler, and the live stage is resolved again for them (R6.19). */
+    changeHandler(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      input: ChangeHandlerRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const body = validate(changeHandlerRequestSchema, input);
+      return withTx(db, async (tx) => {
+        await assertGrantsHeld(tx, tenantId, callerId, REASSIGN);
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        assertState(request, "in_progress");
+        if (request.handlerId === body.handlerId) {
+          throw invalid("handlerId", "same_handler");
+        }
+        const handlerUnitId = await handlerUnitOf(
+          tx,
+          tenantId,
+          request.requesterId,
+          body.handlerId,
+        );
+        const [changed] = await repo.update(tx, tenantId, id, {
+          handlerId: body.handlerId,
+          handlerUnitId,
+        });
+        if (!changed) {
+          throw new Error("the handler update returned no row");
+        }
+        const transitions: TransitionType[] = [];
+        const [live] = await repo.liveRun(tx, tenantId, id);
+        const closure = live
+          ? await refreshRun(
+              tx,
+              changed,
+              await repo.stageDefs(tx, tenantId, live.workflowVersionId),
+              live,
+              actorOf(callerId, context),
+              transitions,
+            )
+          : null;
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.handler_changed",
+          resourceType: "request",
+          resourceId: id,
+          reason: body.reason,
+          details: {
+            before: request.handlerId,
+            after: body.handlerId,
+            reason: body.reason,
+            transitions,
+          },
+        });
+        await auditCompletion(tx, changed, actorOf(callerId, context), closure);
         return reload(tx, tenantId, id, callerId);
       });
     },

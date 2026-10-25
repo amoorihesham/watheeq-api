@@ -8,4 +8,4 @@ export type {
   ResolvedAssigneesType,
   ResolveOptionsType,
 } from "./positions.types.js";
-export { nextLevel, resolveAssignees } from "./shared/resolve.js";
+export { nextLevel, peopleAtLevel, resolveAssignees } from "./shared/resolve.js";

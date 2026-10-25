@@ -12,11 +12,10 @@ const repo = createCalendarRepository();
  * with its adjustments, ended ones included, so past dates are answered by the rules that applied then (P4.8).
  */
 export async function loadCalendar(db: Executor, tenantId: string): Promise<CalendarType> {
-  const [hours, periods, overrides] = await Promise.all([
-    repo.listHours(db, tenantId),
-    repo.listPeriods(db, tenantId),
-    repo.listOverrides(db, tenantId),
-  ]);
+  // One after the other: a transaction has one connection, and pg is deprecating queries queued on a busy client.
+  const hours = await repo.listHours(db, tenantId);
+  const periods = await repo.listPeriods(db, tenantId);
+  const overrides = await repo.listOverrides(db, tenantId);
   return {
     hours: hours.map((version) => ({ ...version, week: canonicalWeek(version.week) })),
     periods: periods.map((row) => toCalendarPeriod(row, overrides)),
