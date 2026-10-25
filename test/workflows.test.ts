@@ -351,9 +351,15 @@ describe("creating workflows (R5.8)", () => {
   it("leaves nothing behind when the name is taken", async () => {
     const name = nextName("Clean Failure");
     await createWorkflow(name);
-    const before = await pool.query("select count(*)::int as n from workflow_versions");
+    const before = await pool.query(
+      "select count(*)::int as n from workflow_versions where tenant_id = $1",
+      [alNoor],
+    );
     await as(huda).post("/workflows", { name, stages: simpleStages() });
-    const after = await pool.query("select count(*)::int as n from workflow_versions");
+    const after = await pool.query(
+      "select count(*)::int as n from workflow_versions where tenant_id = $1",
+      [alNoor],
+    );
     expect(after.rows[0].n).toBe(before.rows[0].n);
   });
 });

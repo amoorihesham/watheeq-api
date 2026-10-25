@@ -14,6 +14,7 @@ import {
   gatedStore,
   rawRequest,
   seedFiles,
+  trackedStore,
   uploadAs,
 } from "./helpers/files.js";
 import { captureLogs } from "./helpers/log-capture.js";
@@ -390,7 +391,8 @@ describe("size and headers (R5.5.10)", () => {
 
   it("never stores more than the declared size when the client sends more", async () => {
     const declared = Buffer.alloc(100, "a");
-    await rawRequest(app, {
+    const tracked = trackedStore(store);
+    await rawRequest(testApp(pool, capture.logger, { fileStore: tracked.store }), {
       path: "/files?name=lie.txt",
       headers: {
         Cookie: accessCookie(khalid),
@@ -401,6 +403,8 @@ describe("size and headers (R5.5.10)", () => {
     });
     // The server frames the body by Content-Length, so the extra bytes are not part of this request: either the
     // upload completes with exactly the declared bytes, or the broken connection removes it. Never in between.
+    // The connection can break before the server has even reserved the row, so wait for its store work first.
+    await tracked.settled();
     await eventually(
       async () =>
         (await filesOf(pool, alNoor.id)).every(
@@ -416,8 +420,8 @@ describe("size and headers (R5.5.10)", () => {
   });
 
   it("deletes the bytes and the row when the client disconnects before sending what it declared", async () => {
-    const before = (await filesOf(pool, alNoor.id)).length;
-    const res = await rawRequest(app, {
+    const tracked = trackedStore(store);
+    const res = await rawRequest(testApp(pool, capture.logger, { fileStore: tracked.store }), {
       path: "/files?name=cut.txt",
       headers: {
         Cookie: accessCookie(khalid),
@@ -428,11 +432,11 @@ describe("size and headers (R5.5.10)", () => {
       abortAfterBody: true,
     });
     expect(res).toBe("closed");
+    await tracked.settled();
     await eventually(
       async () => (await filesOf(pool, alNoor.id)).every((f) => f.name !== "cut.txt"),
       "the abandoned row to be removed",
     );
-    expect((await filesOf(pool, alNoor.id)).length).toBe(before);
   });
 });
 

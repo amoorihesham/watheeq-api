@@ -178,6 +178,42 @@ export function gatedStore(inner: FileStoreType) {
   return { store, release, entered };
 }
 
+/**
+ * A store that reports when an upload's store work is over: `settled()` resolves once `put` has been called and
+ * every `put` and `delete` begun has finished. A test whose client breaks the connection waits on it, because the
+ * server may still be reserving, storing, or cleaning up after the client has seen the connection close.
+ */
+export function trackedStore(inner: FileStoreType) {
+  const pending = new Set<Promise<unknown>>();
+  let putCalled: () => void = () => {};
+  const firstPut = new Promise<void>((resolve) => {
+    putCalled = resolve;
+  });
+  const track = <T>(work: Promise<T>): Promise<T> => {
+    pending.add(work);
+    work.then(
+      () => pending.delete(work),
+      () => pending.delete(work),
+    );
+    return work;
+  };
+  const store: FileStoreType = {
+    ...inner,
+    put(key, body) {
+      putCalled();
+      return track(inner.put(key, body));
+    },
+    delete: (keys) => track(inner.delete(keys)),
+  };
+  async function settled(): Promise<void> {
+    await firstPut;
+    while (pending.size > 0) {
+      await Promise.allSettled([...pending]);
+    }
+  }
+  return { store, settled };
+}
+
 /** A store that fails the operations named, like an unreachable object store. */
 export function failingStore(
   inner: FileStoreType,
