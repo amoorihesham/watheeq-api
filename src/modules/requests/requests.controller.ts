@@ -13,6 +13,7 @@ const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
 const callerOf = (req: Request) => principalOf(req).id;
 const requestIdOf = (req: Request) => String(req.params.requestId);
 const fileIdOf = (req: Request) => String(req.params.fileId);
+const informationIdOf = (req: Request) => String(req.params.infoId);
 
 export function createRequestsController({ service }: { service: RequestsServiceType }) {
   return {
@@ -141,6 +142,51 @@ export function createRequestsController({ service }: { service: RequestsService
         fileIdOf(req),
       );
       await sendDownload(res, file, body);
+    }) satisfies RequestHandler,
+
+    askInformation: (async (req, res) => {
+      const request = await service.askInformation(
+        tenantOf(req),
+        callerOf(req),
+        requestIdOf(req),
+        req.body,
+        auditContextOf(req),
+      );
+      res.status(201).json({ request } satisfies RequestResponseType);
+    }) satisfies RequestHandler,
+
+    answerInformation: (async (req, res) => {
+      const request = await service.answerInformation(
+        tenantOf(req),
+        callerOf(req),
+        requestIdOf(req),
+        informationIdOf(req),
+        req.body,
+        auditContextOf(req),
+      );
+      res.status(200).json({ request } satisfies RequestResponseType);
+    }) satisfies RequestHandler,
+
+    cancelInformation: (async (req, res) => {
+      const request = await service.cancelInformation(
+        tenantOf(req),
+        callerOf(req),
+        requestIdOf(req),
+        informationIdOf(req),
+        auditContextOf(req),
+      );
+      res.status(200).json({ request } satisfies RequestResponseType);
+    }) satisfies RequestHandler,
+
+    closeNoResponse: (async (req, res) => {
+      const request = await service.closeNoResponse(
+        tenantOf(req),
+        callerOf(req),
+        requestIdOf(req),
+        req.body,
+        auditContextOf(req),
+      );
+      res.status(200).json({ request } satisfies RequestResponseType);
     }) satisfies RequestHandler,
   };
 }

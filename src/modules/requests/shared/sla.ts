@@ -29,6 +29,27 @@ function measure(
   };
 }
 
+/**
+ * The working time the request spent waiting for the requester (R6.23, Q27): each question's open time, counted
+ * only between acceptance and `at`. A question that has not ended counts until `at`.
+ */
+export function awaitingInfoDaysOf(
+  calendar: CalendarType,
+  acceptedAt: Date,
+  questions: { askedAt: Date; endedAt: Date | null }[],
+  at: Date,
+): number {
+  let total = 0;
+  for (const { askedAt, endedAt } of questions) {
+    const from = askedAt > acceptedAt ? askedAt : acceptedAt;
+    const to = endedAt && endedAt < at ? endedAt : at;
+    if (from < to) {
+      total += workingDaysBetween(calendar, from, to);
+    }
+  }
+  return Number(total.toFixed(6));
+}
+
 /** The closure record of a closed request, or null while it is open. */
 export function frozenSlaOf(request: SlaSourceType): SlaType | null {
   const { slaDeadline, elapsedDays, breachDays, slaMet } = request;
@@ -69,8 +90,8 @@ export type OutcomeType = "completed" | "rejected" | "rejected_no_response" | "w
 /**
  * Closes a request, for every closing path (Phase 6 spec, 4.3): freezes the closure record of an accepted request
  * from the calendar as it is now (its past never changes, D26) and returns it; a request closed before acceptance
- * has an outcome and no SLA. The caller holds the request's row lock and audits.
- * It ends the live stage run as cancelled; step 6.3 also closes an open information request here.
+ * has an outcome and no SLA. It ends the live stage run as cancelled, and an open information request becomes
+ * `closed`. The caller holds the request's row lock and audits.
  */
 export async function closeRequest(
   tx: Tx,
@@ -79,15 +100,19 @@ export async function closeRequest(
 ): Promise<SlaType | null> {
   const closedAt = await repo.now(tx);
   await repo.cancelLiveRun(tx, request.tenantId, request.id, closedAt, closure.actorId);
-  const record = request.acceptedAt
-    ? measure(
-        await loadCalendar(tx, request.tenantId),
-        request.acceptedAt,
-        request.priorityDays,
-        closedAt,
-        0,
-      )
-    : null;
+  let record: SlaType | null = null;
+  if (request.acceptedAt) {
+    const calendar = await loadCalendar(tx, request.tenantId);
+    const questions = await repo.informationOf(tx, request.tenantId, request.id);
+    record = measure(
+      calendar,
+      request.acceptedAt,
+      request.priorityDays,
+      closedAt,
+      awaitingInfoDaysOf(calendar, request.acceptedAt, questions, closedAt),
+    );
+  }
+  await repo.closeOpenInformation(tx, request.tenantId, request.id, closedAt, closure.actorId);
   await repo.close(tx, request.tenantId, request.id, {
     closedAt,
     state: closure.outcome,

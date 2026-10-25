@@ -37,6 +37,7 @@ describe("database baseline", () => {
       "escalation_recipients",
       "escalation_settings",
       "files",
+      "information_requests",
       "number_sequences",
       "org_units",
       "password_tokens",

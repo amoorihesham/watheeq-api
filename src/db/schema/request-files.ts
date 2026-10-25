@@ -9,6 +9,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { files } from "./files.js";
+import { informationRequests } from "./information-requests.js";
 import { requests } from "./requests.js";
 import { tenantMembers } from "./tenant-members.js";
 import { tenants } from "./tenants.js";
@@ -44,6 +45,16 @@ export const requestFiles = pgTable(
       name: "request_files_attached_by_fk",
       columns: [t.tenantId, t.attachedBy],
       foreignColumns: [tenantMembers.tenantId, tenantMembers.userId],
+    }),
+    // The answer's question must belong to the same request.
+    foreignKey({
+      name: "request_files_information_request_fk",
+      columns: [t.tenantId, t.requestId, t.informationRequestId],
+      foreignColumns: [
+        informationRequests.tenantId,
+        informationRequests.requestId,
+        informationRequests.id,
+      ],
     }),
     index("request_files_request_idx").on(t.requestId),
     check(

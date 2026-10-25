@@ -3,6 +3,8 @@ import { requestStates } from "@/db/schema/index.js";
 import { idSchema } from "@/http/validate.js";
 import {
   DEFAULT_REQUEST_PAGE_SIZE,
+  MAX_ANSWER_LENGTH,
+  MAX_QUESTION_LENGTH,
   MAX_REASON_LENGTH,
   MAX_REQUEST_PAGE_SIZE,
   MAX_TITLE_LENGTH,
@@ -22,6 +24,14 @@ export const submitRequestSchema = z.strictObject({
 });
 
 export const attachFilesRequestSchema = z.strictObject({ fileIds: z.array(z.string()).min(1) });
+
+export const askInformationRequestSchema = z.strictObject({
+  question: z.string().trim().min(1).max(MAX_QUESTION_LENGTH),
+});
+export const answerInformationRequestSchema = z.strictObject({
+  answer: z.string().trim().min(1).max(MAX_ANSWER_LENGTH),
+  fileIds: z.array(z.string()).optional(),
+});
 
 export const changePriorityRequestSchema = z.strictObject({ priorityId: idSchema, reason });
 export const acceptRequestSchema = z.strictObject({ handlerId: idSchema, workflowId: idSchema });

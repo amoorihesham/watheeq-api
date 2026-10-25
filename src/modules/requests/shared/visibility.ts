@@ -1,5 +1,10 @@
 import { type AnyColumn, and, eq, or, type SQL, sql } from "drizzle-orm";
-import { requestStageAssignees, requestStageRuns, requests } from "@/db/schema/index.js";
+import {
+  informationRequests,
+  requestStageAssignees,
+  requestStageRuns,
+  requests,
+} from "@/db/schema/index.js";
 import { withinScope } from "@/modules/tenant-access/index.js";
 
 /** The caller's `permission` scope over the request's owner and one of its recorded units (T29). */
@@ -51,8 +56,20 @@ export function visibleRequests(tenantId: string, callerId: string): SQL {
 }
 
 /**
- * "Waiting on me" (R6.8): the caller is an assignee of the live stage run. Step 6.3 adds the open information
- * requests the caller must answer.
+ * "Waiting on me" (R6.8): the caller is an assignee of the live stage run, or the requester of a request whose
+ * information request is open.
  */
-export const waitingOnMe = (_tenantId: string, callerId: string): SQL =>
-  and(eq(requests.state, "in_progress"), isLiveAssignee(callerId)) as SQL;
+export function waitingOnMe(_tenantId: string, callerId: string): SQL {
+  return or(
+    and(eq(requests.state, "in_progress"), isLiveAssignee(callerId)),
+    and(
+      eq(requests.requesterId, callerId),
+      sql`exists (
+        select 1 from ${informationRequests}
+        where ${informationRequests.tenantId} = ${requests.tenantId}
+          and ${informationRequests.requestId} = ${requests.id}
+          and ${informationRequests.state} = 'open'
+      )`,
+    ),
+  ) as SQL;
+}

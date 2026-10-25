@@ -94,6 +94,7 @@ const CODE_BY_UNIQUE_CONSTRAINT: Record<string, ErrorCode> = {
   workflows_name_unique: "WORKFLOW_NAME_TAKEN",
   services_name_unique: "SERVICE_NAME_TAKEN",
   priorities_name_unique: "PRIORITY_NAME_TAKEN",
+  information_requests_one_open: "INFORMATION_REQUEST_OPEN",
 };
 
 /**

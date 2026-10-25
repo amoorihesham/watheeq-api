@@ -47,6 +47,10 @@ export function createRequestsRouter({ db, config, store }: RequestsRouterDepsTy
   router.post(stage("narrow"), controller.stageAction("narrowStage"));
   router.post(stage("escalate"), controller.stageAction("escalateStage"));
   router.post(stage("refresh"), controller.stageAction("refreshStage"));
+  router.post("/:requestId/information-requests", controller.askInformation);
+  router.post("/:requestId/information-requests/:infoId/answer", controller.answerInformation);
+  router.post("/:requestId/information-requests/:infoId/cancel", controller.cancelInformation);
+  router.post("/:requestId/close-no-response", controller.closeNoResponse);
   router.post("/:requestId/files", controller.attachFiles);
   router.post("/:requestId/files/:fileId/remove", controller.removeFile);
   router.get("/:requestId/files/:fileId/content", controller.fileContent);

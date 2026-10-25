@@ -1,7 +1,13 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type { requestFiles, requestStageRuns, requestStates, requests } from "@/db/schema/index.js";
+import type {
+  informationRequests,
+  requestFiles,
+  requestStageRuns,
+  requestStates,
+  requests,
+} from "@/db/schema/index.js";
 import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { AnswerSnapshotType } from "@/modules/services/shared/answers.js";
 import type { FormFieldType } from "@/modules/services/shared/form.js";
@@ -11,6 +17,8 @@ import type { createRequestsController } from "./requests.controller.js";
 import type { createRequestsRepository } from "./requests.repository.js";
 import type {
   acceptRequestSchema,
+  answerInformationRequestSchema,
+  askInformationRequestSchema,
   attachFilesRequestSchema,
   changeHandlerRequestSchema,
   changePriorityRequestSchema,
@@ -116,6 +124,15 @@ export interface RequestFileRowType {
 
 export type NewRequestFileType = typeof requestFiles.$inferInsert;
 
+export type InformationRequestRowType = typeof informationRequests.$inferSelect;
+export type NewInformationRequestType = typeof informationRequests.$inferInsert;
+
+/** An information request with the names of its asker and of whoever ended it. */
+export type InformationRequestListRowType = InformationRequestRowType & {
+  askedByName: string;
+  endedByName: string | null;
+};
+
 export interface MemberUnitRowType {
   unitId: string | null;
 }
@@ -128,6 +145,8 @@ export type CompleteStageRequestType = z.input<typeof completeStageRequestSchema
 export type RefreshStageRequestType = z.input<typeof refreshStageRequestSchema>;
 export type ChangeHandlerRequestType = z.input<typeof changeHandlerRequestSchema>;
 export type NarrowStageRequestType = z.input<typeof narrowStageRequestSchema>;
+export type AskInformationRequestType = z.input<typeof askInformationRequestSchema>;
+export type AnswerInformationRequestType = z.input<typeof answerInformationRequestSchema>;
 export type AttachFilesRequestType = z.input<typeof attachFilesRequestSchema>;
 export type ListRequestsQueryType = z.output<typeof listRequestsQuerySchema>;
 
@@ -198,11 +217,24 @@ export interface RequestAnswerType extends AnswerSnapshotType {
   files?: AnswerFileType[];
 }
 
+/** A question to the requester, with its answer and the files sent with it (R6.20). */
+export interface InformationRequestType {
+  id: string;
+  askedBy: { id: string; name: string };
+  askedIn: InformationRequestRowType["askedIn"];
+  question: string;
+  askedAt: Date;
+  state: InformationRequestRowType["state"];
+  answer: string | null;
+  endedAt: Date | null;
+  endedBy: { id: string; name: string } | null;
+  files: RequestFileType[];
+}
+
 export interface RequestType extends RequestSummaryType {
   answers: RequestAnswerType[];
   files: RequestFileType[];
-  /** Step 6.3 replaces this with its own list. */
-  informationRequests: unknown[];
+  informationRequests: InformationRequestType[];
   stages: StageRunType[];
   sla: SlaType | null;
   allowedActions: string[];

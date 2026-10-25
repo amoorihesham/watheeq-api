@@ -22,6 +22,8 @@ import type { FileStoreType } from "@/storage/index.js";
 import { MAX_REQUEST_FILES, NUMBER_PREFIX } from "./requests.config.js";
 import {
   acceptRequestSchema,
+  answerInformationRequestSchema,
+  askInformationRequestSchema,
   attachFilesRequestSchema,
   changeHandlerRequestSchema,
   changePriorityRequestSchema,
@@ -37,11 +39,15 @@ import type {
   AcceptRequestType,
   ActiveStageType,
   AnswerFileType,
+  AnswerInformationRequestType,
+  AskInformationRequestType,
   AttachFilesRequestType,
   CatalogType,
   ChangeHandlerRequestType,
   ChangePriorityRequestType,
   CompleteStageRequestType,
+  InformationRequestListRowType,
+  InformationRequestType,
   ListRequestsResponseType,
   NarrowStageRequestType,
   NewRequestFileType,
@@ -65,7 +71,7 @@ import type {
   SubmitRequestType,
 } from "./requests.types.js";
 import { nextNumber } from "./shared/numbers.js";
-import { closeRequest, frozenSlaOf, slaOf } from "./shared/sla.js";
+import { awaitingInfoDaysOf, closeRequest, frozenSlaOf, slaOf } from "./shared/sla.js";
 import { isLiveStageAssignee } from "./shared/stage-assignees.js";
 import {
   type ActorType,
@@ -93,8 +99,8 @@ function existingRequestId(requestId: string): string {
   return requestId;
 }
 
-/** The same for a file ID in a path. */
-function existingFileId(fileId: string): string {
+/** The same for a file or information request ID in a path. */
+function existingChildId(fileId: string): string {
   const parsed = requestIdSchema.safeParse(fileId);
   if (!parsed.success) {
     throw new AppError("NOT_FOUND");
@@ -119,6 +125,22 @@ function assertOpen(request: RequestRowType): void {
   }
 }
 
+const toInformation = (
+  row: InformationRequestListRowType,
+  files: RequestFileType[],
+): InformationRequestType => ({
+  id: row.id,
+  askedBy: { id: row.askedBy, name: row.askedByName },
+  askedIn: row.askedIn,
+  question: row.question,
+  askedAt: row.askedAt,
+  state: row.state,
+  answer: row.answer,
+  endedAt: row.endedAt,
+  endedBy: row.endedBy && row.endedByName ? { id: row.endedBy, name: row.endedByName } : null,
+  files: files.filter((file) => file.informationRequestId === row.id),
+});
+
 const toFile = (row: RequestFileRowType): RequestFileType => ({
   id: row.id,
   name: row.name,
@@ -134,7 +156,7 @@ const toFile = (row: RequestFileRowType): RequestFileType => ({
 /** The snapshot with each file field's files listed; one no longer attached is shown as removed (R6.25). */
 function answersWithFiles(
   answers: RequestDetailRowType["answers"],
-  files: RequestFileRowType[],
+  files: RequestFileType[],
 ): RequestAnswerType[] {
   const byId = new Map(files.map((file) => [file.id, file]));
   return answers.map((answer) => {
@@ -230,11 +252,25 @@ async function allowedActionsOf(
   callerId: string,
   grants: GrantMapType,
   runs: StageRunViewRowType[],
-  canAttach: boolean,
+  can: { attach: boolean; ask: boolean; openQuestion: InformationRequestListRowType | undefined },
 ): Promise<string[]> {
   const actions: string[] = [];
-  if (canAttach) {
+  if (can.attach) {
     actions.push("attach_files");
+  }
+  if (can.ask && !can.openQuestion) {
+    actions.push("ask_information");
+  }
+  if (can.openQuestion) {
+    if (row.requesterId === callerId) {
+      actions.push("answer_information");
+    }
+    if (can.openQuestion.askedBy === callerId || row.handlerId === callerId) {
+      actions.push("cancel_information");
+    }
+    if (row.state === "in_progress" && row.handlerId === callerId) {
+      actions.push("close_no_response");
+    }
   }
   if (row.state === "in_review") {
     if (row.requesterId === callerId) {
@@ -310,6 +346,27 @@ export function createRequestsService({
     return isLiveStageAssignee(executor, request, callerId);
   }
 
+  /**
+   * Who may ask the requester a question (R6.20): a reviewer while the request is in review, the handler or a
+   * current assignee of the live stage while it is in progress.
+   */
+  async function mayAsk(
+    executor: Executor,
+    request: RequestRowType,
+    callerId: string,
+    grants: GrantMapType,
+  ): Promise<boolean> {
+    if (request.state === "in_review") {
+      return grants.has("request.review");
+    }
+    if (request.state === "in_progress") {
+      return (
+        request.handlerId === callerId || (await isLiveStageAssignee(executor, request, callerId))
+      );
+    }
+    return false;
+  }
+
   /** A deactivated member's token stays valid for a while; party actions check the database (D31). */
   async function assertActiveCaller(tx: Tx, tenantId: string, callerId: string): Promise<void> {
     if ((await repo.isActiveMember(tx, tenantId, callerId)).length === 0) {
@@ -342,24 +399,29 @@ export function createRequestsService({
       row.state === "in_progress" ? await loadCalendar(executor, row.tenantId) : null;
     const grants = await loadMemberGrants(executor, row.tenantId, callerId);
     const { runs, assignees } = await runsWithAssignees(executor, row.tenantId, [row.id]);
-    const files = await repo.filesOf(executor, row.tenantId, row.id);
-    const canAttach = await mayAttach(executor, row, callerId, grants);
+    const files = (await repo.filesOf(executor, row.tenantId, row.id)).map(toFile);
+    const questions = await repo.informationOf(executor, row.tenantId, row.id);
+    const can = {
+      attach: await mayAttach(executor, row, callerId, grants),
+      ask: await mayAsk(executor, row, callerId, grants),
+      openQuestion: questions.find((question) => question.state === "open"),
+    };
     return {
       ...toSummary(row, calendar, activeStageOf(runs, assignees)),
       answers: answersWithFiles(row.answers, files),
-      files: files.map(toFile),
-      informationRequests: [],
+      files,
+      informationRequests: questions.map((question) => toInformation(question, files)),
       stages: runs.map((run) => toStageRun(run, assignees)),
-      sla: calendar ? slaOf(row, calendar) : frozenSlaOf(row),
-      allowedActions: await allowedActionsOf(
-        executor,
-        repo,
-        row,
-        callerId,
-        grants,
-        runs,
-        canAttach,
-      ),
+      sla:
+        calendar && row.acceptedAt
+          ? slaOf(
+              row,
+              calendar,
+              new Date(),
+              awaitingInfoDaysOf(calendar, row.acceptedAt, questions, new Date()),
+            )
+          : frozenSlaOf(row),
+      allowedActions: await allowedActionsOf(executor, repo, row, callerId, grants, runs, can),
     };
   }
 
@@ -1174,7 +1236,7 @@ export function createRequestsService({
       context: AuditContextType,
     ): Promise<RequestType> {
       const id = existingRequestId(requestId);
-      const fileKey = existingFileId(fileId);
+      const fileKey = existingChildId(fileId);
       const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
@@ -1213,7 +1275,7 @@ export function createRequestsService({
       fileId: string,
     ): Promise<{ file: FileDownloadType; body: Readable }> {
       const id = existingRequestId(requestId);
-      const fileKey = existingFileId(fileId);
+      const fileKey = existingChildId(fileId);
       const [request] = await repo.findById(db, tenantId, id, visibleRequests(tenantId, callerId));
       const [file] = request ? await repo.findFile(db, tenantId, id, fileKey) : [];
       if (!file) {
@@ -1223,6 +1285,200 @@ export function createRequestsService({
         file: { name: file.name, contentType: file.contentType, sizeBytes: file.sizeBytes },
         body: await store.get(storageKeyOf(tenantId, file.id)),
       };
+    },
+
+    /**
+     * A reviewer in review, or the handler or a current stage assignee in progress, asks the requester a question
+     * (R6.20). At most one is open per request.
+     */
+    askInformation(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      input: AskInformationRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const body = validate(askInformationRequestSchema, input);
+      return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        assertOpen(request);
+        const grants = await loadMemberGrants(tx, tenantId, callerId);
+        if (!(await mayAsk(tx, request, callerId, grants))) {
+          throw new AppError("FORBIDDEN");
+        }
+        if ((await repo.openInformation(tx, tenantId, id)).length > 0) {
+          throw new AppError("INFORMATION_REQUEST_OPEN");
+        }
+        const [asked] = await repo.insertInformation(tx, {
+          tenantId,
+          requestId: id,
+          askedBy: callerId,
+          askedIn: request.state === "in_review" ? "review" : "execution",
+          question: body.question,
+        });
+        if (!asked) {
+          throw new Error("the information request insert returned no row");
+        }
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.information_requested",
+          resourceType: "request",
+          resourceId: id,
+          details: {
+            informationRequestId: asked.id,
+            askedIn: asked.askedIn,
+            question: body.question,
+          },
+        });
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** The requester answers the open question with text and optional files, which closes it (R6.20). */
+    answerInformation(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      informationId: string,
+      input: AnswerInformationRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const infoKey = existingChildId(informationId);
+      const body = validate(answerInformationRequestSchema, input);
+      return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        const [question] = await repo.findInformation(tx, tenantId, id, infoKey);
+        if (!question) {
+          throw new AppError("NOT_FOUND");
+        }
+        if (request.requesterId !== callerId) {
+          throw new AppError("FORBIDDEN");
+        }
+        if (question.state !== "open") {
+          throw new AppError("NO_OPEN_INFORMATION_REQUEST");
+        }
+        const fileIds = body.fileIds ?? [];
+        const [stored] = await repo.countFiles(tx, tenantId, id);
+        if ((stored?.total ?? 0) + fileIds.length > MAX_REQUEST_FILES) {
+          throw new AppError("TOO_MANY_FILES");
+        }
+        const files = await attachFiles(tx, tenantId, callerId, fileIds);
+        if (files.length > 0) {
+          await repo.insertFiles(
+            tx,
+            files.map((file) => ({
+              tenantId,
+              requestId: id,
+              fileId: file.id,
+              informationRequestId: question.id,
+              attachedBy: callerId,
+            })),
+          );
+        }
+        await repo.endInformation(tx, tenantId, question.id, {
+          state: "answered",
+          answer: body.answer,
+          endedAt: await repo.now(tx),
+          endedBy: callerId,
+        });
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.information_answered",
+          resourceType: "request",
+          resourceId: id,
+          details: {
+            informationRequestId: question.id,
+            answer: body.answer,
+            fileIds: files.map((file) => file.id),
+          },
+        });
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** The question's asker or the handler withdraws it, which frees the request for a new one (Q25). */
+    cancelInformation(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      informationId: string,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const infoKey = existingChildId(informationId);
+      return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        const [question] = await repo.findInformation(tx, tenantId, id, infoKey);
+        if (!question) {
+          throw new AppError("NOT_FOUND");
+        }
+        if (question.askedBy !== callerId && request.handlerId !== callerId) {
+          throw new AppError("FORBIDDEN");
+        }
+        if (question.state !== "open") {
+          throw new AppError("NO_OPEN_INFORMATION_REQUEST");
+        }
+        await repo.endInformation(tx, tenantId, question.id, {
+          state: "cancelled",
+          endedAt: await repo.now(tx),
+          endedBy: callerId,
+        });
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.information_cancelled",
+          resourceType: "request",
+          resourceId: id,
+          details: { informationRequestId: question.id },
+        });
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** While a question is open, the handler closes the request as "Rejected - no response" (R6.21). */
+    closeNoResponse(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      input: ReasonRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const body = validate(reasonRequestSchema, input);
+      return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        if (request.handlerId !== callerId) {
+          throw new AppError("FORBIDDEN");
+        }
+        assertState(request, "in_progress");
+        const [question] = await repo.openInformation(tx, tenantId, id);
+        if (!question) {
+          throw new AppError("NO_OPEN_INFORMATION_REQUEST");
+        }
+        const record = await closeRequest(tx, request, {
+          outcome: "rejected_no_response",
+          actorId: callerId,
+          reason: body.reason,
+        });
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.closed_no_response",
+          resourceType: "request",
+          resourceId: id,
+          reason: body.reason,
+          details: { reason: body.reason, informationRequestId: question.id, sla: record },
+        });
+        return reload(tx, tenantId, id, callerId);
+      });
     },
   };
 }

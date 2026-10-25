@@ -17,6 +17,7 @@ import type { Executor } from "@/db/pool.js";
 import { dateFromEpochMs } from "@/db/rows.js";
 import {
   files,
+  informationRequests,
   priorities,
   requestFiles,
   requestStageAssignees,
@@ -30,8 +31,11 @@ import {
   workflows,
 } from "@/db/schema/index.js";
 import type {
+  InformationRequestListRowType,
+  InformationRequestRowType,
   ListRequestsQueryType,
   MemberUnitRowType,
+  NewInformationRequestType,
   NewRequestFileType,
   PriorityRowType,
   RequestDetailRowType,
@@ -58,6 +62,8 @@ const summaryColumns = {
 };
 
 const attacher = alias(users, "attacher");
+const asker = alias(users, "asker");
+const ender = alias(users, "ender");
 
 const fileColumns = {
   id: files.id,
@@ -289,6 +295,115 @@ export function createRequestsRepository() {
             eq(requestFiles.fileId, fileId),
           ),
         );
+    },
+
+    /** The request's open question, if any. */
+    openInformation(
+      db: Executor,
+      tenantId: string,
+      requestId: string,
+    ): Promise<InformationRequestRowType[]> {
+      return db
+        .select()
+        .from(informationRequests)
+        .where(
+          and(
+            eq(informationRequests.tenantId, tenantId),
+            eq(informationRequests.requestId, requestId),
+            eq(informationRequests.state, "open"),
+          ),
+        );
+    },
+
+    insertInformation(
+      db: Executor,
+      values: NewInformationRequestType,
+    ): Promise<InformationRequestRowType[]> {
+      return db.insert(informationRequests).values(values).returning();
+    },
+
+    /** One of the request's questions; none for another request's. */
+    findInformation(
+      db: Executor,
+      tenantId: string,
+      requestId: string,
+      informationId: string,
+    ): Promise<InformationRequestRowType[]> {
+      return db
+        .select()
+        .from(informationRequests)
+        .where(
+          and(
+            eq(informationRequests.tenantId, tenantId),
+            eq(informationRequests.requestId, requestId),
+            eq(informationRequests.id, informationId),
+          ),
+        );
+    },
+
+    endInformation(
+      db: Executor,
+      tenantId: string,
+      informationId: string,
+      patch: {
+        state: "answered" | "cancelled";
+        answer?: string;
+        endedAt: Date;
+        endedBy: string;
+      },
+    ) {
+      return db
+        .update(informationRequests)
+        .set(patch)
+        .where(
+          and(
+            eq(informationRequests.tenantId, tenantId),
+            eq(informationRequests.id, informationId),
+          ),
+        );
+    },
+
+    /** Marks a question that is still open as `closed`, because its request closed. */
+    closeOpenInformation(
+      db: Executor,
+      tenantId: string,
+      requestId: string,
+      endedAt: Date,
+      endedBy: string,
+    ) {
+      return db
+        .update(informationRequests)
+        .set({ state: "closed", endedAt, endedBy })
+        .where(
+          and(
+            eq(informationRequests.tenantId, tenantId),
+            eq(informationRequests.requestId, requestId),
+            eq(informationRequests.state, "open"),
+          ),
+        );
+    },
+
+    informationOf(
+      db: Executor,
+      tenantId: string,
+      requestId: string,
+    ): Promise<InformationRequestListRowType[]> {
+      return db
+        .select({
+          ...getTableColumns(informationRequests),
+          askedByName: asker.userName,
+          endedByName: ender.userName,
+        })
+        .from(informationRequests)
+        .innerJoin(asker, eq(asker.id, informationRequests.askedBy))
+        .leftJoin(ender, eq(ender.id, informationRequests.endedBy))
+        .where(
+          and(
+            eq(informationRequests.tenantId, tenantId),
+            eq(informationRequests.requestId, requestId),
+          ),
+        )
+        .orderBy(asc(informationRequests.askedAt), asc(informationRequests.id));
     },
 
     deleteFileLink(db: Executor, tenantId: string, fileId: string) {
