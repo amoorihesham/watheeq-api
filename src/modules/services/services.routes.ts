@@ -19,6 +19,7 @@ export function createServicesRouter({ db, config }: ServicesRouterDepsType): Ro
   router.get("/:serviceId", requireTenantPermission("service.view"), controller.get);
   router.post("/", requireTenantPermission("service.manage"), controller.create);
   router.patch("/:serviceId", requireTenantPermission("service.manage"), controller.update);
+  router.put("/:serviceId/form", requireTenantPermission("service.manage"), controller.updateForm);
   router.post("/:serviceId/retire", requireTenantPermission("service.manage"), controller.retire);
   router.post("/:serviceId/restore", requireTenantPermission("service.manage"), controller.restore);
   return router;

@@ -37,6 +37,16 @@ export function createServicesController({ service }: { service: ServicesService
       res.status(200).json({ service: updated } satisfies ServiceResponseType);
     }) satisfies RequestHandler,
 
+    updateForm: (async (req, res) => {
+      const updated = await service.updateForm(
+        tenantOf(req),
+        serviceIdOf(req),
+        req.body,
+        auditContextOf(req),
+      );
+      res.status(200).json({ service: updated } satisfies ServiceResponseType);
+    }) satisfies RequestHandler,
+
     retire: (async (req, res) => {
       const retired = await service.retire(tenantOf(req), serviceIdOf(req), auditContextOf(req));
       res.status(200).json({ service: retired } satisfies ServiceResponseType);

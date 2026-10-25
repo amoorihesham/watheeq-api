@@ -6,15 +6,19 @@ import type { createServicesRepository } from "./services.repository.js";
 import type {
   createServiceRequestSchema,
   listServicesQuerySchema,
+  updateServiceFormRequestSchema,
   updateServiceRequestSchema,
 } from "./services.schemas.js";
 import type { createServicesService } from "./services.service.js";
+import type { FormFieldType } from "./shared/form.js";
 
 export interface ServiceRowType {
   id: string;
   name: string;
   description: string | null;
   retiredAt: Date | null;
+  form: FormFieldType[];
+  formRevision: number;
 }
 
 /** A workflow a service allows, with the workflow's name and state. */
@@ -34,6 +38,8 @@ export interface WorkflowStateRowType {
 
 export type CreateServiceRequestType = z.input<typeof createServiceRequestSchema>;
 export type UpdateServiceRequestType = z.input<typeof updateServiceRequestSchema>;
+export type UpdateServiceFormRequestType = z.input<typeof updateServiceFormRequestSchema>;
+export type RequestedFieldType = z.output<typeof updateServiceFormRequestSchema>["fields"][number];
 export type ListServicesQueryType = z.output<typeof listServicesQuerySchema>;
 export type WorkflowChoiceType = z.output<typeof createServiceRequestSchema>["workflows"][number];
 
@@ -42,6 +48,7 @@ export interface ServiceType {
   name: string;
   description: string | null;
   retired: boolean;
+  form: { revision: number; fields: FormFieldType[] };
   workflows: { id: string; name: string; isDefault: boolean; retired: boolean }[];
 }
 

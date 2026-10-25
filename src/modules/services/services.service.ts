@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
@@ -8,18 +9,22 @@ import {
   createServiceRequestSchema,
   listServicesQuerySchema,
   serviceIdSchema,
+  updateServiceFormRequestSchema,
   updateServiceRequestSchema,
 } from "./services.schemas.js";
 import type {
   AllowedWorkflowRowType,
   CreateServiceRequestType,
   ListServicesResponseType,
+  RequestedFieldType,
   ServiceRowType,
   ServicesRepositoryType,
   ServiceType,
+  UpdateServiceFormRequestType,
   UpdateServiceRequestType,
   WorkflowChoiceType,
 } from "./services.types.js";
+import type { FormFieldType } from "./shared/form.js";
 
 /** A non-UUID id is answered like an unknown one, never as a database cast error. */
 function existingServiceId(serviceId: string): string {
@@ -34,6 +39,7 @@ const toService = (row: ServiceRowType, allowed: AllowedWorkflowRowType[]): Serv
   name: row.name,
   description: row.description,
   retired: row.retiredAt !== null,
+  form: { revision: row.formRevision, fields: row.form },
   workflows: allowed.map((workflow) => ({
     id: workflow.id,
     name: workflow.name,
@@ -52,6 +58,43 @@ const choicesKey = (choices: WorkflowChoiceType[]) =>
 
 const toChoices = (allowed: AllowedWorkflowRowType[]): WorkflowChoiceType[] =>
   allowed.map((workflow) => ({ id: workflow.id, isDefault: workflow.isDefault }));
+
+/**
+ * The requested fields as stored fields: a sent ID must belong to the current form and keep its type, new fields
+ * and options get new IDs (R5.5.5). Problems are reported at the request's paths.
+ */
+function resolveForm(
+  current: FormFieldType[],
+  requested: RequestedFieldType[],
+): { fields: FormFieldType[]; details: ErrorDetail[] } {
+  const currentById = new Map(current.map((field) => [field.id, field]));
+  const details: ErrorDetail[] = [];
+  const fields = requested.map((field, index): FormFieldType => {
+    const at = `fields.${index}`;
+    const existing = field.id === undefined ? undefined : currentById.get(field.id);
+    if (field.id !== undefined && !existing) {
+      details.push({ path: `${at}.id`, code: "unknown_field_id" });
+    } else if (existing && existing.type !== field.type) {
+      details.push({ path: `${at}.type`, code: "type_changed" });
+    }
+    const stored = { ...field, id: field.id ?? randomUUID() } as FormFieldType;
+    if ("options" in field && "options" in stored) {
+      // A new field has no options to keep; a field with a bad ID or changed type is already reported.
+      const checkOptions = existing ? existing.type === field.type : field.id === undefined;
+      const known = new Set(
+        existing && "options" in existing ? existing.options.map((option) => option.id) : [],
+      );
+      stored.options = field.options.map((option, position) => {
+        if (checkOptions && option.id !== undefined && !known.has(option.id)) {
+          details.push({ path: `${at}.options.${position}.id`, code: "unknown_option_id" });
+        }
+        return { id: option.id ?? randomUUID(), label: option.label };
+      });
+    }
+    return stored;
+  });
+  return { fields, details };
+}
 
 const workflowPath = (index: number) => `workflows.${index}.id`;
 
@@ -230,6 +273,47 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
           resourceType: "service",
           resourceId: id,
           details: { before, after },
+        });
+        return loadService(tx, tenantId, id);
+      });
+    },
+
+    /**
+     * Saves the whole form based on `baseRevision` (R5.5.4). A save that changes nothing writes nothing; one that
+     * does increments the revision and is audited with the fields before and after.
+     */
+    updateForm(
+      tenantId: string,
+      serviceId: string,
+      input: UpdateServiceFormRequestType,
+      context: AuditContextType,
+    ): Promise<ServiceType> {
+      const id = existingServiceId(serviceId);
+      const body = validate(updateServiceFormRequestSchema, input);
+      return withTx(db, async (tx) => {
+        const service = await lockService(tx, tenantId, id);
+        if (service.retiredAt) {
+          throw new AppError("RESOURCE_RETIRED");
+        }
+        if (body.baseRevision !== service.formRevision) {
+          throw new AppError("SERVICE_FORM_CHANGED");
+        }
+        const { fields, details } = resolveForm(service.form, body.fields);
+        if (details.length > 0) {
+          throw new AppError("VALIDATION_FAILED", details);
+        }
+        if (isDeepStrictEqual(fields, service.form)) {
+          return loadService(tx, tenantId, id);
+        }
+        const revision = service.formRevision + 1;
+        await repo.setForm(tx, tenantId, id, fields, revision);
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "service.form_updated",
+          resourceType: "service",
+          resourceId: id,
+          details: { revision, before: service.form, after: fields },
         });
         return loadService(tx, tenantId, id);
       });

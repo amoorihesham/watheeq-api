@@ -1,2 +1,9 @@
 export const MAX_SERVICE_NAME_LENGTH = 100;
 export const MAX_SERVICE_DESCRIPTION_LENGTH = 2000;
+export const MAX_FIELD_LABEL_LENGTH = 200;
+export const MAX_FIELD_HELP_TEXT_LENGTH = 500;
+export const MAX_SHORT_TEXT_LENGTH = 500;
+export const MAX_LONG_TEXT_LENGTH = 10_000;
+export const MAX_OPTIONS_PER_FIELD = 50;
+export const MAX_OPTION_LABEL_LENGTH = 200;
+export const MAX_FILES_PER_FIELD = 10;

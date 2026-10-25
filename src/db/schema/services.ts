@@ -4,6 +4,8 @@ import {
   check,
   foreignKey,
   index,
+  integer,
+  jsonb,
   type PgTableExtraConfigValue,
   pgTable,
   primaryKey,
@@ -13,6 +15,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { FormFieldType } from "@/modules/services/shared/form.js";
 import { tenants } from "./tenants.js";
 import { workflows } from "./workflows.js";
 
@@ -27,6 +30,8 @@ export const services = pgTable(
     name: text().notNull(),
     description: text(),
     retiredAt: timestamp("retired_at", { withTimezone: true }),
+    form: jsonb().$type<FormFieldType[]>().notNull().default([]),
+    formRevision: integer("form_revision").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -40,6 +45,7 @@ export const services = pgTable(
       "services_description_length",
       sql`${t.description} is null or char_length(${t.description}) <= 2000`,
     ),
+    check("services_form_is_array", sql`jsonb_typeof(${t.form}) = 'array'`),
     // Unique among active services, so restoring one can meet a name taken meanwhile (R5.15).
     uniqueIndex("services_name_unique")
       .on(t.tenantId, sql`lower(${t.name})`)

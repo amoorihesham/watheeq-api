@@ -176,6 +176,7 @@ describe("creating services (R5.11)", () => {
       name: "Vendor contract review",
       description: "Review of a contract with a vendor",
       retired: false,
+      form: { revision: 0, fields: [] },
       workflows: [
         { id: complex, name: "Complex contract", isDefault: false, retired: false },
         { id: vendor, name: "Vendor contract", isDefault: true, retired: false },

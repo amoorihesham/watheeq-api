@@ -8,12 +8,15 @@ import type {
   WorkflowChoiceType,
   WorkflowStateRowType,
 } from "./services.types.js";
+import type { FormFieldType } from "./shared/form.js";
 
 const serviceColumns = {
   id: services.id,
   name: services.name,
   description: services.description,
   retiredAt: services.retiredAt,
+  form: services.form,
+  formRevision: services.formRevision,
 };
 
 const ofTenant = (tenantId: string, serviceId: string) =>
@@ -144,6 +147,19 @@ export function createServicesRepository() {
           isDefault: choice.isDefault,
         })),
       );
+    },
+
+    setForm(
+      db: Executor,
+      tenantId: string,
+      serviceId: string,
+      form: FormFieldType[],
+      revision: number,
+    ) {
+      return db
+        .update(services)
+        .set({ form, formRevision: revision, updatedAt: sql`now()` })
+        .where(ofTenant(tenantId, serviceId));
     },
 
     setRetired(db: Executor, tenantId: string, serviceId: string, retired: boolean) {
