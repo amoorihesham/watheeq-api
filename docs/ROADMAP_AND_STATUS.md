@@ -27,8 +27,7 @@
   Its main decisions are D28-D33 in `MVP_SCOPE.md` (resolving open questions 1 and 2) and T34-T37 in `TECHNICAL_DECISIONS.md`. Migrations `0008`-`0012` add the tables; nothing is seeded.
 - **Phase 5.5 (service forms & file storage) implemented** (`docs/specs/phase-5.5-service-forms-attachments.md`): added in the Phase 6 pre-spec discussion, it gives each service a request form with stable field IDs and revisions, answer checking and snapshots for Phase 6 (`validateAnswers`, `snapshotAnswers`), file uploads to S3-compatible storage with type detection and download-only serving, pending uploads that expire after 24 hours, a storage limit per plan reserved under a per-tenant lock, the cleanup sweep, and `attachFiles` / `discardFiles` for Phase 6.
   Its main decisions are D34-D36 in `MVP_SCOPE.md` and T38-T42 in `TECHNICAL_DECISIONS.md`. Migrations `0013` and `0014` add the form and file tables; local development now also needs the SeaweedFS storage service from `docker-compose.yml` and the `STORAGE_*` settings in `.env.example`.
-  Phase 6 round 1 answers are recorded for its spec; its round 2 questions on numbering, editing, stage mechanics, and attachment access are still open.
-- **Next action:** the Phase 6 (request lifecycle) pre-spec discussion continues with its round 2 questions, then its spec is drafted.
+- **Next action:** Phase 6 spec approved by the owner (2026-10-25); implementation in progress (6.1 then 6.2 by one sub-agent; 6.4 then 6.3 by the other after 6.1 is merged).
 
 ---
 
@@ -46,7 +45,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 4   | Working calendar                | Working hours, seasons, holidays, working-day deadline calculation                          | 1          | Implemented                             |
 | 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | Implemented                             |
 | 5.5 | Service forms & file storage    | Per-service request forms, answer validation, file uploads, pending-file cleanup            | 5          | Implemented                             |
-| 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure, attachments             | 5.5        | Not started                             |
+| 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure, attachments             | 5.5        | In Implementation                       |
 | 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | Not started                             |
 
 Audit is cross-cutting: built in Phase 0, used by every later phase.
