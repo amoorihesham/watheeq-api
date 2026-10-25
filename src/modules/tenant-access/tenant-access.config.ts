@@ -35,6 +35,11 @@ export const PERMISSION_CATALOG = {
   "priority.manage": ["organization"],
   "escalation.view": ["organization"],
   "escalation.manage": ["organization"],
+  "request.submit": ["own"],
+  "request.view": ["own", "section", "department", "organization"],
+  "request.review": ["organization"],
+  "request.handle": ["organization"],
+  "request.reassign": ["organization"],
 } as const satisfies Record<string, readonly PermissionScopeType[]>;
 
 export const TENANT_PERMISSIONS = Object.keys(PERMISSION_CATALOG) as TenantPermissionType[];

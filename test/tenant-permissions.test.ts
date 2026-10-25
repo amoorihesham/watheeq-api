@@ -171,7 +171,9 @@ describe("grantedPermissions (R3.2, P3.8)", () => {
     const grants = systemRoleGrants();
     expect(grants.map((grant) => grant.key)).toEqual(TENANT_PERMISSIONS);
     expect(grants.find((grant) => grant.key === "user.view")?.scope).toBe("organization");
-    expect(grants.every((grant) => grant.scope === "organization")).toBe(true);
+    expect(grants.every((grant) => grant.scope === PERMISSION_CATALOG[grant.key].at(-1))).toBe(
+      true,
+    );
   });
 });
 

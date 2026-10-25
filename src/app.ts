@@ -18,6 +18,7 @@ import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
 import { createPositionsRouter } from "./modules/positions/index.js";
 import { createPrioritiesRouter } from "./modules/priorities/index.js";
+import { createRequestsRouter } from "./modules/requests/index.js";
 import { createPermissionsRouter, createRolesRouter } from "./modules/roles/index.js";
 import { createServicesRouter } from "./modules/services/index.js";
 import { createSubscriptionsRouter } from "./modules/subscriptions/index.js";
@@ -67,6 +68,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/services", createServicesRouter({ db, config }));
   app.use("/priorities", createPrioritiesRouter({ db, config }));
   app.use("/escalation", createEscalationRouter({ db, config }));
+  app.use("/requests", createRequestsRouter({ db, config }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

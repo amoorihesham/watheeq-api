@@ -154,7 +154,10 @@ describe("listing and viewing roles", () => {
       id: adminRoleId,
       name: "Tenant Admin",
       isSystem: true,
-      permissions: TENANT_PERMISSIONS.map((key) => ({ key, scope: "organization" })),
+      permissions: TENANT_PERMISSIONS.map((key) => ({
+        key,
+        scope: PERMISSION_CATALOG[key].at(-1),
+      })),
       memberCount: 1,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
