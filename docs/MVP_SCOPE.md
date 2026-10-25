@@ -105,16 +105,19 @@ Renewal by the operator returns the tenant to Active.
 #### 3.5 Request Lifecycle
 
 1. **Submission** - the requester selects a service, fills in its form with any required documents, and submits a request, choosing a priority. The answers are kept as submitted, with a copy of each field, so later form edits never change a submitted request (D34).
-2. **Review** - legal reviews the request and may adjust its priority.
+   The request gets a number such as `REQ-42-2026` (D37) and a title, and nothing in it can be edited afterwards; corrections go through information requests.
+2. **Review** - legal reviews the request, may adjust its priority, and may ask the requester for information.
+   The requester may withdraw the request until it is accepted (D40).
 3. **Decision** - legal accepts or rejects the request.
    - On acceptance, an overall request owner (the **handler**) is assigned, the reviewer picks one of the service's allowed workflows (D28), and the SLA clock starts.
    - On acceptance, priority is **locked**. Priority changes before acceptance are audited with a reason.
 4. **Execution** - the request moves through its workflow's ordered stages.
-   - When a stage starts, its position is resolved to people automatically; any one of them completes it, and may return it to the previous stage (D30, D31).
+   - When a stage starts, its position is resolved to people automatically and recorded; any one of them who still qualifies completes it, or returns it to the nearest earlier stage that ran (D30, D31, D38).
    - Where the stage allows it, the handler may narrow the assignees to some of them, or escalate the stage to the next level, with a reason (D30).
-   - Legal may request additional information from the requester at any point during execution.
-   - If the requester does not respond, legal may close the request as _Rejected - no response_.
-5. **Closure** - the request ends as **Completed** or **Rejected**.
+   - The handler, or a current assignee of the active stage, may request additional information from the requester; one question is open at a time.
+   - If the requester does not respond, the handler may close the request as _Rejected - no response_.
+   - The handler may refresh a stage's assignees when the structure changed, and a holder of `request.reassign` may replace the handler.
+5. **Closure** - the request ends as **Completed**, **Rejected**, **Rejected - no response**, or **Withdrawn** (D40).
 
 Workflow-stage assignment does not transfer overall request ownership.
 
@@ -123,6 +126,7 @@ Workflow-stage assignment does not transfer overall request ownership.
 - The SLA clock starts at acceptance and runs continuously in working time until closure; every working day counts as one day whatever its length, and a deadline is an exact moment (D24, D25).
 - **The clock does not pause** while awaiting requester information, nor during requester-side stages.
 - The closure record states: outcome, SLA deadline, actual elapsed time, met or breached, breach duration, and time spent awaiting information (informational only - it does not affect the SLA result).
+- While a request is open, its deadline is computed from the current calendar whenever it is read; at closure the record is frozen and never changes (D39).
 
 #### 3.7 Escalation
 
@@ -212,6 +216,10 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D34 | Each service has a request form; a submission's answers, including documents, are checked against it and stored with a copy of each field definition | Requests carry the information legal needs from the start; a form edit never rewrites a submitted request (Phase 5.5 spec, P5.5.1, Q2). Amends section 4, which kept attachments out of scope. |
 | D35 | Plans carry a storage limit in whole GB, copied by subscriptions; usage is every stored file; over the limit only uploads are refused; a customer beyond the largest plan gets a custom plan | Storage is the main cost a tenant drives; refusing only uploads never loses data, as D15 does for users (Phase 5.5 spec, P5.5.6, Q15). |
 | D36 | Removing an attachment deletes the file; there is no retention term, and deleting a tenant's data is a future scope | Unused files cost the customer nothing, while the audit keeps the name, size, and SHA-256 of what was removed (Phase 5.5 spec, P5.5.7, P5.5.8). |
+| D37 | Requests are numbered `REQ-<n>-<year>` per tenant, restarting each Gregorian year in Riyadh time, with no gaps | People quote a short number; other record types (`INV`, `CAS`, `MAT`) can be numbered later with their own prefix (Phase 6 spec, P6.1). |
+| D38 | A stage's assignees are recorded when it starts and re-checked against current data when one acts; party actions need no permission | "Waiting on whom" is a stored fact, and a move or deactivation takes effect at once; the handler refreshes a stage after a structure change (Phase 6 spec, P6.3, P6.4). |
+| D39 | The deadline of an open request is computed when read; the closure record is frozen at closure | Never stale while open, never rewritten once closed (Phase 6 spec, P6.6). |
+| D40 | A request ends as Completed, Rejected (in review only), Rejected - no response (in progress, with an open information request), or Withdrawn (by the requester, before acceptance only) | Once legal accepts, the work is either finished or ended by the requester's silence; resolves open question 4 (Phase 6 spec, P6.7). |
 
 ---
 
@@ -229,7 +237,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 1. ~~How services map to workflows (one workflow per service, or chosen at acceptance).~~ Resolved in Phase 5: a service lists its allowed workflows with one default, and the reviewer picks one at acceptance (D28).
 2. ~~Who a workflow stage is assigned to (a legal role, a specific person, or chosen by the owner).~~ Resolved in Phase 5: a stage names a position, resolved to people automatically when it starts (D29, D30).
 3. ~~Deadline calculation precision (end of working day vs. exact time) and whether calendar changes affect already-accepted requests.~~ Resolved in Phase 4: deadlines are exact moments, placed proportionally within working days (D24, D25); calendar changes affect only days after today, so the future deadlines of open requests follow them and past outcomes never change (D26).
-4. Whether a requester can withdraw a request.
+4. ~~Whether a requester can withdraw a request.~~ Resolved in Phase 6: before acceptance only, with a reason (D40).
 5. ~~Length of the grace period, and whether it is a platform-wide setting or defined per plan.~~ Resolved in Phase 1: defined per plan (`grace_days`, 0-365) and copied into each subscription.
 6. In the read-only state, whether SLA clocks and escalations for still-open requests continue, stop, or are marked as affected by the subscription state.
 7. ~~Whether the operator can suspend a tenant independently of its subscription (e.g. for abuse or contract disputes).~~ Resolved in Phase 1: deferred; ending a subscription early (a past end date, with a reason) covers the MVP.

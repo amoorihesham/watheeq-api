@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                                                                                                                                                                                |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Status**             | In Implementation                                                                                                                                                                                                                    |
+| **Status**             | Implemented                                                                                                                                                                                                                          |
 | **Approved by / date** | _Amr - 25/10/2026 - 19:17 pm_                                                                                                                                                                                                        |
 | **Depends on**         | Phase 1 (`phase-1-platform-subscriptions.md`), Phase 3 (`phase-3-roles-authorization.md`), Phase 4 (`phase-4-working-calendar.md`), Phase 5 (`phase-5-legal-configuration.md`), Phase 5.5 (`phase-5.5-service-forms-attachments.md`) |
 | **Related decisions**  | MVP 3.1, 3.5, 3.6, 3.9, D4, D5, D6, D7, D24-D26, D28-D36; open question 4; Technical T2, T8, T11, T15-T17, T21, T22, T24-T26, T29, T30, T33-T39, T41                                                                                 |
@@ -201,7 +201,8 @@ A form answer that named a removed file keeps the file ID in its snapshot, and t
 
 #### Migrations
 
-Generated `0015_requests` (numbers, requests), `0016_stage_runs`, `0017_information_requests`, `0018_request_files`, one per step (section 7); parallel steps are renumbered when merged.
+Generated `0015_requests` (numbers, requests), custom `0016_requests_unit_fk_set_null`, generated `0017_stage_runs`, `0018_request_files`, and `0019_information_requests`, in the order the steps were merged.
+`0016` exists because Drizzle cannot express `on delete set null (requester_unit_id)`: a plain `set null` on a composite key would also clear `tenant_id`.
 
 #### Audit actions
 
@@ -215,8 +216,9 @@ Generated `0015_requests` (numbers, requests), `0016_stage_runs`, `0017_informat
 | `request.stage_completed`, `request.stage_returned`                                              | request  | run, stage, comment or reason, and the stage transitions it caused           |
 | `request.stage_narrowed`, `request.stage_escalated`, `request.stage_refreshed`                   | request  | run, `{before, after}` assignees and levels, reason                          |
 | `request.information_requested`, `request.information_answered`, `request.information_cancelled` | request  | information request ID, question or answer, file IDs                         |
-| `request.completed`, `request.closed_no_response`                                                | request  | the closure record; `{reason}` for no response                               |
-| `request.files_attached`, `request.file_removed`                                                 | request  | file IDs; for a removal the name, size, SHA-256, and reason                  |
+| `request.completed`, `request.closed_no_response`                                                | request  | the closure record; for no response also the reason and the question's ID    |
+| `request.files_attached`                                                                         | request  | `{fileIds}`                                                                  |
+| `request.file_removed`                                                                           | request  | `{file: {id, name, sizeBytes, sha256}, reason}`                              |
 
 A **stage transition** is `{run, stage, state, assignees, level}`: every start, skip, hold, escalation by fallback, and completion an action causes is listed in that action's entry, so stage assignments are audited (MVP 3.9) without an entry per automatic step.
 
@@ -255,10 +257,18 @@ Shapes:
 - **Request:** the summary plus `answers` (with removed files marked), `files`, `stages` (every run in order, with assignees, state, times, and comments), `informationRequests`, `sla`, and `allowedActions` (the actions the caller may take now, so the web app shows only valid buttons).
 - **SLA:** `{deadline, elapsedDays, met, breachDays, awaitingInfoDays}`: live while in progress, the frozen record once closed, null before acceptance.
 
+Every action route returns `{request}`, the caller's view after the action.
+`files` are ordered by attach time, then name, then ID.
+`allowedActions` names: `withdraw`, `change_priority`, `accept`, `reject`, `reassign`, `complete`, `return`, `refresh`, `narrow`, `escalate`, `attach_files`, `ask_information`, `answer_information`, `cancel_information`, `close_no_response`.
+Changing the priority to the one the request already has returns 200 and writes no audit entry.
 Lists are ordered by `submitted_at` descending, then `id`; `limit` is 1-100, default 25, with `offset`, as `GET /users`.
 `deadline` in lists is computed in memory with one `loadCalendar` per request (Q6).
 Reasons are trimmed, 1-2,000 characters; comments up to 2,000.
-`fileIds` are the caller's pending uploads (Phase 5.5); refusals come from `attachFiles` at `fileIds.<index>`.
+`fileIds` are the caller's pending uploads (Phase 5.5); refusals come from `attachFiles` at `fileIds.<index>`, and for a file named in a form answer at `answers.<fieldId>.<index>`.
+
+Checks run in this order: not visible is 404, not allowed is 403, the wrong state is 409.
+Two exceptions: attaching and asking on a closed request are 409 before the party check, and closing as no response while in review is 403, since there is no handler yet.
+Every party action (withdraw, the stage actions, asking, answering, cancelling, attaching, removing, and closing as no response) first checks in the database that the caller is still an active member: a deactivated member's token stays valid until it expires (D31), and the action is 403.
 
 #### New error codes
 
@@ -266,19 +276,20 @@ Reasons are trimmed, 1-2,000 characters; comments up to 2,000.
 | ---- | ----------------------------- | ----------------------------------------------------------------- |
 | 403  | `SUBSCRIPTION_NOT_ACTIVE`     | Submitting in Grace (Phase 1's `requireActiveSubscription`).      |
 | 409  | `ESCALATION_NOT_CONFIGURED`   | Submitting before the tenant saved its escalation settings (D33). |
-| 409  | `INVALID_REQUEST_STATE`       | The action is not allowed in the request's state.                 |
-| 409  | `STAGE_NOT_ACTIVE`            | The run is not the request's live run, or no longer active.       |
+| 403  | `PERMISSION_NOT_HELD`         | Review or reassign by a caller whose role, read from the database, no longer holds the permission. |
+| 409  | `INVALID_REQUEST_STATE`       | The action is not allowed in the request's state; also a handler stage action on a request not in progress. |
+| 409  | `STAGE_NOT_ACTIVE`            | The run is not the request's live run, or no longer active; also any stage action on a closed request, and anything but refresh on a held run. |
 | 409  | `NO_EARLIER_STAGE`            | Returning from the first stage that ran.                          |
 | 409  | `NO_HIGHER_LEVEL`             | Escalating past the department's managers.                        |
 | 409  | `INFORMATION_REQUEST_OPEN`    | A second information request while one is open.                   |
-| 409  | `NO_OPEN_INFORMATION_REQUEST` | "No response" closure without an open information request.        |
+| 409  | `NO_OPEN_INFORMATION_REQUEST` | "No response" closure without an open information request; answering or cancelling one that is no longer open. |
 | 409  | `TOO_MANY_FILES`              | More than 50 files on one request.                                |
 
 Validation detail codes: `unknown_service`, `service_retired`, `unknown_priority`, `priority_retired`, `unknown_workflow`, `workflow_not_allowed`, `workflow_retired`, `handler_not_eligible`, `handler_is_requester`, `not_assignee`, `same_handler`, plus the answer codes of Phase 5.5 and the `attachFiles` codes.
 
 #### Permissions
 
-Five catalog keys (T26); the Tenant Admin role holds them at once (D21):
+Five catalog keys (T26); the Tenant Admin role holds them at once (D21), each at its widest allowed scope, so `request.submit` at own:
 
 | Key                | Scopes                                 | Grants                                                                             |
 | ------------------ | -------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -338,7 +349,7 @@ In one transaction:
 1. Resolve the stage's target with `resolveAssignees(tx, tenantId, target, {handlerId, requesterId}, {excludeParties})`.
 2. Found people: insert an `active` run with the level and the assignees.
 3. Nobody, fallback **skip**: insert a `skipped` run (started and ended now) and start the next stage; after the last stage, complete the request.
-4. Nobody, fallback **escalate**: `nextLevel`; found: an `active` run with `escalated = true`; null: a `held` run.
+4. Nobody, fallback **escalate**: `nextLevel` from the level the target resolved to; found: an `active` run with `escalated = true`; null (the chain has ended): a `held` run.
 5. Nobody, fallback **hold**: a `held` run.
 
 All of it runs in the caller's transaction and is listed as transitions in the caller's audit entry.
@@ -357,9 +368,12 @@ The check in step 2 is why Khalid, moved out of Procurement after the stage reco
 
 Handler actions (the caller must be the current handler):
 
-- **Narrow** (`handlerMayNarrow`): `userIds` must be a non-empty subset of the current assignees (`not_assignee` otherwise); the other rows are deleted; `narrowed = true`.
-- **Escalate** (`handlerMayEscalate`): `nextLevel` from the run's level; null: 409 `NO_HIGHER_LEVEL`; otherwise the assignees and level are replaced; `escalated = true`.
-- **Refresh** (an active or held run): resolve the stage's target again as in "Starting a stage" and replace the run's assignees and level in place, clearing `narrowed` and `escalated`; if nobody is found and the fallback is skip, the run becomes `skipped` and the next stage starts.
+- **Narrow** (`handlerMayNarrow`, an active run only): `userIds` must be a non-empty subset of the current assignees (`not_assignee` otherwise); the other rows are deleted; `narrowed = true`.
+- **Escalate** (`handlerMayEscalate`, an active run only): `nextLevel` from the run's level; null: 409 `NO_HIGHER_LEVEL`; otherwise the assignees and level are replaced; `escalated = true`.
+  A held run stores no level, so it cannot be escalated; the handler refreshes it instead.
+- **Refresh** (an active or held run): resolve the stage's target again as in "Starting a stage" and replace the run's assignees and level in place, clearing `narrowed` and `escalated`; if nobody is found and the fallback is skip, the run becomes `skipped`, keeps its earlier assignee rows as history, and the next stage starts.
+
+Review, accept, reject, priority changes, and reassignment also read the caller's role from the database at the moment of the action, so a reviewer whose role was reduced gets 403 `PERMISSION_NOT_HELD` before their token expires.
 
 #### Reassigning the handler
 
@@ -387,6 +401,8 @@ If Faisal is deactivated, nobody can act as handler until a holder of `request.r
    - `awaiting_info_days`: the sum of `workingDaysBetween` over each information request's open time, clipped to `[accepted_at, closed_at]` (Q27).
 4. Set the state, `closed_at`, `closed_by`, `close_reason`; audit.
 
+An action takes one database time and uses it for every timestamp it writes, so a workflow whose stages all skip shows exactly 0 elapsed days.
+
 Because the calendar's past never changes (D26), the record computed at closure is the one the calendar implied all along; freezing it means a later calendar rule never rewrites a closed record.
 
 #### Attachments
@@ -394,6 +410,7 @@ Because the calendar's past never changes (D26), the record computed at closure 
 - **Attach:** lock the request; open; the caller is a party allowed by R6.24 (a stage assignee must still qualify); `attachFiles`; at most 50 per request; audit.
 - **Remove:** lock the request; open; the caller attached the file or is the handler (Q22); delete the link row and call `discardFiles` in the same transaction; audit the file's name, size, SHA-256, and the reason.
 - **Download:** R6.7 visibility, the link row exists, then stream from the store with the Phase 5.5 download headers.
+  Files stay downloadable after the request closes, by anyone who still sees it, so a closed request's history stays readable.
 
 #### Visibility
 
@@ -409,14 +426,16 @@ or withinScope(request.view, owner = requester_id, unit = handler_unit_id)
 
 `withinScope` is Phase 3's condition (T29), resolved from the caller's current unit and role, so a move or a role edit applies on the next request.
 
-#### Changes to Phase 5 modules
+#### Changes to earlier modules
 
+- `calendar`: `loadCalendar` runs its queries one after another, since parallel queries on one transaction's connection make `pg` warn.
 - `positions` exports `peopleAtLevel(executor, tenantId, level, context, options)`, the function the resolver already uses internally, so stage actions can re-check a recorded level.
 - `tenant-access` exports a check that a member's role, read from the database, holds a permission (for the handler check), if none suitable exists.
 
 #### Contract with Phase 7
 
-- R0 measures from `submitted_at` while `in_review`; R1 and R2 use the live deadline from `slaOf(request, calendar)`, exported by the requests module, while `in_progress`.
+- R0 measures from `submitted_at` while `in_review`; R1 and R2 use the live deadline from `slaOf(request, calendar, now?, awaitingInfoDays?)`, exported by the requests module, while `in_progress`.
+  While a request is open, `met` means "not past the deadline yet".
 - Phase 7 resolves recipients with the request's requester and handler as the context.
 - Firing is recorded by Phase 7, at most once per rule and request (D9).
 
@@ -438,7 +457,7 @@ src/
       index.ts                        slaOf and the readers Phase 7 needs
     positions/                        (changed) peopleAtLevel exported
     tenant-access/                    (changed) five permissions; a role-holds-permission check if needed
-db/migrations/0015_requests.sql ... 0018_request_files.sql
+db/migrations/0015_requests.sql ... 0019_information_requests.sql
 ```
 
 `app.ts` gains `/requests`.
@@ -466,6 +485,7 @@ One module, because every action locks the same request row and shares its state
 | Khalid attaches a file that expired an hour ago.                                         | `file_expired` at `fileIds.0` (Phase 5.5).                                                                                                            |
 | Khalid removes a form file the form required.                                            | Allowed with a reason; the answer shows the file as removed; the form is not re-checked (the snapshot is history).                                    |
 | A 51st file.                                                                             | 409 `TOO_MANY_FILES`; nothing attached.                                                                                                               |
+| Khalid withdraws #42, then opens it again.                                               | He still sees it and downloads its files; nothing can be attached, removed, or asked.                                                                |
 | Lina (no unit) submits.                                                                  | `requester_unit_id` is null; she, the handler, assignees, and organization-scope viewers see it.                                                      |
 | A unit holding old requests is deleted.                                                  | Its ID becomes null on those requests; they stay visible by the other unit, by party, and at organization scope.                                      |
 | Al-Noor enters Grace with #42 in progress.                                               | Stage actions, information requests, and attachments continue; submissions get 403 `SUBSCRIPTION_NOT_ACTIVE`.                                         |
@@ -558,7 +578,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P6.7 | Outcomes: completed, rejected (review only), rejected - no response (in progress only), withdrawn (before acceptance only).                                      | Q8-Q11; resolves MVP open question 4.                                                                                                         |
 | P6.8 | Every action locks the request row first.                                                                                                                        | One rule serializes accept versus withdraw, two completes, and attach versus close, with no lost update.                                      |
 
-Promote at close-out: P6.1, P6.3 with P6.4, P6.6, and P6.7 to `MVP_SCOPE.md` (3.5, 3.6, open question 4); P6.1 (storage), P6.3, P6.5, and P6.8 to `TECHNICAL_DECISIONS.md`.
+Promoted on 2026-10-26: P6.1, P6.3 with P6.4, P6.6, and P6.7 to `MVP_SCOPE.md` as D37-D40 (with 3.5 and 3.6 updated and open question 4 resolved); P6.1 (storage), P6.3, P6.5, and P6.8 to `TECHNICAL_DECISIONS.md` as T43-T46. Decisions not promoted are detail that stays authoritative here.
 
 ## 11. Change Log
 
@@ -566,3 +586,5 @@ Promote at close-out: P6.1, P6.3 with P6.4, P6.6, and P6.7 to `MVP_SCOPE.md` (3.
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | 2026-10-25 | Initial draft from the owner's round 1 and round 2 answers (Q1-Q23), with Q24-Q27 open.                                                                                           | Phase 5.5 implemented; Phase 6 spec drafted. |
 | 2026-10-25 | Resolved Q24-Q27 with option (a): a required title, cancelable information requests, information requests open across acceptance, awaiting time in working days after acceptance. | Owner answering round.                       |
+| 2026-10-26 | Implemented and verified: 6.1 then 6.2 by one agent, 6.4 then 6.3 by the other; migrations `0015`-`0019`; full suite, mutation checks, and an end-to-end run against a running server. Approved by the owner and folded in: the custom migration `0016` (4.1), audit details (4.1), the response, ordering, `allowedActions`, same-priority, check-order, form-file-path, and active-member rules (4.2), `PERMISSION_NOT_HELD` and the stage error codes (4.2), the Tenant Admin's own scope for `request.submit`, held runs and refresh history and the escalate fallback (4.3), one time per action, downloads after closure, sequential `loadCalendar`, and the `slaOf` signature for Phase 7. Withdraw gained the active-member check at the owner's approval; the close-out also found that a deactivated handler could still narrow, escalate, and refresh (against section 5), so every stage action now checks it too, with tests. | Phase 6 implemented. |
+| 2026-10-26 | Status set to `Implemented`; decisions promoted (D37-D40, T43-T46). | Phase 6 complete. |
