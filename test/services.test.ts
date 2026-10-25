@@ -709,18 +709,22 @@ describe("races (section 5)", () => {
     expect(res.body.error.code).toBe("SERVICE_WORKFLOW_RETIRED");
   });
 
-  it("waits for the service row lock before a change", async () => {
-    const name = nextName("Race Rename");
-    const id = await createService(name, [vendor]);
+  it("reads the service under its row lock, so a retire committed meanwhile refuses the change", async () => {
+    const id = await createService(nextName("Race Rename"), [vendor]);
     let renaming: Promise<request.Response> = Promise.reject(new Error("not started"));
     renaming.catch(() => undefined);
-    await whileHolding("select id from services where id = $1 for update", [id], async () => {
+    await whileHolding("select id from services where id = $1 for update", [id], async (client) => {
       renaming = as(huda)
         .patch(`/services/${id}`, { description: "second" })
         .then((res) => res);
       await waitUntilBlockedOn(pool, "services");
+      await client.query("update services set retired_at = now() where id = $1", [id]);
     });
-    expect((await renaming).status).toBe(200);
+    const res = await renaming;
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("RESOURCE_RETIRED");
+    const { rows } = await pool.query("select description from services where id = $1", [id]);
+    expect(rows[0].description).not.toBe("second");
   });
 });
 
