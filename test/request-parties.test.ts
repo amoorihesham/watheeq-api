@@ -126,3 +126,67 @@ describe("closing as no response with a live stage (R6.21)", () => {
     ).toBe("INVALID_REQUEST_STATE");
   });
 });
+
+describe("a deactivated member whose token is still valid (D31)", () => {
+  async function whileInactive(person: PersonType, check: () => Promise<void>): Promise<void> {
+    await pool.query("update users set is_active = false where id = $1", [alNoor.ids[person]]);
+    try {
+      await check();
+    } finally {
+      await pool.query("update users set is_active = true where id = $1", [alNoor.ids[person]]);
+    }
+  }
+
+  it("refuses Khalid's withdraw and his answer", async () => {
+    const submitted = await as("khalid").post("/requests", {
+      serviceId: alNoor.serviceId,
+      priorityId: alNoor.priorities.high,
+      title: "Gulf Supplies contract",
+      answers: vendorAnswers(alNoor),
+    });
+    const id = submitted.body.request.id as string;
+    await whileInactive("khalid", async () => {
+      expect((await as("khalid").post(`/requests/${id}/withdraw`, { reason: "r" })).status).toBe(
+        403,
+      );
+    });
+    expect((await as("khalid").post(`/requests/${id}/withdraw`, { reason: "r" })).status).toBe(200);
+
+    const { id: open } = await inBusinessApproval();
+    const asked = await as("majed").post(`/requests/${open}/information-requests`, {
+      question: "Is this within the Q4 budget?",
+    });
+    const infoId = asked.body.request.informationRequests[0].id as string;
+    await whileInactive("khalid", async () => {
+      const answered = await as("khalid").post(
+        `/requests/${open}/information-requests/${infoId}/answer`,
+        { answer: "Yes" },
+      );
+      expect(answered.status).toBe(403);
+    });
+  });
+
+  it("refuses Majed's question while his stage waits on him", async () => {
+    const { id } = await inBusinessApproval();
+    await whileInactive("majed", async () => {
+      const asked = await as("majed").post(`/requests/${id}/information-requests`, {
+        question: "Anything?",
+      });
+      expect(asked.status).toBe(403);
+    });
+  });
+});
+
+describe("a deactivated handler (section 5)", () => {
+  it("refuses Faisal's stage actions until he is replaced", async () => {
+    const { id, runId } = await inBusinessApproval();
+    await pool.query("update users set is_active = false where id = $1", [alNoor.ids.faisal]);
+    try {
+      expect((await as("faisal").post(`/requests/${id}/stages/${runId}/refresh`, {})).status).toBe(
+        403,
+      );
+    } finally {
+      await pool.query("update users set is_active = true where id = $1", [alNoor.ids.faisal]);
+    }
+  });
+});

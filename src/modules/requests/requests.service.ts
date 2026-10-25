@@ -884,6 +884,7 @@ export function createRequestsService({
       const id = existingRequestId(requestId);
       const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
         if (request.requesterId !== callerId) {
           throw new AppError("FORBIDDEN");
@@ -920,6 +921,7 @@ export function createRequestsService({
       const run = existingRequestId(runId);
       const body = validate(completeStageRequestSchema, input);
       return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
         const live = await liveStage(tx, request, run);
         if (!(await qualifiesFor(tx, request, live.run, live.stage, callerId))) {
@@ -966,6 +968,7 @@ export function createRequestsService({
       const run = existingRequestId(runId);
       const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
         const live = await liveStage(tx, request, run);
         if (!(await qualifiesFor(tx, request, live.run, live.stage, callerId))) {
@@ -1013,6 +1016,7 @@ export function createRequestsService({
       const run = existingRequestId(runId);
       const body = validate(narrowStageRequestSchema, input);
       return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
         assertState(request, "in_progress");
         assertHandler(request, callerId);
@@ -1059,6 +1063,7 @@ export function createRequestsService({
       const run = existingRequestId(runId);
       const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
         assertState(request, "in_progress");
         assertHandler(request, callerId);
@@ -1099,6 +1104,7 @@ export function createRequestsService({
       const run = existingRequestId(runId);
       const body = validate(refreshStageRequestSchema, input);
       return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
         assertState(request, "in_progress");
         assertHandler(request, callerId);
