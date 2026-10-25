@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Last updated:** 2026-10-24
+**Last updated:** 2026-10-25
 
 ### Current Status
 
@@ -25,7 +25,9 @@
   Its main decisions are D24-D27 in `MVP_SCOPE.md` and T30-T33 in `TECHNICAL_DECISIONS.md`. Migrations `0006` and `0007` add the calendar tables and give existing tenants the default hours.
 - **Phase 5 (legal configuration) implemented** (`docs/specs/phase-5-legal-configuration.md`): positions placed in org units and held by their members, six built-in positions relative to the handler and the requester, the assignee resolver that Phases 6 and 7 use (`resolveAssignees`, `nextLevel`), linear workflows with immutable versions, services with allowed workflows and a default, priorities with a display order, and escalation settings per rule (on or off, threshold, recipients) that must be saved before requests can be submitted (`isEscalationConfigured`).
   Its main decisions are D28-D33 in `MVP_SCOPE.md` (resolving open questions 1 and 2) and T34-T37 in `TECHNICAL_DECISIONS.md`. Migrations `0008`-`0012` add the tables; nothing is seeded.
-- **Next action:** draft the Phase 6 spec (request lifecycle) when the owner asks; its dependency, Phase 5, is implemented, and section 4.3 of the Phase 5 spec ("Contract with Phase 6") lists the rules Phase 6 must implement.
+- **Phase 5.5 added (2026-10-25):** in the Phase 6 pre-spec discussion the owner brought per-service request forms and attachments into the MVP, as their own phase before the request lifecycle (`docs/specs/phase-5.5-service-forms-attachments.md`, P5.5.1).
+  Phase 6 round 1 answers are recorded for its spec; its round 2 questions on numbering, editing, stage mechanics, and attachment access are still open.
+- **Next action:** Phase 5.5 spec approved by the owner (2026-10-25); implementation in progress (steps 5.5.1 and 5.5.2 in parallel). The Phase 6 spec is drafted next, alongside or after the Phase 5.5 report.
 
 ---
 
@@ -42,7 +44,8 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 3   | Roles & authorization           | Permission catalog, roles, subset rules, scope resolution                                   | 2          | Implemented                             |
 | 4   | Working calendar                | Working hours, seasons, holidays, working-day deadline calculation                          | 1          | Implemented                             |
 | 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | Implemented                             |
-| 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure                          | 5          | Not started                             |
+| 5.5 | Service forms & file storage    | Per-service request forms, answer validation, file uploads, pending-file cleanup            | 5          | In Implementation                       |
+| 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure, attachments             | 5.5        | Not started                             |
 | 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | Not started                             |
 
 Audit is cross-cutting: built in Phase 0, used by every later phase.
