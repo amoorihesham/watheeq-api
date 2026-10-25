@@ -1,8 +1,6 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDb } from "../src/db/pool.js";
 import { createLogger } from "../src/logging/logger.js";
-import { sweepFiles } from "../src/modules/files/index.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
 import { connectToTestDb, seedUser } from "./helpers/db.js";
@@ -14,7 +12,6 @@ import { connectToTestStore } from "./helpers/storage.js";
 const PASSWORD = "correct horse battery staple";
 const GB = 1024 ** 3;
 const pool = connectToTestDb();
-const db = createDb(pool);
 const store = connectToTestStore();
 const app = testApp(pool, createLogger("silent"), { fileStore: store });
 
@@ -216,20 +213,6 @@ describe("usage in both views (R5.5.18, R5.5.21)", () => {
     await seedFiles(pool, { tenantId: a.tenantId, userId: a.ownerId, count: 3, sizeBytes: 1000 });
     expect((await as(b.sara).get("/subscription")).body.usage.storage.usedBytes).toBe(0);
     expect((await as(a.sara).get("/subscription")).body.usage.storage.usedBytes).toBe(3000);
-  });
-
-  it("stops counting a file once the sweep has deleted it", async () => {
-    const { tenantId, sara, ownerId } = await createTenant(await createPlan("Limit Swept", 20));
-    await seedFiles(pool, {
-      tenantId,
-      userId: ownerId,
-      count: 2,
-      sizeBytes: 5000,
-      state: "discarded",
-    });
-    expect((await as(sara).get("/subscription")).body.usage.storage.usedBytes).toBe(10_000);
-    await sweepFiles(db, store);
-    expect((await as(sara).get("/subscription")).body.usage.storage.usedBytes).toBe(0);
   });
 
   it("counts a real upload at its size", async () => {

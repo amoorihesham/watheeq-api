@@ -202,6 +202,7 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
     );
     const secret = "secret-merger-plan.pdf";
     const { body } = await uploadAs(app, khalid, secret, fixture("contract.pdf"));
+    expect((await as(khalid).get(`/files/${body.file.id}/content`)).status).toBe(200);
     await as(khalid).delete(`/files/${body.file.id}`);
     const { rows: after } = await pool.query(
       "select count(*)::int as n from audit_log where tenant_id = $1",

@@ -1,6 +1,14 @@
 import pino, { type DestinationStream, type Logger } from "pino";
 
-const REDACTED_FIELDS = ["password", "cookie", "set-cookie", "x-csrf-token", "authorization"];
+// content-disposition carries the name of a downloaded file, which may hold personal data (Phase 5.5 spec, section 6).
+const REDACTED_FIELDS = [
+  "password",
+  "cookie",
+  "set-cookie",
+  "x-csrf-token",
+  "authorization",
+  "content-disposition",
+];
 
 /** Redacts the sensitive field names at the top level, one level deep, and inside logged request/response headers. */
 export const REDACT_PATHS = [

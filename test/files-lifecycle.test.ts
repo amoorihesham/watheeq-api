@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
+import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDb } from "../src/db/pool.js";
+import { createDb, type Db } from "../src/db/pool.js";
 import { withTx } from "../src/db/tx.js";
 import { AppError } from "../src/http/errors.js";
 import {
@@ -13,7 +14,8 @@ import {
 } from "../src/modules/files/index.js";
 import type { FileStoreType } from "../src/storage/index.js";
 import {
-  connectToTestDb,
+  createIsolatedDb,
+  type IsolatedDbType,
   type SeededTenant,
   seedSubscribedTenant,
   waitUntilBlockedOn,
@@ -24,9 +26,12 @@ import { connectToTestStore, objectExists } from "./helpers/storage.js";
 
 // Phase 5.5 spec, R5.5.12 and 4.3: attaching, discarding, and the cleanup sweep.
 
-const pool = connectToTestDb();
-const db = createDb(pool);
+// The sweep deletes every tenant's due rows, so this file runs in a database of its own and never touches the rows
+// other test files are using.
 const store = connectToTestStore();
+let isolated: IsolatedDbType;
+let pool: pg.Pool;
+let db: Db;
 
 let alNoor: SeededTenant;
 let alRashid: SeededTenant;
@@ -35,6 +40,9 @@ let faisal = "";
 let nasser = "";
 
 beforeAll(async () => {
+  isolated = await createIsolatedDb();
+  pool = isolated.pool;
+  db = createDb(pool);
   alNoor = await seedSubscribedTenant(pool, "files-life-al-noor", [
     { email: "sara@files-life-alnoor.test" },
     { email: "khalid@files-life-alnoor.test" },
@@ -49,7 +57,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pool.end();
+  await isolated.drop();
 });
 
 const putBytes = (tenantId: string, fileId: string) =>

@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type pg from "pg";
 import { inject } from "vitest";
+import { runMigrations } from "../../src/db/migrate.js";
 import { createPool } from "../../src/db/pool.js";
 import { createLogger, type Logger } from "../../src/logging/logger.js";
 import { DEFAULT_WEEK } from "../../src/modules/calendar/index.js";
@@ -7,6 +9,34 @@ import { DEFAULT_WEEK } from "../../src/modules/calendar/index.js";
 /** A pool connected to the test database, as the application connects. */
 export function connectToTestDb(logger: Logger = createLogger("silent")): pg.Pool {
   return createPool(inject("databaseUrl"), logger);
+}
+
+export interface IsolatedDbType {
+  pool: pg.Pool;
+  /** Closes the pool and drops the database. */
+  drop(): Promise<void>;
+}
+
+/**
+ * A fresh, migrated database of its own in the test server. For tests whose subject acts on every tenant's rows,
+ * such as the file cleanup sweep, which would otherwise delete rows that other test files are still using.
+ */
+export async function createIsolatedDb(): Promise<IsolatedDbType> {
+  const admin = connectToTestDb();
+  const name = `iso_${randomUUID().replaceAll("-", "")}`;
+  await admin.query(`create database ${name}`);
+  const url = new URL(inject("databaseUrl"));
+  url.pathname = `/${name}`;
+  await runMigrations(url.toString());
+  const pool = createPool(url.toString(), createLogger("silent"));
+  return {
+    pool,
+    async drop() {
+      await pool.end();
+      await admin.query(`drop database ${name} with (force)`);
+      await admin.end();
+    },
+  };
 }
 
 /** Drizzle wraps driver errors; the PostgreSQL message is on `cause`. */
