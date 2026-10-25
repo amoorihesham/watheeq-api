@@ -2,9 +2,9 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Status:** Revised 2026-10-21 to match the simplified MVP codebase; Phase 3 and Phase 4 decisions added 2026-10-22; Phase 5 decisions added 2026-10-24.
-The full design for T1-T13 is in `docs/specs/phase-0-foundations.md`, T14 in `docs/specs/phase-0.5-refactor.md`, T15-T20 in `docs/specs/phase-1-platform-subscriptions.md`, T21-T24 in `docs/specs/phase-2-org-structure-users.md`, T25 in this log only (a cross-cutting change made during Phase 3), T26-T29 in `docs/specs/phase-3-roles-authorization.md`, T30-T33 in `docs/specs/phase-4-working-calendar.md`, and T34-T37 in `docs/specs/phase-5-legal-configuration.md`.
-**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D33).
+**Status:** Revised 2026-10-21 to match the simplified MVP codebase; Phase 3 and Phase 4 decisions added 2026-10-22; Phase 5 decisions added 2026-10-24; Phase 5.5 decisions added 2026-10-25.
+The full design for T1-T13 is in `docs/specs/phase-0-foundations.md`, T14 in `docs/specs/phase-0.5-refactor.md`, T15-T20 in `docs/specs/phase-1-platform-subscriptions.md`, T21-T24 in `docs/specs/phase-2-org-structure-users.md`, T25 in this log only (a cross-cutting change made during Phase 3), T26-T29 in `docs/specs/phase-3-roles-authorization.md`, T30-T33 in `docs/specs/phase-4-working-calendar.md`, T34-T37 in `docs/specs/phase-5-legal-configuration.md`, and T38-T42 in `docs/specs/phase-5.5-service-forms-attachments.md`.
+**Scope of this doc:** Technology and architecture decisions. Product and scope decisions live in `MVP_SCOPE.md` (D1-D36).
 
 **Guiding rule:** for the MVP, choose the simplest design that is correct for the current requirements.
 Hardening that the MVP does not need yet is listed under "Deferred hardening" and added when the product grows.
@@ -61,6 +61,11 @@ Hardening that the MVP does not need yet is listed under "Deferred hardening" an
 | T35 | **Workflows are versioned: each save that changes the stages inserts an immutable `workflow_versions` row with its `workflow_stages` rows, and requests will reference the version;** a save names its `baseVersion` and runs under a row lock (409 `WORKFLOW_VERSION_CHANGED` when stale); `current_version_id` has a composite key to a version of the same workflow, made deferrable by a custom migration because Drizzle cannot declare it (Phase 5, P5.4, P5.5) | Running requests keep the path they were accepted with, and a future graph (transitions, conditions) is stored once per version, not copied into every request; stage rows can be referenced by foreign keys; two editors cannot overwrite each other silently | Copying the stages into each request; a `jsonb` stage list; editing in place |
 | T36 | **Legal configuration is retired, never deleted; names are unique among active rows (partial indexes); retiring locks the row `FOR UPDATE` and then checks its dependents, while every write that references a row locks it `FOR SHARE` and checks it is active** (Phase 5, P5.7) | History stays readable for requests; a retired name can be reused; a retire and a save that names the same row cannot both pass their checks | Hard deletes with foreign-key errors; optimistic checks |
 | T37 | **Every UUID from untrusted input passes through `idSchema` (`src/http/validate.ts`), which lower-cases it** (found in Phase 5 step 5.4) | PostgreSQL accepts either case, but services compare IDs as strings (a stage's position against the rows locked for it), so an upper-case ID was reported as unknown | Lower-casing in each service; comparing case-insensitively everywhere |
+| T38 | **A service's form is a `jsonb` field list on `services`, with stable field and option IDs and a `form_revision` checked on save under a row lock** (409 `SERVICE_FORM_CHANGED` when stale); a field's type never changes; its structure is one zod schema (Phase 5.5, P5.5.2) | Nothing references a field, since answers carry their own copy, and the form is read and written whole; stable IDs let reports follow a field across renames | Field and option tables; editing without a revision |
+| T39 | **A file's row is written before its bytes and moves `uploading` → `pending` → `attached`, or to `discarded`; the storage key is `<tenant_id>/<file_id>`, derived and never the user's name; uploads send raw bytes, one file per request, name in the query string, `Content-Length` required, and are mounted before the JSON-only body rule** (Phase 5.5, P5.5.3, P5.5.4) | The database is the one list of stored objects, so cleanup never scans the bucket and a crash leaves a row to find; no multipart parser dependency | Bytes first; multipart uploads; storing the key |
+| T40 | **Object storage sits behind `FileStoreType` (`put`, `get`, `delete`), implemented with the AWS SDK v3 for any S3-compatible store; SeaweedFS serves local development and tests** (Phase 5.5, P5.5.5) | As T19 does for email: choosing the KSA provider is a configuration change, and tests run against a real S3 server | Local disk; MinIO (repository archived, images no longer published); Garage (cluster setup before first use) |
+| T41 | **Uploads reserve their declared size under a per-tenant advisory lock `uploads:<tenant_id>`, in the short transaction that also checks the per-person quota and inserts the `uploading` row; usage is `sum(size_bytes)`, never a stored counter** (Phase 5.5, P5.5.6) | Two concurrent uploads cannot both pass the storage limit, as T17 does for seats; the lock is never held while bytes stream; usage cannot drift from the files that exist | Checking after the bytes arrive; a usage counter |
+| T42 | **Cleanup is `sweepFiles`, an in-process `setTimeout` chain in each API instance: every 15 minutes after the previous run, batches of 100 rows `FOR UPDATE SKIP LOCKED`, one `DeleteObjects` call, then the rows, then commit, within a 2-minute budget** (Phase 5.5, P5.5.9) | No job runner exists before Phase 7; several instances split the work; a store failure rolls the batch back, so bytes never outlive their row | A cron container; a job queue now |
 
 ---
 
@@ -78,11 +83,12 @@ Each item below is a known, accepted gap for the MVP stage, with the trigger tha
 | CSRF tokens | `SameSite=Lax` cookies and a same-origin deployment | If the API is served from a different site than the web app, or before production exposure |
 | Separate operator identity realm | `users.role = 'operator'` (T4) | When operator roles or stricter operator policies are needed |
 | MFA and enterprise SSO | Email and password only | After the MVP |
+| Virus scanning of uploaded files | An allow-list of types detected from the content (no legacy Office formats), and files served only as sandboxed downloads (Phase 5.5 spec, Q6) | Before production |
 
 ---
 
 ### Deferred Technical Decisions
 
-- **Background job runner:** decided in Phase 7 (escalation checks).
+- **Background job runner:** decided in Phase 7 (escalation checks); the file sweep (T42) can move into it then.
 - **Hosting provider in KSA:** decided at deployment; Docker keeps options open. The managed PostgreSQL must offer version 18, built with ICU (the `und-x-icu` collation orders names; Phase 1 spec, P1.24).
 - **Email provider for verification emails** (MVP D16): must keep data in KSA and accept SMTP; until then Mailpit serves local development (Phase 1 spec, P1.18). Must be chosen before production.

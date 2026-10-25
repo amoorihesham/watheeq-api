@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Status:** Agreed scope baseline (last updated 2026-10-24). Implementation progress is tracked in `ROADMAP_AND_STATUS.md`.
+**Status:** Agreed scope baseline (last updated 2026-10-25). Implementation progress is tracked in `ROADMAP_AND_STATUS.md`.
 **Relationship to other docs:** `PRODUCT_VISION.md` describes the long-term product. This document defines what the first release must do. When they differ, this document governs the MVP.
 
 ---
@@ -40,7 +40,8 @@ Within a tenant, what an actor can do is determined by the permissions of their 
 **Plans**
 
 - The operator creates and edits plans.
-- In the MVP, a plan's only enforced limit is the **maximum number of users**.
+- In the MVP, a plan's enforced limits are the **maximum number of users** and the **storage** for uploaded files, in whole GB (D35).
+- A customer who needs more than the largest plan gets a custom plan of their own, with its own limits and price (D35).
 - A plan has a **price** in SAR per **payment period** (monthly or yearly) and may carry a **discount** percentage. The price is a record for offline billing; nothing is charged (D11).
 
 **Subscriptions**
@@ -66,6 +67,7 @@ Renewal by the operator returns the tenant to Active.
 - Creating a user beyond the subscription's user limit is rejected with a clear message.
 - The limit check must hold under concurrent user creation (two admins creating the last allowed user simultaneously must not exceed the limit).
 - **Over-limit after downgrade:** if a tenant is moved to a plan with a lower limit than its current user count, existing users keep working; creating new users is blocked until the count is within the limit. No users are removed automatically.
+- **Storage:** an upload that would pass the subscription's storage limit is refused, including under concurrent uploads; after a downgrade below current usage, files stay and only new uploads are refused (D35).
 
 #### 3.2 Organization Configuration (Tenant Admin)
 
@@ -92,6 +94,7 @@ Renewal by the operator returns the tenant to Active.
 #### 3.4 Legal Operations Configuration (Head of Legal)
 
 - **Service catalog:** services offered to requesters; each service lists the workflows it allows, one of them the default (D28).
+- **Request forms:** each service defines the form a requester fills in: text, number, date, choice, yes or no, and file fields, each optional or required (D34).
 - **Positions:** named responsibilities placed in a department or section and held by members of that unit, independent of roles; a person holds at most one. Six built-in positions are relative to the request: the handler, the requester, and the managers of either one's unit or department (D29).
 - **Legal roles:** created under the rules in 3.3.
 - **Priority levels:** priority and SLA are a single concept - a named level with a deadline in working days (e.g. _High = 5 working days_).
@@ -101,7 +104,7 @@ Renewal by the operator returns the tenant to Active.
 
 #### 3.5 Request Lifecycle
 
-1. **Submission** - the requester selects a service and submits a request, choosing a priority.
+1. **Submission** - the requester selects a service, fills in its form with any required documents, and submits a request, choosing a priority. The answers are kept as submitted, with a copy of each field, so later form edits never change a submitted request (D34).
 2. **Review** - legal reviews the request and may adjust its priority.
 3. **Decision** - legal accepts or rejects the request.
    - On acceptance, an overall request owner (the **handler**) is assigned, the reviewer picks one of the service's allowed workflows (D28), and the SLA clock starts.
@@ -150,7 +153,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 
 - Payment integration, invoicing, and tax / e-invoicing.
 - Self-service sign-up or plan changes by tenants.
-- Plan limits other than the user count; feature gating by plan.
+- Plan limits other than the user count and storage; feature gating by plan.
 - Trial plans.
 - Delegation of permissions.
 - Workflow routing policies.
@@ -159,7 +162,9 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 - Branching, conditional, or parallel workflow stages.
 - Positions / job titles.
 - Email, SMS, or push notifications. (Transactional email for account verification is in scope, D16.)
-- Attachments and document management.
+- Document management beyond request attachments (folders, versions, templates).
+- Retention terms, and deleting a tenant's data after its subscription ends (D36).
+- Virus scanning of uploads (deferred hardening, before production).
 - Pausing the SLA clock.
 - Repeated reminders after breach; automatic reassignment on escalation.
 - Reporting and analytics.
@@ -182,7 +187,7 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D9  | Each escalation rule fires once per request                                                   | Prevents duplicate notifications from periodic checks.                                                 |
 | D10 | In-app notifications only                                                                     | Avoids external mail-provider dependency in the MVP.                                                   |
 | D11 | Subscriptions managed manually by the operator; no payment integration                        | B2B sales are typically settled offline; avoids payment-gateway and tax dependencies in the MVP.       |
-| D12 | The only plan limit in the MVP is the user count; feature gating deferred                     | Smallest limit set that supports differentiated plans.                                                 |
+| D12 | Plan limits in the MVP are the user count and storage (D35); feature gating deferred          | Smallest limit set that supports differentiated plans.                                                 |
 | D13 | Expiry: grace period (new submissions blocked, in-progress requests workable), then read-only | Keeps legal records accessible and lets in-flight requests close fairly against their SLA.             |
 | D14 | Subscriptions copy plan terms at assignment; plan edits apply to new subscriptions only       | Prevents plan edits from silently changing existing customers' terms.                                  |
 | D15 | Downgrade below current user count creates an over-limit state, not removal                   | Avoids destructive automatic changes to a tenant's users.                                              |
@@ -204,6 +209,9 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D31 | Acting on a stage is authorized by being one of its current resolved assignees, not by a permission; the first action wins | A requester with no legal permissions can confirm their stage, and a Tenant Admin cannot sign a sign-off assigned to others (Phase 5 spec, P5.8). |
 | D32 | Escalation per tenant: each rule on or off, its threshold (R0 1-30 working days, R1 1-99%), and its recipients as positions | Replaces the fixed recipients and chain of 3.7 (Phase 5 spec, P5.10). |
 | D33 | Escalation settings are not seeded; requests cannot be submitted until a tenant saves them | No request exists without escalation monitoring, and no threshold is a guess made for the tenant (Phase 5 spec, P5.11). |
+| D34 | Each service has a request form; a submission's answers, including documents, are checked against it and stored with a copy of each field definition | Requests carry the information legal needs from the start; a form edit never rewrites a submitted request (Phase 5.5 spec, P5.5.1, Q2). Amends section 4, which kept attachments out of scope. |
+| D35 | Plans carry a storage limit in whole GB, copied by subscriptions; usage is every stored file; over the limit only uploads are refused; a customer beyond the largest plan gets a custom plan | Storage is the main cost a tenant drives; refusing only uploads never loses data, as D15 does for users (Phase 5.5 spec, P5.5.6, Q15). |
+| D36 | Removing an attachment deletes the file; there is no retention term, and deleting a tenant's data is a future scope | Unused files cost the customer nothing, while the audit keeps the name, size, and SHA-256 of what was removed (Phase 5.5 spec, P5.5.7, P5.5.8). |
 
 ---
 

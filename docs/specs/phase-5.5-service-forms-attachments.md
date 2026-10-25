@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                                                                                    |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status**             | In Implementation                                                                                                                        |
+| **Status**             | Implemented                                                                                                                              |
 | **Approved by / date** | _Amr - 25/10/2026 - 17:55 pm_                                                                                                            |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`), Phase 0.5 (`phase-0.5-refactor.md`), Phase 5 (`phase-5-legal-configuration.md`)                      |
 | **Related decisions**  | MVP 3.1, 3.4, 3.5, section 4, D12, D14, D15, D28, D31; Technical T2, T8, T10, T11, T14, T16, T17, T19, T20, T22, T24, T25, T35, T36, T37 |
@@ -117,6 +117,12 @@ The structure is enforced by one zod schema at the trust boundary (T25), and the
 Why stable IDs: an answer stores its field's ID with the copy of the definition, so a later report can follow "Contract value" across form revisions even after a rename.
 That is also why a field's type cannot change: the same ID would then hold a date in one request and text in another.
 
+Saving details (approved 2026-10-25): labels and option labels are trimmed; `helpText` is optional in a request and stored as null when omitted or blank.
+A new field that arrives with option IDs gets `unknown_option_id`.
+A field with an unknown ID or a changed type reports only that error, not errors in its options as well.
+`baseRevision` is an integer of 0 or more.
+Every service response, including the list, carries the form.
+
 #### Files
 
 **`files`** (new, tenant data):
@@ -157,7 +163,8 @@ An `uploading` row counts with its declared size, which is what makes the reserv
 #### Migrations
 
 Generated `0013_service_forms` (step 5.5.1) and `0014_files` (step 5.5.2), which also adds the two `storage_limit_gb` columns.
-The defaults give every existing service an empty form at revision 0; existing plans and subscriptions get the storage limit chosen in Q13.
+The defaults give every existing service an empty form at revision 0.
+Existing plans and subscriptions get 10 GB (Q13) through a column default of 10 on both `storage_limit_gb` columns, kept after the migration; the API still requires `storageLimitGb` when a plan is created.
 
 #### Audit actions
 
@@ -173,7 +180,7 @@ Tenant routes run `authenticate()`, `requireRole('user')`, and the subscription 
 | ----------- | -------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET         | `/services/:id`                              | `service.view`                                           |                                                                                       | (changed) the service now includes `form: {revision, fields}`                                                                                                                      |
 | PUT         | `/services/:id/form`                         | `service.manage`                                         | `{baseRevision, fields:[field]}`                                                      | 200 `{service}`; 400; 404; 409 `SERVICE_FORM_CHANGED`, `RESOURCE_RETIRED`                                                                                                          |
-| POST        | `/files?name=<name>`                         | active member (Q9)                                       | the file's bytes, `Content-Type: application/octet-stream`, `Content-Length` required | 201 `{file}`; 400 `invalid_name`, `length_mismatch`; 409 `UPLOAD_QUOTA_REACHED`, `STORAGE_LIMIT_REACHED`; 411 `LENGTH_REQUIRED`; 413 `FILE_TOO_LARGE`; 415 `FILE_TYPE_NOT_ALLOWED` |
+| POST        | `/files?name=<name>`                         | active member (Q9)                                       | the file's bytes, `Content-Type: application/octet-stream`, `Content-Length` required | 201 `{file}`; 400 `invalid_name`, `empty_file`, `length_mismatch`; 409 `UPLOAD_QUOTA_REACHED`, `STORAGE_LIMIT_REACHED`; 411 `LENGTH_REQUIRED`; 413 `FILE_TOO_LARGE`; 415 `FILE_TYPE_NOT_ALLOWED` |
 | POST, PATCH | `/operator/plans`, `/operator/plans/:planId` | operator: `platform.plan.create`, `platform.plan.update` | (changed) `storageLimitGb` required on create, allowed on update                      | as Phase 1                                                                                                                                                                         |
 | GET         | `/subscription`, the operator tenant view    | as Phase 1                                               |                                                                                       | (changed) `subscription.storageLimitGb`; `usage.storage: {usedBytes, limitBytes, overLimit}`                                                                                       |
 | GET         | `/files/:id`                                 | the uploader, while pending                              |                                                                                       | 200 `{file}`; 404                                                                                                                                                                  |
@@ -201,8 +208,18 @@ The file name travels in the query string, percent-encoded, so Arabic names need
 | 413  | `FILE_TOO_LARGE`        | `Content-Length` over 25 MB.                                              |
 | 415  | `FILE_TYPE_NOT_ALLOWED` | The detected type is not allowed, or does not match the extension.        |
 
-Validation detail codes: `duplicate_label`, `duplicate_option`, `duplicate_field_id`, `unknown_field_id`, `unknown_option_id`, `type_changed`, `min_above_max`, `invalid_name`, `length_mismatch` (the body ended before or ran past `Content-Length`).
+Validation detail codes: `duplicate_label`, `duplicate_option` (a repeated option label or option ID within one field), `duplicate_field_id`, `unknown_field_id`, `unknown_option_id`, `type_changed`, `min_above_max`, `invalid_name`, `empty_file` (`Content-Length: 0`, at `body`), `length_mismatch` (the body ended before or ran past `Content-Length`).
 Answer detail codes (returned by Phase 6 at `answers.<field ID>`): `required`, `wrong_type`, `too_long`, `below_minimum`, `above_maximum`, `not_integer`, `invalid_date`, `unknown_option`, `duplicate_option`, `too_many_files`, `unknown_field`.
+
+Answer rules (approved 2026-10-25):
+
+- `validateAnswers` returns details with the full path `answers.<field ID>`, so Phase 6 passes them through unchanged.
+- An answer is unanswered when it is missing, null, blank text, or an empty list; a required field then gets `required`, and an optional one is skipped. `false` and `0` are answers.
+- A date answer is a `YYYY-MM-DD` string that is a real Gregorian date (year 1 or later).
+- Choice answers carry option IDs, not labels.
+- A file answer that is not a list, holds an ID that is not a UUID, or names the same file twice is `wrong_type`; `too_many_files` is only for more than `maxFiles`.
+- Text lengths in answers count Unicode code points; labels in the form count UTF-16 units, as elsewhere in the API.
+- A snapshot entry is `{field, value, chosen?}`: a deep copy of the field definition, the answer, and for choices the chosen options as `{id, label}`. Only answered fields are kept, in form order.
 
 ### 4.3 Key flows
 
@@ -219,8 +236,10 @@ Removing a field is allowed: submitted requests keep their copies (Q2), and the 
 
 #### Uploading
 
-1. Check the subscription (T16), the caller's active membership, the name (cleaned: path parts and control characters removed, Unicode normalized to NFC, 1-255 characters, an extension required), and `Content-Length` (411 if absent, 413 over 25 MB).
+1. Check the subscription (T16), the name (cleaned: path parts and control characters (`\p{Cc}`) removed, Unicode normalized to NFC, 1-255 characters, an extension required), its extension against the allowed types (415 before any row is written), and `Content-Length` (411 if absent, 400 `empty_file` if 0, 413 over 25 MB).
+   Bidirectional marks and the zero-width non-joiner stay in names, since Arabic text uses them.
 2. In a short transaction under a per-tenant advisory lock keyed `uploads:<tenant_id>`: count the caller's `uploading` and `pending` rows (409 `UPLOAD_QUOTA_REACHED` at 20); sum the tenant's `size_bytes` and refuse if it plus `Content-Length` passes the limit (409 `STORAGE_LIMIT_REACHED`); insert the row as `uploading` with the declared size; commit.
+   The same transaction checks in the database that the caller is an active member (`users.is_active` and the membership), because the access token can be up to 30 minutes old.
    The lock makes the second of two concurrent uploads wait and then count the first one's reserved size, as the seat lock does for users (T17).
    One lock per tenant serves both checks; it is held only for this short transaction, never while bytes stream.
 3. Stream the body to the store, counting bytes (abort with `length_mismatch` if they differ from `Content-Length`), computing SHA-256, and detecting the type from the first bytes.
@@ -230,7 +249,12 @@ Removing a field is allowed: submitted requests keep their copies (Q2), and the 
 
 Allowed types (Q5): PDF, Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`), PNG, JPEG, and plain text (`.txt`, valid UTF-8 with no NUL byte).
 Detection uses the `file-type` package for binary formats; plain text has no signature and is accepted only with the `.txt` extension after the UTF-8 check.
-Whether `file-type` tells `.docx`, `.xlsx`, and `.pptx` apart while streaming, without buffering the whole file, is verified at the start of step 5.5.2 (principle 12); if it cannot, the upload is first written to the store and the type is checked by reading the stored object, deleting it on refusal.
+Verified in step 5.5.2: `file-type` reads the first 1 MiB and tells `.docx`, `.xlsx`, and `.pptx` apart, from `[Content_Types].xml` or from the `word/`, `xl/`, or `ppt/` entry names, whichever order the writer used, so no store-read fallback was built.
+An archive whose first 1 MiB holds neither (for example, a first entry over 1 MiB that is not an Office part) is refused with 415; this is accepted as rare.
+Plain text is checked only as valid UTF-8 without NUL bytes, so HTML saved as `.txt` is accepted; it is only ever served as a sandboxed `text/plain` download (section 6).
+
+`length_mismatch` is raised by the inspector, which counts the bytes it receives.
+Over HTTP, Node stops reading the body at `Content-Length`, so extra bytes are never stored, and a shorter body is a client disconnect; both leave the store and the database consistent.
 
 The global JSON-only body rule (`jsonBody`) does not apply to `POST /files`, which accepts `application/octet-stream` only (415 `UNSUPPORTED_MEDIA_TYPE` otherwise).
 
@@ -263,13 +287,17 @@ On shutdown the timer is cleared; a batch cut off midway rolls back, and the nex
 **Observability.** Each run logs the number of files deleted by kind (discarded, expired, abandoned); a warning is logged when a matching row is more than 1 hour past due, which means sweeps are failing.
 
 Usage (R5.5.18) still counts a discarded file until its run, at most about 15 minutes.
+Likewise a pending upload past its 24 hours stays `pending` until the sweep: its uploader can still read and discard it, and it counts toward the quota of 20; only `attachFiles` enforces the age.
+
+The overdue warning counts `pending` rows older than 25 hours and `uploading` rows older than 2 hours, checked at the start of each run, so it fires even when the run then fails; `discarded` rows are not counted, because no discard time is stored.
 
 #### Attaching (for Phase 6)
 
 `attachFiles(tx, tenantId, userId, fileIds)` locks the rows `FOR UPDATE` and requires each to be in the tenant, uploaded by `userId`, `pending`, and less than 24 hours old; it sets `attached` and `attached_at`, and returns the files.
-Each refusal names its index: `unknown_file` (absent, another tenant's, or another person's, so nothing is revealed), `file_expired`, `file_attached`.
+A refusal is 400 `VALIDATION_FAILED` with one detail per refused file at `fileIds.<index>`: `unknown_file` (absent, another tenant's, another person's, discarded, or still uploading, so nothing is revealed), `file_expired`, `file_attached` (also for a file named twice in one call).
+Any refusal attaches nothing.
 
-`discardFiles(tx, tenantId, fileIds)` locks the rows `FOR UPDATE` and marks them `discarded`; Phase 6 deletes its link rows to them in the same transaction, since the sweep later deletes the file rows.
+`discardFiles(tx, tenantId, fileIds)` marks the tenant's pending or attached files among `fileIds` `discarded` and clears `attached_at`, ignoring any other ID; Phase 6 deletes its link rows to them in the same transaction, since the sweep later deletes the file rows.
 
 A sweep and an attach on the same row: whichever locks first wins; the sweep re-checks the row's state and age after locking, and an attach after the sweep finds no row (`unknown_file`).
 
@@ -302,12 +330,14 @@ src/
     subscriptions/                    (changed) storage usage in GET /subscription
     files/                            new: routes, controller, service, repository, config, schemas, types
       index.ts                        attachFiles, discardFiles, and sweepFiles for other modules
-docker-compose.yml                    (changed) the local S3-compatible server and a one-shot bucket creation
+docker-compose.yml                    (changed) the local S3-compatible server (SeaweedFS) and a one-shot bucket creation
 db/migrations/0013_service_forms.sql, 0014_files.sql
 ```
 
 `FileStoreType` (`put`, `get`, `delete`) follows `EmailSenderType` (T19): modules depend on the interface, and choosing the KSA provider is a configuration change.
-New dependencies: `@aws-sdk/client-s3` and `@aws-sdk/lib-storage` (streaming uploads to any S3-compatible store), and `file-type` (content detection).
+New dependencies: `@aws-sdk/client-s3` and `@aws-sdk/lib-storage` (streaming uploads to any S3-compatible store), and `file-type` (content detection), pinned to exact versions.
+The local and test S3 server is SeaweedFS (`chrislusf/seaweedfs`, pinned, Apache-2.0), chosen in step 5.5.2: MinIO's open-source repository is archived and its images are no longer published, and Garage needs cluster-layout commands before first use.
+Tests start the same image with Testcontainers next to PostgreSQL.
 
 ## 5. Edge Cases and Failure Behavior
 
@@ -343,6 +373,7 @@ New dependencies: `@aws-sdk/client-s3` and `@aws-sdk/lib-storage` (streaming upl
 - **Serving files:** always `Content-Disposition: attachment` with the detected type, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox`, and `Cache-Control: no-store`, so an uploaded HTML or SVG can never run in the application's origin (and neither is an allowed type).
 - **Storage:** a private bucket in Saudi Arabia (data residency), encrypted at rest by the provider; credentials only in configuration.
 - **Logs:** file IDs only, never file names, which may contain personal data.
+  For every route, the logged URL leaves out the query string (where the upload name travels), and the `Content-Disposition` header is redacted.
 - **Not scanned for malware** in the MVP (Q6); the allow-list, download-only serving, and no legacy Office formats (which can carry macros) reduce the exposure until scanning is added.
 - **Audit:** form changes in the same transaction (T8); attaching is audited by Phase 6.
 
@@ -359,6 +390,7 @@ The two steps do not depend on each other and are built by the two sub-agents in
 ## 8. Test Plan
 
 Integration tests against real PostgreSQL and a real S3-compatible server with Al-Noor and Al-Rashid.
+The sweep tests run in a migrated database of their own (`createIsolatedDb`), because a sweep deletes the due files of every tenant and would disturb other test files running in parallel.
 
 | Requirement      | Test                                                                                                                                                   | Step  |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
@@ -408,6 +440,8 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P5.5.8 | Removing an attachment deletes the file: Phase 6 marks it `discarded` with `discardFiles` in its own audited transaction, and the sweep deletes the bytes, then the row.                                                                          | Owner decision (Q14): unused files cost the customer nothing; the row-first order (P5.5.4) still holds, so bytes never outlive their row.                                                                        |
 | P5.5.9 | Cleanup is an in-process sweep in each API instance: a 15-minute `setTimeout` chain, batches of 100 under `FOR UPDATE SKIP LOCKED`, bytes deleted before rows, a 2-minute run budget.                                                             | Owner decision (Q8): no job runner before Phase 7; safe with several instances; a failure leaves rows to retry, never bytes without a row.                                                                       |
 
+Promoted on 2026-10-25: P5.5.1 with Q2, P5.5.6 with Q15, and P5.5.7 with P5.5.8 to `MVP_SCOPE.md` as D34-D36 (with 3.1, 3.4, 3.5, D12, and section 4 updated); P5.5.2, P5.5.3 with P5.5.4, P5.5.5, the reservation in P5.5.6, and P5.5.9 to `TECHNICAL_DECISIONS.md` as T38-T42, and virus scanning (Q6) to its deferred hardening. Decisions not promoted are detail that stays authoritative here.
+
 ## 11. Change Log
 
 | Date       | Change                                                                                                                                                                                                                                                          | Reason                                                                         |
@@ -416,3 +450,5 @@ The spec cannot be `Approved` while a blocking open question remains.
 | 2026-10-25 | Added the storage limit per plan (R5.5.17-R5.5.21, Q10-Q13, P5.5.6): uploads now require `Content-Length`, and the per-user upload lock became one per-tenant lock serving both the quota and the limit. Recorded that plan retention is out of scope (P5.5.7). | Owner request; Q10-Q12 resolved, retention deferred to a future scope.         |
 | 2026-10-25 | Removing an attachment deletes the file (Q14, P5.5.8): new `discarded` state, `discardFiles`, the sweep deletes discarded files; pending discards use the same path.                                                                                            | Owner decision.                                                                |
 | 2026-10-25 | Resolved Q1-Q9 and Q13 with the recommended options, except that forms have no field limit (Q1); resolved Q15 (custom plans for customers beyond the largest plan); detailed the cleanup sweep (4.3, P5.5.9).                                                   | Owner answering round.                                                         |
+| 2026-10-25 | Implemented and verified: steps 5.5.1 and 5.5.2 built in parallel, migrations `0013_service_forms` and `0014_files`; full suite, mutation checks, and an end-to-end run against a running server. Approved by the owner and folded in: form saving details (4.1), answer rules (4.2), `empty_file`, the extension check before the reservation, the database membership check, the `file-type` result and the plain-text rule, `length_mismatch` behavior, expired-but-unswept pending files, the overdue warning, `attachFiles` and `discardFiles` details (4.3), SeaweedFS for local and test storage (4.4), logs without query strings, and isolated sweep tests (section 8). Known test limit: the sweep's re-check after locking is PostgreSQL behavior that no test can trigger on demand, since it needs an attach to commit between the sweep's scan and its lock. | Phase 5.5 implemented. |
+| 2026-10-25 | Status set to `Implemented`; decisions promoted (D34-D36, T38-T42). | Phase 5.5 complete. |
