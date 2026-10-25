@@ -12,6 +12,11 @@ export function testConfig(overrides: Record<string, string> = {}): Config {
     SMTP_PORT: "1025",
     EMAIL_FROM: "Watheeq Test <no-reply@watheeq.test>",
     APP_BASE_URL: TEST_APP_BASE_URL,
+    // The object store of the test run is injected into the app (see `testApp`), so this only has to be valid.
+    STORAGE_ENDPOINT: "http://storage.watheeq.test",
+    STORAGE_BUCKET: "watheeq-test",
+    STORAGE_ACCESS_KEY: "test-access-key",
+    STORAGE_SECRET_KEY: "test-secret-key",
     ...overrides,
   });
   if (!result.ok) {

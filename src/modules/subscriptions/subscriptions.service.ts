@@ -21,9 +21,10 @@ export function createSubscriptionsService({
       }
       const today = (await repo.today(db)).rows[0]?.today ?? "";
       const [usage] = await repo.countActiveMembers(db, tenantId);
+      const [stored] = await repo.sumStoredBytes(db, tenantId);
       return {
         subscription: toSubscriptionView(row, today),
-        usage: toUsage(usage?.activeUsers ?? 0, row.userLimit),
+        usage: toUsage(usage?.activeUsers ?? 0, stored?.storedBytes ?? 0, row),
       };
     },
   };

@@ -27,6 +27,7 @@ export const subscriptions = pgTable(
     // The plan's terms, copied at assignment so later plan edits never change them (D14).
     planName: text("plan_name").notNull(),
     userLimit: integer("user_limit").notNull(),
+    storageLimitGb: integer("storage_limit_gb").notNull().default(10),
     graceDays: integer("grace_days").notNull(),
     priceHalalas: bigint("price_halalas", { mode: "number" }).notNull(),
     paymentPeriod: paymentPeriods("payment_period").notNull(),
@@ -48,6 +49,7 @@ export const subscriptions = pgTable(
   },
   (t) => [
     check("subscriptions_user_limit", sql`${t.userLimit} >= 1`),
+    check("subscriptions_storage_limit", sql`${t.storageLimitGb} between 1 and 100000`),
     check("subscriptions_grace_days", sql`${t.graceDays} >= 0`),
     check("subscriptions_price", sql`${t.priceHalalas} >= 0`),
     check("subscriptions_plan_discount", sql`${t.planDiscountPercent} between 0 and 100`),

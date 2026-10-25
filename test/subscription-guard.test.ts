@@ -76,6 +76,7 @@ beforeAll(async () => {
     await request(app).post("/operator/plans").set("Cookie", accessCookie(omar)).send({
       name: "SG Basic",
       userLimit: 10,
+      storageLimitGb: 10,
       graceDays: 14,
       priceHalalas: 100_000,
       paymentPeriod: "monthly",
@@ -215,6 +216,7 @@ describe("GET /subscription (R1.11, P1.23)", () => {
         planId: basicId,
         planName: "SG Basic",
         userLimit: 10,
+        storageLimitGb: 10,
         graceDays: 14,
         startDate: addDays(today, -60),
         endDate: addDays(today, 30),
@@ -228,7 +230,12 @@ describe("GET /subscription (R1.11, P1.23)", () => {
           effectivePriceHalalas: 76_500,
         },
       },
-      usage: { activeUsers: 1, userLimit: 10, overLimit: false },
+      usage: {
+        activeUsers: 1,
+        userLimit: 10,
+        overLimit: false,
+        storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
+      },
     });
   });
 

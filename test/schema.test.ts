@@ -36,6 +36,7 @@ describe("database baseline", () => {
       "calendar_periods",
       "escalation_recipients",
       "escalation_settings",
+      "files",
       "org_units",
       "password_tokens",
       "plans",
@@ -55,6 +56,72 @@ describe("database baseline", () => {
       "workflows",
       "working_hours",
     ]);
+  });
+
+  describe("files (Phase 5.5, 4.1)", () => {
+    const insert = (state: string, extra: Record<string, unknown> = {}) => {
+      const row = {
+        content_type: "application/pdf",
+        sha256: "abc",
+        size_bytes: 100,
+        name: "a.pdf",
+        attached_at: null as Date | null,
+        ...extra,
+      };
+      return pool.query(
+        `insert into files (tenant_id, uploaded_by, state, name, content_type, sha256, size_bytes, attached_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          alNoor.id,
+          alNoor.userIds[0],
+          state,
+          row.name,
+          row.content_type,
+          row.sha256,
+          row.size_bytes,
+          row.attached_at,
+        ],
+      );
+    };
+
+    it("accepts an uploading row without a detected type and a pending row with one", async () => {
+      await insert("uploading", { content_type: null, sha256: null });
+      await insert("pending");
+    });
+
+    it("requires a detected type and digest once a file is no longer uploading", async () => {
+      expect(await rejectionText(insert("pending", { content_type: null }))).toMatch(
+        /files_detected/,
+      );
+      expect(await rejectionText(insert("discarded", { sha256: null }))).toMatch(/files_detected/);
+    });
+
+    it("sets attached_at exactly when the file is attached", async () => {
+      await insert("attached", { attached_at: new Date() });
+      expect(await rejectionText(insert("attached"))).toMatch(/files_attached_at/);
+      expect(await rejectionText(insert("pending", { attached_at: new Date() }))).toMatch(
+        /files_attached_at/,
+      );
+    });
+
+    it("limits the size to 1 byte up to 25 MB and the name to 255 characters", async () => {
+      expect(await rejectionText(insert("pending", { size_bytes: 0 }))).toMatch(/files_size/);
+      expect(await rejectionText(insert("pending", { size_bytes: 26_214_401 }))).toMatch(
+        /files_size/,
+      );
+      await insert("pending", { size_bytes: 26_214_400 });
+      expect(await rejectionText(insert("pending", { name: "" }))).toMatch(/files_name_length/);
+      expect(await rejectionText(insert("pending", { name: "a".repeat(256) }))).toMatch(
+        /files_name_length/,
+      );
+    });
+
+    it("is the target of composite foreign keys: (tenant_id, id) is unique", async () => {
+      const { rows } = await pool.query(
+        "select conname from pg_constraint where conrelid = 'files'::regclass and contype = 'u'",
+      );
+      expect(rows.map((r) => r.conname)).toContain("files_tenant_id_unique");
+    });
   });
 
   it("refuses a second membership for a user (R0.8)", async () => {

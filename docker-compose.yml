@@ -26,5 +26,40 @@ services:
       - "127.0.0.1:1025:1025"
       - "127.0.0.1:8025:8025"
 
+  # Local S3-compatible object storage for uploaded files (Phase 5.5 spec, P5.5.5). S3 API: http://localhost:8333
+  # SeaweedFS rather than MinIO, whose community edition stopped shipping images and whose repository is archived.
+  storage:
+    image: chrislusf/seaweedfs:4.50
+    command: server -filer -s3 -dir=/data
+    environment:
+      # Becomes the S3 admin identity; matches STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY in .env.example.
+      AWS_ACCESS_KEY_ID: watheeq
+      AWS_SECRET_ACCESS_KEY: watheeq-local-secret
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - watheeq-s3data:/data
+    healthcheck:
+      # Any HTTP answer (an anonymous request gets 403) means the S3 API is up; curl fails only without a connection.
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:8333/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: creates the bucket the app and .env.example expect (a few seconds after startup), then exits.
+  storage-init:
+    image: chrislusf/seaweedfs:4.50
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    # Idempotent, so `docker compose up` can run it again.
+    command:
+      - >-
+        echo s3.bucket.list | weed shell -master=storage:9333 | grep -qw watheeq-files
+        || echo "s3.bucket.create -name watheeq-files" | weed shell -master=storage:9333
+    restart: "no"
+
 volumes:
   watheeq-pgdata:
+  watheeq-s3data:

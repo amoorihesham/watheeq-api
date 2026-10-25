@@ -1,3 +1,4 @@
+import { BYTES_PER_GB } from "../subscriptions.config.js";
 import type {
   SubscriptionRowType,
   SubscriptionStatusType,
@@ -12,6 +13,7 @@ export function toSubscriptionView(row: SubscriptionRowType, today: string): Sub
     planId: row.planId,
     planName: row.planName,
     userLimit: row.userLimit,
+    storageLimitGb: row.storageLimitGb,
     graceDays: row.graceDays,
     startDate: row.startDate,
     endDate: row.endDate,
@@ -38,6 +40,17 @@ export function toSubscriptionStatus(
   };
 }
 
-export function toUsage(activeUsers: number, userLimit: number): UsageType {
-  return { activeUsers, userLimit, overLimit: activeUsers > userLimit };
+/** What the subscription's limits are measured against: active members, and every stored byte (R5.5.18). */
+export function toUsage(
+  activeUsers: number,
+  storedBytes: number,
+  limits: { userLimit: number; storageLimitGb: number },
+): UsageType {
+  const limitBytes = limits.storageLimitGb * BYTES_PER_GB;
+  return {
+    activeUsers,
+    userLimit: limits.userLimit,
+    overLimit: activeUsers > limits.userLimit,
+    storage: { usedBytes: storedBytes, limitBytes, overLimit: storedBytes > limitBytes },
+  };
 }

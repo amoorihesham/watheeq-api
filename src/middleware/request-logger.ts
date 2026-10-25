@@ -18,9 +18,18 @@ function genReqId(req: IncomingMessage, res: ServerResponse): string {
 }
 
 /**
+ * The logged request without its query string: a query may carry personal data, such as the name of an uploaded
+ * file (`POST /files?name=...`), which logs never hold (Phase 5.5 spec, section 6).
+ */
+function withoutQuery<T extends { url: string }>(req: T): T {
+  const { query: _query, ...rest } = req as T & { query?: unknown };
+  return { ...rest, url: req.url.split("?")[0] ?? "" } as T;
+}
+
+/**
  * Request logging. `quietReqLogger` makes `req.log` carry `reqId` instead of the full request,
  * and the response line carries both `reqId` and the request. Every line therefore has `reqId`.
  */
 export function requestLogger(logger: Logger) {
-  return pinoHttp({ logger, genReqId, quietReqLogger: true });
+  return pinoHttp({ logger, genReqId, quietReqLogger: true, serializers: { req: withoutQuery } });
 }

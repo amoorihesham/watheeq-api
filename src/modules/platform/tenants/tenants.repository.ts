@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
-import { roles, subscriptions, tenantMembers, tenants, users } from "@/db/schema/index.js";
+import { files, roles, subscriptions, tenantMembers, tenants, users } from "@/db/schema/index.js";
 import { riyadhToday } from "@/modules/subscriptions/index.js";
 import type { NewTenantType, TenantOwnerType, TenantType } from "./tenants.types.js";
 
@@ -11,12 +11,17 @@ const activeMembers = sql<number>`(
   where ${tenantMembers.tenantId} = ${tenants.id} and ${users.isActive}
 )`;
 
+const storedBytes = sql<number>`(
+  select coalesce(sum(${files.sizeBytes}), 0)::float8 from ${files} where ${files.tenantId} = ${tenants.id}
+)`;
+
 /** Platform code: reads across tenants, reached only behind `requireRole("operator")` (P1.1). */
 export function createTenantsRepository() {
   const detailColumns = {
     tenant: tenants,
     subscription: subscriptions,
     activeUsers: activeMembers,
+    storedBytes,
     today: riyadhToday,
   };
 

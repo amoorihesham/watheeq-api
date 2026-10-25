@@ -42,6 +42,11 @@ If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` an
 | `EMAIL_FROM` | none | Required. Sender address, for example `Watheeq <no-reply@watheeq.sa>`. |
 | `APP_BASE_URL` | none | Required. Web-app origin; verification links are `${APP_BASE_URL}/verify-email?token=...`. |
 | `VERIFICATION_TOKEN_TTL_SECONDS` | `259200` | Verification link lifetime (72 hours). |
+| `STORAGE_ENDPOINT` | none | Required. URL of the S3-compatible object store; locally SeaweedFS (`http://localhost:8333`). |
+| `STORAGE_BUCKET` | none | Required. Private bucket for uploaded files; created beforehand (locally by `docker compose up`). |
+| `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | none | Required. Credentials of the bucket. |
+| `STORAGE_REGION` | `us-east-1` | Region the S3 client signs for; most S3-compatible servers ignore it. |
+| `STORAGE_FORCE_PATH_STYLE` | `false` | `true` for servers addressed as `host/bucket/key` (local servers); `false` for virtual-hosted style. |
 
 ## HTTP behavior
 
@@ -145,6 +150,11 @@ Deliberately deferred for the MVP: Row-Level Security, login throttling, CSRF to
 
 `docker compose up -d --wait` also starts Mailpit, a local SMTP server.
 Verification emails sent by the app appear in its inbox at <http://localhost:8025>.
+
+## Local file storage (SeaweedFS)
+
+`docker compose up -d --wait` also starts SeaweedFS, an S3-compatible server on <http://localhost:8333>, and creates the `watheeq-files` bucket.
+The `.env.example` values point at it; tests start their own server through Testcontainers.
 
 ## Notes
 

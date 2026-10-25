@@ -14,6 +14,7 @@ export interface PlanType {
   id: string;
   name: string;
   userLimit: number;
+  storageLimitGb: number;
   graceDays: number;
   priceHalalas: number;
   paymentPeriod: PaymentPeriodType;

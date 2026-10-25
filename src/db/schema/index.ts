@@ -8,6 +8,7 @@ export {
   workingHours,
 } from "./calendar.js";
 export { escalationRecipients, escalationRules, escalationSettings } from "./escalation.js";
+export { fileStates, files } from "./files.js";
 export { orgUnitKinds, orgUnits } from "./org-units.js";
 export { passwordTokenPurposes, passwordTokens } from "./password-tokens.js";
 export { paymentPeriods, plans } from "./plans.js";

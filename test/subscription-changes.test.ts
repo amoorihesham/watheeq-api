@@ -68,6 +68,7 @@ beforeAll(async () => {
     await plan({
       name: "SC Basic",
       userLimit: 10,
+      storageLimitGb: 10,
       graceDays: 14,
       priceHalalas: 100_000,
       paymentPeriod: "monthly",
@@ -78,6 +79,7 @@ beforeAll(async () => {
     await plan({
       name: "SC Professional",
       userLimit: 50,
+      storageLimitGb: 10,
       graceDays: 30,
       priceHalalas: 1_100_000,
       paymentPeriod: "yearly",
@@ -110,6 +112,7 @@ describe("change a subscription (R1.6)", () => {
         planId: professionalId,
         planName: "SC Professional",
         userLimit: 50,
+        storageLimitGb: 10,
         graceDays: 30,
         startDate: today,
         endDate: "2028-10-31",
@@ -123,7 +126,12 @@ describe("change a subscription (R1.6)", () => {
           effectivePriceHalalas: 990_000,
         },
       },
-      usage: { activeUsers: 1, userLimit: 50, overLimit: false },
+      usage: {
+        activeUsers: 1,
+        userLimit: 50,
+        overLimit: false,
+        storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
+      },
     });
 
     const [entry] = await changesOf(id);
@@ -134,12 +142,14 @@ describe("change a subscription (R1.6)", () => {
         before: {
           planName: "SC Basic",
           userLimit: 10,
+          storageLimitGb: 10,
           priceHalalas: 100_000,
           endDate: addDays(today, 364),
         },
         after: {
           planName: "SC Professional",
           userLimit: 50,
+          storageLimitGb: 10,
           priceHalalas: 1_100_000,
           endDate: "2028-10-31",
         },
@@ -182,10 +192,12 @@ describe("change a subscription (R1.6)", () => {
     const res = await as(omar).get(`/operator/tenants/${id}`);
     expect(res.body.subscription).toMatchObject({
       userLimit: 50,
+      storageLimitGb: 10,
       pricing: { priceHalalas: 1_100_000 },
     });
     await as(omar).patch(`/operator/plans/${professionalId}`, {
       userLimit: 50,
+      storageLimitGb: 10,
       priceHalalas: 1_100_000,
     });
   });

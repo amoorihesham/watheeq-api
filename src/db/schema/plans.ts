@@ -20,6 +20,8 @@ export const plans = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     name: text().notNull(),
     userLimit: integer("user_limit").notNull(),
+    // Whole GB of stored files; the default is what plans that existed before the limit got (Phase 5.5 spec, Q13).
+    storageLimitGb: integer("storage_limit_gb").notNull().default(10),
     graceDays: integer("grace_days").notNull(),
     // Halalas per payment period (1 SAR = 100 halalas), so amounts never pass through floating point.
     priceHalalas: bigint("price_halalas", { mode: "number" }).notNull(),
@@ -38,6 +40,7 @@ export const plans = pgTable(
       sql`${t.name} = btrim(${t.name}) and char_length(${t.name}) between 1 and 100`,
     ),
     check("plans_user_limit", sql`${t.userLimit} >= 1`),
+    check("plans_storage_limit", sql`${t.storageLimitGb} between 1 and 100000`),
     check("plans_grace_days", sql`${t.graceDays} between 0 and 365`),
     check("plans_price", sql`${t.priceHalalas} >= 0`),
     check("plans_discount", sql`${t.discountPercent} between 0 and 100`),

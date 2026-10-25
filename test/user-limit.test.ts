@@ -34,6 +34,7 @@ const createPlan = async (name: string, userLimit: number): Promise<string> =>
     await as(omar).post("/operator/plans", {
       name,
       userLimit,
+      storageLimitGb: 10,
       graceDays: 14,
       priceHalalas: 100_000,
       paymentPeriod: "monthly",
@@ -237,7 +238,12 @@ describe("a downgrade below the user count (R1.13, D15)", () => {
       reason: "Downgraded to Small",
     });
     expect(downgrade.status).toBe(200);
-    expect(downgrade.body.usage).toEqual({ activeUsers: 4, userLimit: 2, overLimit: true });
+    expect(downgrade.body.usage).toEqual({
+      activeUsers: 4,
+      userLimit: 2,
+      overLimit: true,
+      storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
+    });
 
     // Nobody is removed: every existing user still logs in.
     for (const email of members) {
@@ -285,6 +291,11 @@ describe("a downgrade below the user count (R1.13, D15)", () => {
 
     release();
     await addition;
-    expect((await downgrade).body.usage).toEqual({ activeUsers: 2, userLimit: 1, overLimit: true });
+    expect((await downgrade).body.usage).toEqual({
+      activeUsers: 2,
+      userLimit: 1,
+      overLimit: true,
+      storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
+    });
   });
 });

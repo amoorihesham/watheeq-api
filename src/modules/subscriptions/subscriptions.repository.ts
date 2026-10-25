@@ -1,6 +1,6 @@
 import { and, count, eq, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
-import { subscriptions, tenantMembers, users } from "@/db/schema/index.js";
+import { files, subscriptions, tenantMembers, users } from "@/db/schema/index.js";
 import { SUBSCRIPTION_TIME_ZONE } from "./subscriptions.config.js";
 import type {
   NewSubscriptionType,
@@ -54,6 +54,21 @@ export function createSubscriptionsRepository() {
         .select({ userLimit: subscriptions.userLimit })
         .from(subscriptions)
         .where(eq(subscriptions.tenantId, tenantId));
+    },
+
+    findStorageLimit(db: Executor, tenantId: string): Promise<{ storageLimitGb: number }[]> {
+      return db
+        .select({ storageLimitGb: subscriptions.storageLimitGb })
+        .from(subscriptions)
+        .where(eq(subscriptions.tenantId, tenantId));
+    },
+
+    /** Every stored byte of the tenant, whatever the file's state, computed and never kept as a counter (Q10). */
+    sumStoredBytes(db: Executor, tenantId: string): Promise<{ storedBytes: number }[]> {
+      return db
+        .select({ storedBytes: sql<number>`coalesce(sum(${files.sizeBytes}), 0)::float8` })
+        .from(files)
+        .where(eq(files.tenantId, tenantId));
     },
 
     countActiveMembers(db: Executor, tenantId: string): Promise<{ activeUsers: number }[]> {

@@ -12,6 +12,7 @@ import { requestLogger } from "./middleware/request-logger.js";
 import { createAuthRouter } from "./modules/auth/index.js";
 import { createCalendarRouter } from "./modules/calendar/index.js";
 import { createEscalationRouter } from "./modules/escalation/index.js";
+import { createFilesRouter } from "./modules/files/index.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
@@ -22,6 +23,7 @@ import { createServicesRouter } from "./modules/services/index.js";
 import { createSubscriptionsRouter } from "./modules/subscriptions/index.js";
 import { createUsersRouter } from "./modules/users/index.js";
 import { createWorkflowsRouter } from "./modules/workflows/index.js";
+import { createS3Store, type FileStoreType, storageSettingsOf } from "./storage/index.js";
 
 export interface AppDeps {
   pool: pg.Pool;
@@ -29,6 +31,8 @@ export interface AppDeps {
   config: Config;
   /** Defaults to the SMTP sender built from configuration; tests pass a fake that records emails. */
   emailSender?: EmailSenderType;
+  /** Defaults to the S3 store built from configuration; tests pass one connected to their own server. */
+  fileStore?: FileStoreType;
   /** Extra routers mounted after the body parser. Used by tests to exercise error paths. */
   routers?: { prefix: string; router: express.Router }[];
 }
@@ -40,12 +44,15 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use(requestLogger(deps.logger));
   // /health is mounted before body parsing and any future authentication.
   app.use(createHealthRouter(deps.pool));
-  app.use(jsonBody());
   app.use(cookieParser());
 
   const db = createDb(deps.pool);
   const { config } = deps;
   const emailSender = deps.emailSender ?? createSmtpSender(smtpSettingsOf(config));
+  const store = deps.fileStore ?? createS3Store(storageSettingsOf(config));
+  // /files carries raw bytes, so it is mounted before the JSON-only body rule.
+  app.use("/files", createFilesRouter({ db, config, store }));
+  app.use(jsonBody());
   app.use("/auth", createAuthRouter({ db, config, emailSender }));
   app.use("/operator/plans", createPlansRouter({ db, config }));
   app.use("/operator/tenants", createTenantsRouter({ db, config, emailSender }));

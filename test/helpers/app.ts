@@ -3,8 +3,10 @@ import type pg from "pg";
 import { buildApp } from "../../src/app.js";
 import type { EmailSenderType } from "../../src/email/index.js";
 import type { Logger } from "../../src/logging/logger.js";
+import type { FileStoreType } from "../../src/storage/index.js";
 import { testConfig } from "./config.js";
 import { createFakeEmailSender } from "./email.js";
+import { connectToTestStore } from "./storage.js";
 
 export interface TestAppOptions {
   /** Raw environment strings layered over the defaults, as in `testConfig`. */
@@ -13,6 +15,8 @@ export interface TestAppOptions {
   routers?: express.Router[];
   /** Defaults to a fake that drops every email, so tests never reach an SMTP server. */
   emailSender?: EmailSenderType;
+  /** Defaults to the real S3-compatible server of the test run; tests pass a wrapper to fail or pause it. */
+  fileStore?: FileStoreType;
 }
 
 /** The real application, built against the given pool and logger with test configuration. */
@@ -26,6 +30,7 @@ export function testApp(
     logger,
     config: testConfig(options.config),
     emailSender: options.emailSender ?? createFakeEmailSender().sender,
+    fileStore: options.fileStore ?? connectToTestStore(),
     ...(options.routers
       ? { routers: options.routers.map((router) => ({ prefix: "/", router })) }
       : {}),

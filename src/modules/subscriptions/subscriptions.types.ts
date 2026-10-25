@@ -28,6 +28,7 @@ export interface SubscriptionViewType {
   planId: string;
   planName: string;
   userLimit: number;
+  storageLimitGb: number;
   graceDays: number;
   startDate: string;
   endDate: string;
@@ -63,8 +64,15 @@ export type SubscriptionsRepositoryType = ReturnType<typeof createSubscriptionsR
 export type SubscriptionsServiceType = ReturnType<typeof createSubscriptionsService>;
 export type SubscriptionsControllerType = ReturnType<typeof createSubscriptionsController>;
 
+export interface StorageUsageType {
+  usedBytes: number;
+  limitBytes: number;
+  overLimit: boolean;
+}
+
 export interface UsageType {
   activeUsers: number;
   userLimit: number;
   overLimit: boolean;
+  storage: StorageUsageType;
 }

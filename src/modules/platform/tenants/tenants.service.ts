@@ -44,12 +44,13 @@ function toDetail(row: {
   tenant: TenantDetailType["tenant"];
   subscription: Parameters<typeof toSubscriptionView>[0];
   activeUsers: number;
+  storedBytes: number;
   today: string;
 }): TenantDetailType {
   return {
     tenant: row.tenant,
     subscription: toSubscriptionView(row.subscription, row.today),
-    usage: toUsage(row.activeUsers, row.subscription.userLimit),
+    usage: toUsage(row.activeUsers, row.storedBytes, row.subscription),
   };
 }
 
@@ -103,6 +104,7 @@ export function createTenantsService({
           planId: plan.id,
           planName: plan.name,
           userLimit: plan.userLimit,
+          storageLimitGb: plan.storageLimitGb,
           graceDays: plan.graceDays,
           priceHalalas: plan.priceHalalas,
           paymentPeriod: plan.paymentPeriod,
@@ -221,6 +223,7 @@ export function createTenantsService({
           planId: plan.id,
           planName: plan.name,
           userLimit: plan.userLimit,
+          storageLimitGb: plan.storageLimitGb,
           graceDays: plan.graceDays,
           priceHalalas: plan.priceHalalas,
           paymentPeriod: plan.paymentPeriod,
@@ -233,6 +236,7 @@ export function createTenantsService({
           throw new Error("update returned no row");
         }
         const [usage] = await subscriptionsRepo.countActiveMembers(tx, id);
+        const [stored] = await subscriptionsRepo.sumStoredBytes(tx, id);
         await writeAuditEntry(tx, {
           tenantId: id,
           ...context,
@@ -244,7 +248,7 @@ export function createTenantsService({
         });
         return {
           subscription: toSubscriptionView(after, today),
-          usage: toUsage(usage?.activeUsers ?? 0, after.userLimit),
+          usage: toUsage(usage?.activeUsers ?? 0, stored?.storedBytes ?? 0, after),
         };
       });
     },

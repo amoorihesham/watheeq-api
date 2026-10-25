@@ -5,6 +5,7 @@ import {
   MAX_GRACE_DAYS,
   MAX_PLAN_NAME_LENGTH,
   MAX_PRICE_HALALAS,
+  MAX_STORAGE_LIMIT_GB,
   MAX_USER_LIMIT,
   PAYMENT_PERIODS,
 } from "./plans.config.js";
@@ -21,6 +22,7 @@ export const discountPercentSchema = z
 const planFields = {
   name: z.string().trim().min(1).max(MAX_PLAN_NAME_LENGTH),
   userLimit: z.number().int().min(1).max(MAX_USER_LIMIT),
+  storageLimitGb: z.number().int().min(1).max(MAX_STORAGE_LIMIT_GB),
   graceDays: z.number().int().min(0).max(MAX_GRACE_DAYS),
   priceHalalas: z.number().int().min(0).max(MAX_PRICE_HALALAS),
   paymentPeriod: z.enum(PAYMENT_PERIODS),

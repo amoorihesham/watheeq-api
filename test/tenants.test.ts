@@ -72,6 +72,7 @@ beforeAll(async () => {
   const plan = await as(omar).post("/operator/plans", {
     name: "Tenants Basic",
     userLimit: 10,
+    storageLimitGb: 10,
     graceDays: 14,
     priceHalalas: 100_000,
     paymentPeriod: "monthly",
@@ -104,6 +105,7 @@ describe("create a tenant (R1.3, R1.14)", () => {
       planId: basicId,
       planName: "Tenants Basic",
       userLimit: 10,
+      storageLimitGb: 10,
       graceDays: 14,
       startDate: today,
       endDate: addDays(today, 364),
@@ -430,7 +432,12 @@ describe("list and view tenants (R1.7)", () => {
     expect(bySlug["tn-al-noor"].subscription.state).toBe("active");
     expect(bySlug["tn-al-grace"].subscription.state).toBe("grace");
     expect(bySlug["tn-al-readonly"].subscription.state).toBe("read_only");
-    expect(bySlug["tn-al-noor"].usage).toEqual({ activeUsers: 1, userLimit: 10, overLimit: false });
+    expect(bySlug["tn-al-noor"].usage).toEqual({
+      activeUsers: 1,
+      userLimit: 10,
+      overLimit: false,
+      storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
+    });
     const names: string[] = res.body.tenants.map(
       (t: { tenant: { name: string } }) => t.tenant.name,
     );
@@ -468,6 +475,7 @@ describe("seat check (R1.12)", () => {
     const plan = await as(omar).post("/operator/plans", {
       name: "Tenants Solo",
       userLimit: 1,
+      storageLimitGb: 10,
       graceDays: 0,
       priceHalalas: 0,
       paymentPeriod: "yearly",

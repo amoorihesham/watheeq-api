@@ -8,6 +8,10 @@ const valid = {
   SMTP_PORT: "1025",
   EMAIL_FROM: "Watheeq <no-reply@watheeq.sa>",
   APP_BASE_URL: "http://localhost:5173",
+  STORAGE_ENDPOINT: "http://localhost:8333",
+  STORAGE_BUCKET: "watheeq-files",
+  STORAGE_ACCESS_KEY: "access",
+  STORAGE_SECRET_KEY: "secret",
 };
 
 describe("parseConfig", () => {
@@ -29,6 +33,12 @@ describe("parseConfig", () => {
         APP_BASE_URL: valid.APP_BASE_URL,
         VERIFICATION_TOKEN_TTL_SECONDS: 259200,
         PASSWORD_RESET_TTL_SECONDS: 3600,
+        STORAGE_ENDPOINT: valid.STORAGE_ENDPOINT,
+        STORAGE_REGION: "us-east-1",
+        STORAGE_BUCKET: valid.STORAGE_BUCKET,
+        STORAGE_ACCESS_KEY: valid.STORAGE_ACCESS_KEY,
+        STORAGE_SECRET_KEY: valid.STORAGE_SECRET_KEY,
+        STORAGE_FORCE_PATH_STYLE: false,
         LOG_LEVEL: "info",
       },
     });
@@ -65,6 +75,19 @@ describe("parseConfig", () => {
     });
   });
 
+  it("reads STORAGE_FORCE_PATH_STYLE as a boolean, and only from 'true' or 'false'", () => {
+    const on = parseConfig({ ...valid, STORAGE_FORCE_PATH_STYLE: "true" });
+    expect(on.ok && on.config.STORAGE_FORCE_PATH_STYLE).toBe(true);
+    expect(parseConfig({ ...valid, STORAGE_FORCE_PATH_STYLE: "1" }).ok).toBe(false);
+  });
+
+  it("requires STORAGE_ENDPOINT to be a URL", () => {
+    expect(parseConfig({ ...valid, STORAGE_ENDPOINT: "not a url" })).toEqual({
+      ok: false,
+      message: "Invalid configuration: STORAGE_ENDPOINT (invalid_format)",
+    });
+  });
+
   it("coerces PORT to a number", () => {
     const result = parseConfig({ ...valid, PORT: "8080" });
     expect(result.ok && result.config.PORT).toBe(8080);
@@ -74,7 +97,7 @@ describe("parseConfig", () => {
     expect(parseConfig({})).toEqual({
       ok: false,
       message:
-        "Invalid configuration: DATABASE_URL (Required), JWT_SECRET (Required), SMTP_HOST (Required), SMTP_PORT (Required), EMAIL_FROM (Required), APP_BASE_URL (Required)",
+        "Invalid configuration: DATABASE_URL (Required), JWT_SECRET (Required), SMTP_HOST (Required), SMTP_PORT (Required), EMAIL_FROM (Required), APP_BASE_URL (Required), STORAGE_ENDPOINT (Required), STORAGE_BUCKET (Required), STORAGE_ACCESS_KEY (Required), STORAGE_SECRET_KEY (Required)",
     });
   });
 

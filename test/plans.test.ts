@@ -16,6 +16,7 @@ let sara = "";
 const basic = {
   name: "Plans Basic",
   userLimit: 10,
+  storageLimitGb: 10,
   graceDays: 14,
   priceHalalas: 100_000,
   paymentPeriod: "monthly",
@@ -167,6 +168,7 @@ describe("edit a plan (R1.1, R1.14)", () => {
       priceHalalas: 120_000,
       discountPercent: 10,
       userLimit: 10,
+      storageLimitGb: 10,
     });
     expect(new Date(res.body.plan.updatedAt).getTime()).toBeGreaterThanOrEqual(
       new Date(created.body.plan.updatedAt).getTime(),
