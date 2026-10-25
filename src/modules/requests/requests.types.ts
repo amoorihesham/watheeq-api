@@ -1,15 +1,17 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type { requestStageRuns, requestStates, requests } from "@/db/schema/index.js";
+import type { requestFiles, requestStageRuns, requestStates, requests } from "@/db/schema/index.js";
 import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { AnswerSnapshotType } from "@/modules/services/shared/answers.js";
 import type { FormFieldType } from "@/modules/services/shared/form.js";
+import type { FileStoreType } from "@/storage/index.js";
 import type { REQUEST_VIEWS } from "./requests.config.js";
 import type { createRequestsController } from "./requests.controller.js";
 import type { createRequestsRepository } from "./requests.repository.js";
 import type {
   acceptRequestSchema,
+  attachFilesRequestSchema,
   changeHandlerRequestSchema,
   changePriorityRequestSchema,
   completeStageRequestSchema,
@@ -98,6 +100,22 @@ export interface WorkflowRowType {
   currentVersionId: string;
 }
 
+/** A file attached to a request, with its link and the name of whoever attached it. */
+export interface RequestFileRowType {
+  id: string;
+  name: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  fieldId: string | null;
+  informationRequestId: string | null;
+  attachedBy: string;
+  attachedByName: string;
+  attachedAt: Date;
+}
+
+export type NewRequestFileType = typeof requestFiles.$inferInsert;
+
 export interface MemberUnitRowType {
   unitId: string | null;
 }
@@ -110,6 +128,7 @@ export type CompleteStageRequestType = z.input<typeof completeStageRequestSchema
 export type RefreshStageRequestType = z.input<typeof refreshStageRequestSchema>;
 export type ChangeHandlerRequestType = z.input<typeof changeHandlerRequestSchema>;
 export type NarrowStageRequestType = z.input<typeof narrowStageRequestSchema>;
+export type AttachFilesRequestType = z.input<typeof attachFilesRequestSchema>;
 export type ListRequestsQueryType = z.output<typeof listRequestsQuerySchema>;
 
 /** The SLA as the API returns it: live while in progress, the frozen record once closed (R6.22, R6.23). */
@@ -157,10 +176,32 @@ export interface RequestSummaryType {
   activeStage: ActiveStageType | null;
 }
 
+export interface RequestFileType {
+  id: string;
+  name: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  fieldId: string | null;
+  informationRequestId: string | null;
+  attachedBy: { id: string; name: string };
+  attachedAt: Date;
+}
+
+/** A file named in a form answer: its details while attached, only its ID once removed (R6.25). */
+export type AnswerFileType =
+  | { id: string; removed: false; name: string; contentType: string; sizeBytes: number }
+  | { id: string; removed: true };
+
+/** A snapshot entry as the page returns it: a file field also lists its files. */
+export interface RequestAnswerType extends AnswerSnapshotType {
+  files?: AnswerFileType[];
+}
+
 export interface RequestType extends RequestSummaryType {
-  answers: AnswerSnapshotType[];
-  /** Steps 6.4 and 6.3 replace these two with their own lists. */
-  files: unknown[];
+  answers: RequestAnswerType[];
+  files: RequestFileType[];
+  /** Step 6.3 replaces this with its own list. */
   informationRequests: unknown[];
   stages: StageRunType[];
   sla: SlaType | null;
@@ -188,6 +229,7 @@ export interface ListRequestsResponseType {
 export interface RequestsRouterDepsType {
   db: Db;
   config: Config;
+  store: FileStoreType;
 }
 
 export type RequestsRepositoryType = ReturnType<typeof createRequestsRepository>;

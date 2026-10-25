@@ -15,6 +15,7 @@ export { paymentPeriods, plans } from "./plans.js";
 export { assigneeBuiltins, positions } from "./positions.js";
 export { priorities } from "./priorities.js";
 export { refreshTokens } from "./refresh-tokens.js";
+export { requestFiles } from "./request-files.js";
 export { requestStageAssignees, requestStageRuns, stageRunStates } from "./request-stages.js";
 export { numberSequences, requestStates, requests } from "./requests.js";
 export { permissionScopes, rolePermissions, roles } from "./roles.js";

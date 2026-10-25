@@ -21,6 +21,8 @@ export const submitRequestSchema = z.strictObject({
   fileIds: z.array(z.string()).optional(),
 });
 
+export const attachFilesRequestSchema = z.strictObject({ fileIds: z.array(z.string()).min(1) });
+
 export const changePriorityRequestSchema = z.strictObject({ priorityId: idSchema, reason });
 export const acceptRequestSchema = z.strictObject({ handlerId: idSchema, workflowId: idSchema });
 export const reasonRequestSchema = z.strictObject({ reason });

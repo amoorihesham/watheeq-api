@@ -13,9 +13,9 @@ import type { RequestsRouterDepsType } from "./requests.types.js";
  * stage assignees) and the reads declare no permission: being the party, or seeing the request under R6.7, is the
  * authorization, checked in the database for each request (D31, a recorded exception to T24).
  */
-export function createRequestsRouter({ db, config }: RequestsRouterDepsType): Router {
+export function createRequestsRouter({ db, config, store }: RequestsRouterDepsType): Router {
   const controller = createRequestsController({
-    service: createRequestsService({ db, repo: createRequestsRepository() }),
+    service: createRequestsService({ db, repo: createRequestsRepository(), store }),
   });
   const router = Router();
   router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
@@ -47,5 +47,8 @@ export function createRequestsRouter({ db, config }: RequestsRouterDepsType): Ro
   router.post(stage("narrow"), controller.stageAction("narrowStage"));
   router.post(stage("escalate"), controller.stageAction("escalateStage"));
   router.post(stage("refresh"), controller.stageAction("refreshStage"));
+  router.post("/:requestId/files", controller.attachFiles);
+  router.post("/:requestId/files/:fileId/remove", controller.removeFile);
+  router.get("/:requestId/files/:fileId/content", controller.fileContent);
   return router;
 }

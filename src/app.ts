@@ -68,7 +68,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/services", createServicesRouter({ db, config }));
   app.use("/priorities", createPrioritiesRouter({ db, config }));
   app.use("/escalation", createEscalationRouter({ db, config }));
-  app.use("/requests", createRequestsRouter({ db, config }));
+  app.use("/requests", createRequestsRouter({ db, config, store }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

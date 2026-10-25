@@ -1,5 +1,6 @@
 import type { Request, RequestHandler } from "express";
 import { auditContextOf, principalOf } from "@/modules/auth/index.js";
+import { sendDownload } from "@/modules/files/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
 import type {
   CatalogType,
@@ -11,6 +12,7 @@ import type {
 const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
 const callerOf = (req: Request) => principalOf(req).id;
 const requestIdOf = (req: Request) => String(req.params.requestId);
+const fileIdOf = (req: Request) => String(req.params.fileId);
 
 export function createRequestsController({ service }: { service: RequestsServiceType }) {
   return {
@@ -106,6 +108,39 @@ export function createRequestsController({ service }: { service: RequestsService
         auditContextOf(req),
       );
       res.status(200).json({ request } satisfies RequestResponseType);
+    }) satisfies RequestHandler,
+
+    attachFiles: (async (req, res) => {
+      const request = await service.attachFiles(
+        tenantOf(req),
+        callerOf(req),
+        requestIdOf(req),
+        req.body,
+        auditContextOf(req),
+      );
+      res.status(200).json({ request } satisfies RequestResponseType);
+    }) satisfies RequestHandler,
+
+    removeFile: (async (req, res) => {
+      const request = await service.removeFile(
+        tenantOf(req),
+        callerOf(req),
+        requestIdOf(req),
+        fileIdOf(req),
+        req.body,
+        auditContextOf(req),
+      );
+      res.status(200).json({ request } satisfies RequestResponseType);
+    }) satisfies RequestHandler,
+
+    fileContent: (async (req, res) => {
+      const { file, body } = await service.openFile(
+        tenantOf(req),
+        callerOf(req),
+        requestIdOf(req),
+        fileIdOf(req),
+      );
+      await sendDownload(res, file, body);
     }) satisfies RequestHandler,
   };
 }

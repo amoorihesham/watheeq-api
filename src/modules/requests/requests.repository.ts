@@ -1,5 +1,6 @@
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -15,7 +16,9 @@ import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import { dateFromEpochMs } from "@/db/rows.js";
 import {
+  files,
   priorities,
+  requestFiles,
   requestStageAssignees,
   requestStageRuns,
   requests,
@@ -29,8 +32,10 @@ import {
 import type {
   ListRequestsQueryType,
   MemberUnitRowType,
+  NewRequestFileType,
   PriorityRowType,
   RequestDetailRowType,
+  RequestFileRowType,
   RequestRowType,
   RequestSummaryRowType,
   RequestViewType,
@@ -50,6 +55,22 @@ const summaryColumns = {
   ...summaryOwnColumns,
   requesterName: users.userName,
   handlerName: handlerUser.userName,
+};
+
+const attacher = alias(users, "attacher");
+
+const fileColumns = {
+  id: files.id,
+  name: files.name,
+  // A file is never linked to a request before it has a detected type.
+  contentType: sql<string>`${files.contentType}`,
+  sizeBytes: files.sizeBytes,
+  sha256: sql<string>`${files.sha256}`,
+  fieldId: requestFiles.fieldId,
+  informationRequestId: requestFiles.informationRequestId,
+  attachedBy: requestFiles.attachedBy,
+  attachedByName: attacher.userName,
+  attachedAt: requestFiles.attachedAt,
 };
 
 const ofTenant = (tenantId: string, requestId: string) =>
@@ -205,6 +226,75 @@ export function createRequestsRepository() {
           slaMet: record?.met ?? null,
         })
         .where(ofTenant(tenantId, requestId));
+    },
+
+    /** Whether the user is an active member of the tenant now: a token may outlive a deactivation. */
+    isActiveMember(db: Executor, tenantId: string, userId: string): Promise<{ id: string }[]> {
+      return db
+        .select({ id: users.id })
+        .from(tenantMembers)
+        .innerJoin(users, eq(users.id, tenantMembers.userId))
+        .where(
+          and(
+            eq(tenantMembers.tenantId, tenantId),
+            eq(tenantMembers.userId, userId),
+            eq(users.isActive, true),
+          ),
+        );
+    },
+
+    countFiles(db: Executor, tenantId: string, requestId: string): Promise<{ total: number }[]> {
+      return db
+        .select({ total: count() })
+        .from(requestFiles)
+        .where(and(eq(requestFiles.tenantId, tenantId), eq(requestFiles.requestId, requestId)));
+    },
+
+    insertFiles(db: Executor, rows: NewRequestFileType[]) {
+      return db.insert(requestFiles).values(rows);
+    },
+
+    filesOf(db: Executor, tenantId: string, requestId: string): Promise<RequestFileRowType[]> {
+      return db
+        .select(fileColumns)
+        .from(requestFiles)
+        .innerJoin(
+          files,
+          and(eq(files.tenantId, requestFiles.tenantId), eq(files.id, requestFiles.fileId)),
+        )
+        .innerJoin(attacher, eq(attacher.id, requestFiles.attachedBy))
+        .where(and(eq(requestFiles.tenantId, tenantId), eq(requestFiles.requestId, requestId)))
+        .orderBy(asc(requestFiles.attachedAt), asc(files.name), asc(files.id));
+    },
+
+    /** One of the request's attached files; none for a file of another request, or one already removed. */
+    findFile(
+      db: Executor,
+      tenantId: string,
+      requestId: string,
+      fileId: string,
+    ): Promise<RequestFileRowType[]> {
+      return db
+        .select(fileColumns)
+        .from(requestFiles)
+        .innerJoin(
+          files,
+          and(eq(files.tenantId, requestFiles.tenantId), eq(files.id, requestFiles.fileId)),
+        )
+        .innerJoin(attacher, eq(attacher.id, requestFiles.attachedBy))
+        .where(
+          and(
+            eq(requestFiles.tenantId, tenantId),
+            eq(requestFiles.requestId, requestId),
+            eq(requestFiles.fileId, fileId),
+          ),
+        );
+    },
+
+    deleteFileLink(db: Executor, tenantId: string, fileId: string) {
+      return db
+        .delete(requestFiles)
+        .where(and(eq(requestFiles.tenantId, tenantId), eq(requestFiles.fileId, fileId)));
     },
 
     /** The member's unit now; no row for a user outside the tenant. */

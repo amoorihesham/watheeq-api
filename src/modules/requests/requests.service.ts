@@ -1,3 +1,4 @@
+import type { Readable } from "node:stream";
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor, Tx } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
@@ -5,15 +6,23 @@ import { AppError, type ErrorDetail } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import { loadCalendar } from "@/modules/calendar/index.js";
 import { isEscalationConfigured } from "@/modules/escalation/index.js";
+import {
+  attachFiles,
+  discardFiles,
+  type FileDownloadType,
+  storageKeyOf,
+} from "@/modules/files/index.js";
 import { snapshotAnswers, validateAnswers } from "@/modules/services/index.js";
 import {
   assertGrantsHeld,
   type GrantMapType,
   loadMemberGrants,
 } from "@/modules/tenant-access/index.js";
-import { NUMBER_PREFIX } from "./requests.config.js";
+import type { FileStoreType } from "@/storage/index.js";
+import { MAX_REQUEST_FILES, NUMBER_PREFIX } from "./requests.config.js";
 import {
   acceptRequestSchema,
+  attachFilesRequestSchema,
   changeHandlerRequestSchema,
   changePriorityRequestSchema,
   completeStageRequestSchema,
@@ -27,20 +36,27 @@ import {
 import type {
   AcceptRequestType,
   ActiveStageType,
+  AnswerFileType,
+  AttachFilesRequestType,
   CatalogType,
   ChangeHandlerRequestType,
   ChangePriorityRequestType,
   CompleteStageRequestType,
   ListRequestsResponseType,
   NarrowStageRequestType,
+  NewRequestFileType,
   ReasonRequestType,
   RefreshStageRequestType,
+  RequestAnswerType,
   RequestDetailRowType,
+  RequestFileRowType,
+  RequestFileType,
   RequestRowType,
   RequestSummaryRowType,
   RequestSummaryType,
   RequestsRepositoryType,
   RequestType,
+  ServiceRowType,
   StageAssigneeRowType,
   StageDefRowType,
   StageRunRowType,
@@ -50,6 +66,7 @@ import type {
 } from "./requests.types.js";
 import { nextNumber } from "./shared/numbers.js";
 import { closeRequest, frozenSlaOf, slaOf } from "./shared/sla.js";
+import { isLiveStageAssignee } from "./shared/stage-assignees.js";
 import {
   type ActorType,
   assigneeIdsOf,
@@ -76,12 +93,70 @@ function existingRequestId(requestId: string): string {
   return requestId;
 }
 
+/** The same for a file ID in a path. */
+function existingFileId(fileId: string): string {
+  const parsed = requestIdSchema.safeParse(fileId);
+  if (!parsed.success) {
+    throw new AppError("NOT_FOUND");
+  }
+  return parsed.data;
+}
+
 const invalid = (path: string, code: string) => new AppError("VALIDATION_FAILED", [{ path, code }]);
 
 function assertState(request: RequestRowType, state: RequestRowType["state"]): void {
   if (request.state !== state) {
     throw new AppError("INVALID_REQUEST_STATE");
   }
+}
+
+const isOpen = (request: Pick<RequestRowType, "state">) =>
+  request.state === "in_review" || request.state === "in_progress";
+
+function assertOpen(request: RequestRowType): void {
+  if (!isOpen(request)) {
+    throw new AppError("INVALID_REQUEST_STATE");
+  }
+}
+
+const toFile = (row: RequestFileRowType): RequestFileType => ({
+  id: row.id,
+  name: row.name,
+  contentType: row.contentType,
+  sizeBytes: row.sizeBytes,
+  sha256: row.sha256,
+  fieldId: row.fieldId,
+  informationRequestId: row.informationRequestId,
+  attachedBy: { id: row.attachedBy, name: row.attachedByName },
+  attachedAt: row.attachedAt,
+});
+
+/** The snapshot with each file field's files listed; one no longer attached is shown as removed (R6.25). */
+function answersWithFiles(
+  answers: RequestDetailRowType["answers"],
+  files: RequestFileRowType[],
+): RequestAnswerType[] {
+  const byId = new Map(files.map((file) => [file.id, file]));
+  return answers.map((answer) => {
+    if (answer.field.type !== "file" || !Array.isArray(answer.value)) {
+      return answer;
+    }
+    return {
+      ...answer,
+      files: (answer.value as string[]).map((id): AnswerFileType => {
+        const file = byId.get(id);
+        return file
+          ? {
+              id,
+              removed: false,
+              name: file.name,
+              contentType: file.contentType,
+              sizeBytes: file.sizeBytes,
+            }
+          : { id, removed: true };
+      }),
+    };
+  });
 }
 
 const numberOf = (row: Pick<RequestRowType, "number" | "year">) => `REQ-${row.number}-${row.year}`;
@@ -155,8 +230,12 @@ async function allowedActionsOf(
   callerId: string,
   grants: GrantMapType,
   runs: StageRunViewRowType[],
+  canAttach: boolean,
 ): Promise<string[]> {
   const actions: string[] = [];
+  if (canAttach) {
+    actions.push("attach_files");
+  }
   if (row.state === "in_review") {
     if (row.requesterId === callerId) {
       actions.push("withdraw");
@@ -200,7 +279,44 @@ async function allowedActionsOf(
   return actions;
 }
 
-export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepositoryType }) {
+export function createRequestsService({
+  db,
+  repo,
+  store,
+}: {
+  db: Db;
+  repo: RequestsRepositoryType;
+  store: FileStoreType;
+}) {
+  /**
+   * Who may attach files (R6.24): the requester, the handler, a current assignee of the live stage, and a reviewer
+   * while the request is in review. Read from the database now, not from the token.
+   */
+  async function mayAttach(
+    executor: Executor,
+    request: RequestRowType,
+    callerId: string,
+    grants: GrantMapType,
+  ): Promise<boolean> {
+    if (!isOpen(request)) {
+      return false;
+    }
+    if (request.requesterId === callerId || request.handlerId === callerId) {
+      return true;
+    }
+    if (request.state === "in_review") {
+      return grants.has("request.review");
+    }
+    return isLiveStageAssignee(executor, request, callerId);
+  }
+
+  /** A deactivated member's token stays valid for a while; party actions check the database (D31). */
+  async function assertActiveCaller(tx: Tx, tenantId: string, callerId: string): Promise<void> {
+    if ((await repo.isActiveMember(tx, tenantId, callerId)).length === 0) {
+      throw new AppError("FORBIDDEN");
+    }
+  }
+
   async function runsWithAssignees(
     executor: Executor,
     tenantId: string,
@@ -226,14 +342,24 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
       row.state === "in_progress" ? await loadCalendar(executor, row.tenantId) : null;
     const grants = await loadMemberGrants(executor, row.tenantId, callerId);
     const { runs, assignees } = await runsWithAssignees(executor, row.tenantId, [row.id]);
+    const files = await repo.filesOf(executor, row.tenantId, row.id);
+    const canAttach = await mayAttach(executor, row, callerId, grants);
     return {
       ...toSummary(row, calendar, activeStageOf(runs, assignees)),
-      answers: row.answers,
-      files: [],
+      answers: answersWithFiles(row.answers, files),
+      files: files.map(toFile),
       informationRequests: [],
       stages: runs.map((run) => toStageRun(run, assignees)),
       sla: calendar ? slaOf(row, calendar) : frozenSlaOf(row),
-      allowedActions: await allowedActionsOf(executor, repo, row, callerId, grants, runs),
+      allowedActions: await allowedActionsOf(
+        executor,
+        repo,
+        row,
+        callerId,
+        grants,
+        runs,
+        canAttach,
+      ),
     };
   }
 
@@ -328,6 +454,67 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
     level: run.level,
   });
 
+  /**
+   * Attaches the files named in file answers and in `fileIds` and links them to the new request (R6.3, R6.24).
+   * Refusals keep the paths of Phase 5.5: `answers.<field ID>.<index>` inside a file answer, `fileIds.<index>`
+   * for the extra files.
+   */
+  async function attachSubmissionFiles(
+    tx: Tx,
+    tenantId: string,
+    callerId: string,
+    requestId: string,
+    form: ServiceRowType["form"],
+    body: { answers: Record<string, unknown>; fileIds?: string[] | undefined },
+  ): Promise<string[]> {
+    const groups = [
+      ...form.flatMap((field) => {
+        const ids = body.answers[field.id];
+        return field.type === "file" && Array.isArray(ids)
+          ? [{ fieldId: field.id, ids: ids as string[] }]
+          : [];
+      }),
+      { fieldId: null, ids: body.fileIds ?? [] },
+    ];
+    if (groups.reduce((sum, group) => sum + group.ids.length, 0) > MAX_REQUEST_FILES) {
+      throw new AppError("TOO_MANY_FILES");
+    }
+    const details: ErrorDetail[] = [];
+    const rows: NewRequestFileType[] = [];
+    for (const group of groups) {
+      try {
+        const files = await attachFiles(tx, tenantId, callerId, group.ids);
+        rows.push(
+          ...files.map((file) => ({
+            tenantId,
+            requestId,
+            fileId: file.id,
+            fieldId: group.fieldId,
+            attachedBy: callerId,
+          })),
+        );
+      } catch (err) {
+        if (!(err instanceof AppError) || err.code !== "VALIDATION_FAILED") {
+          throw err;
+        }
+        details.push(
+          ...(err.details ?? []).map((detail) =>
+            group.fieldId
+              ? { ...detail, path: detail.path.replace(/^fileIds\./, `answers.${group.fieldId}.`) }
+              : detail,
+          ),
+        );
+      }
+    }
+    if (details.length > 0) {
+      throw new AppError("VALIDATION_FAILED", details);
+    }
+    if (rows.length > 0) {
+      await repo.insertFiles(tx, rows);
+    }
+    return rows.map((row) => row.fileId);
+  }
+
   return {
     /** The active services with their forms and the active priorities (R6.2). */
     async catalog(tenantId: string): Promise<CatalogType> {
@@ -400,7 +587,14 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
         if (!created) {
           throw new Error("the request insert returned no row");
         }
-        // Step 6.4 attaches the form's files and `fileIds` here, and adds their IDs to the audit entry.
+        const attached = await attachSubmissionFiles(
+          tx,
+          tenantId,
+          callerId,
+          created.id,
+          service.form,
+          body,
+        );
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
@@ -412,6 +606,7 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
             service: { id: service.id, name: service.name },
             priority: { id: priority.id, name: priority.name, days: priority.days },
             title: body.title,
+            fileIds: attached,
           },
         });
         return reload(tx, tenantId, created.id, callerId);
@@ -929,6 +1124,105 @@ export function createRequestsService({ db, repo }: { db: Db; repo: RequestsRepo
         await auditCompletion(tx, changed, actorOf(callerId, context), closure);
         return reload(tx, tenantId, id, callerId);
       });
+    },
+    /** Attaches the caller's pending uploads to an open request (R6.24). */
+    attachFiles(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      input: AttachFilesRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const body = validate(attachFilesRequestSchema, input);
+      return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        assertOpen(request);
+        const grants = await loadMemberGrants(tx, tenantId, callerId);
+        if (!(await mayAttach(tx, request, callerId, grants))) {
+          throw new AppError("FORBIDDEN");
+        }
+        const [stored] = await repo.countFiles(tx, tenantId, id);
+        if ((stored?.total ?? 0) + body.fileIds.length > MAX_REQUEST_FILES) {
+          throw new AppError("TOO_MANY_FILES");
+        }
+        const files = await attachFiles(tx, tenantId, callerId, body.fileIds);
+        await repo.insertFiles(
+          tx,
+          files.map((file) => ({ tenantId, requestId: id, fileId: file.id, attachedBy: callerId })),
+        );
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.files_attached",
+          resourceType: "request",
+          resourceId: id,
+          details: { fileIds: files.map((file) => file.id) },
+        });
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** Deletes an attachment, by whoever attached it or by the handler, with a reason (R6.25). */
+    removeFile(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      fileId: string,
+      input: ReasonRequestType,
+      context: AuditContextType,
+    ): Promise<RequestType> {
+      const id = existingRequestId(requestId);
+      const fileKey = existingFileId(fileId);
+      const body = validate(reasonRequestSchema, input);
+      return withTx(db, async (tx) => {
+        await assertActiveCaller(tx, tenantId, callerId);
+        const request = await lockRequest(tx, tenantId, callerId, id);
+        const [file] = await repo.findFile(tx, tenantId, id, fileKey);
+        if (!file) {
+          throw new AppError("NOT_FOUND");
+        }
+        if (file.attachedBy !== callerId && request.handlerId !== callerId) {
+          throw new AppError("FORBIDDEN");
+        }
+        assertOpen(request);
+        await repo.deleteFileLink(tx, tenantId, file.id);
+        await discardFiles(tx, tenantId, [file.id]);
+        await writeAuditEntry(tx, {
+          tenantId,
+          ...context,
+          action: "request.file_removed",
+          resourceType: "request",
+          resourceId: id,
+          reason: body.reason,
+          details: {
+            file: { id: file.id, name: file.name, sizeBytes: file.sizeBytes, sha256: file.sha256 },
+            reason: body.reason,
+          },
+        });
+        return reload(tx, tenantId, id, callerId);
+      });
+    },
+
+    /** The bytes of an attached file for anyone who sees the request (R6.7, R6.24). */
+    async openFile(
+      tenantId: string,
+      callerId: string,
+      requestId: string,
+      fileId: string,
+    ): Promise<{ file: FileDownloadType; body: Readable }> {
+      const id = existingRequestId(requestId);
+      const fileKey = existingFileId(fileId);
+      const [request] = await repo.findById(db, tenantId, id, visibleRequests(tenantId, callerId));
+      const [file] = request ? await repo.findFile(db, tenantId, id, fileKey) : [];
+      if (!file) {
+        throw new AppError("NOT_FOUND");
+      }
+      return {
+        file: { name: file.name, contentType: file.contentType, sizeBytes: file.sizeBytes },
+        body: await store.get(storageKeyOf(tenantId, file.id)),
+      };
     },
   };
 }
