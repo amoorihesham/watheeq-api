@@ -52,7 +52,7 @@ A path parameter that cannot be decoded (`GET /users/%zz`) is answered like any 
 | `SUBSCRIPTION_NOT_ACTIVE` | 403 | The route needs an Active subscription and the tenant is in Grace or Read-only (submitting a request) | Shows that submission is paused until renewal |
 | `NOT_FOUND` | 404 | The route, the thing, or a path ID does not exist, or exists but the caller may not see it; the two cases look the same | Shows "not found" and goes back to the list |
 | `TAKEN` | 409 | A unique value is already used; `details` is one `taken` at the field (`email`, `slug`, `name`, `admin.email`) | Marks the field as already used |
-| `VERSION_CHANGED` | 409 | The resource changed since the client read it; `details` is one detail at `baseVersion` or `baseRevision` | Reloads the resource and asks the user to redo or merge the edit |
+| `VERSION_CHANGED` | 409 | The resource changed since the client read it; `details` is one `version_changed` detail at `baseVersion` or `baseRevision` | Reloads the resource and asks the user to redo or merge the edit |
 | `ALREADY_VERIFIED` | 409 | A verification or invitation email was requested for someone who already set a password | Refreshes the row; the action is no longer needed |
 | `USER_LIMIT_REACHED` | 409 | Adding or reactivating a member would pass the plan's user limit | Tells Sara the limit is reached and points to the subscription |
 | `UNIT_NOT_EMPTY` | 409 | The org unit still has sections or members | Asks the user to move them first |
@@ -109,6 +109,7 @@ The first group is the codes zod reports for the shape of the input, the second 
 | `invalid_json` | The body is not valid JSON; path `""` | `{"name":` |
 | `invalid_cursor` | The cursor is broken, altered, or from another list or other filters | `cursor` |
 | `taken` | The value is already used; comes with `TAKEN` | `name` |
+| `version_changed` | The version the edit was based on is no longer current; comes with `VERSION_CHANGED` | `baseVersion` |
 | `permission_not_held` | The actor does not hold the permission at that scope; comes with `PERMISSION_NOT_HELD` | `permissions.3` |
 
 ### Values that depend on other data
