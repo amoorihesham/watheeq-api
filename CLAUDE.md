@@ -8,7 +8,7 @@ Multi-tenant backend for managing internal legal departments, legal services, an
 
 Each phase follows this lifecycle:
 
-1. **Draft:** when I ask, create `docs/specs/phase-<N>-<name>.md` from `templates/SPEC_TEMPLATE.md`. Status: `Draft`.
+1. **Draft:** when I ask, create the folder `docs/specs/phase-<N>-<name>/` with `phase-<N>-<name>.md` from `templates/SPEC_TEMPLATE.md` and its endpoints in `phase-<N>-<name>.API.md` from `templates/SPEC_API_TEMPLATE.md`. Status: `Draft`.
 2. **Review:** we discuss it. Resolve open questions, record decisions in the spec, and revise it. Status stays `Draft` (or `In Review`).
 3. **Approved:** I change the status to `Approved`. Only now may implementation start.
 4. **Implement:** the whole spec is implemented by two sub-agents, each in its own git worktree, with the spec's steps split between them along their dependencies and built in the order the spec defines. There is no review gate between steps. After the whole spec is implemented, you review everything once (every step's acceptance criteria, the full test suite, mutation checks for locks and races, and an end-to-end check against a running server) and report to me with the verification results per step.
@@ -37,8 +37,10 @@ Each document is authoritative for its own topic. Do not duplicate content betwe
 | `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1-D46; open product questions |
 | `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T51; deferred hardening                 |
 | `docs/ROADMAP_AND_STATUS.md`  | Phase list, phase status, next action                                            |
-| `docs/specs/phase-<N>-*.md`   | Detailed requirements, design, steps, and acceptance criteria for one phase      |
+| `docs/specs/phase-<N>-*/phase-<N>-*.md` | Detailed requirements, design, steps, and acceptance criteria for one phase |
+| `docs/specs/phase-<N>-*/phase-<N>-*.API.md` | The endpoints one phase adds or changes (the spec's section 4.2) |
 | `templates/SPEC_TEMPLATE.md`  | Structure every phase spec must follow                                           |
+| `templates/SPEC_API_TEMPLATE.md` | Structure every phase's API file must follow |
 
 Read `MVP_SCOPE.md` and `TECHNICAL_DECISIONS.md` before designing or implementing anything.
 

@@ -97,7 +97,7 @@ Every plan write is audited as a platform-level entry.
 A subscription shows `state` (`active`, `grace`, or `read_only`, derived from today's date in Riyadh) and `pricing`, including `effectivePriceHalalas` (plan discount, then customer discount).
 
 The first Tenant Admin has no password until they open the emailed link, which posts `{token, password}` to `POST /auth/verify` (204; 400 `VERIFICATION_INVALID` for an unknown, used, replaced, or expired link).
-Until then their login returns the same 401 as an unknown email. The full design is in `docs/specs/phase-1-platform-subscriptions.md`.
+Until then their login returns the same 401 as an unknown email. The full design is in `docs/specs/phase-1-platform-subscriptions/phase-1-platform-subscriptions.md`.
 
 ## Tenant API
 
@@ -117,9 +117,9 @@ Every tenant route is mounted behind `authenticate()`, `requireRole("user")`, an
   Every repository function that touches tenant data takes the tenant ID from the authenticated user and filters by it.
 - **Accounts:** one `users` table; `role` is `operator` (platform operator, no tenant) or `user` (tenant user).
   A tenant user belongs to exactly one tenant through `tenant_members`.
-- **Authentication:** a 30-minute JWT access token and a 7-day refresh token in `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Refresh tokens are stored hashed, rotated on every refresh, and checked against the database, so a deactivated user loses access within 30 minutes (design in `docs/specs/phase-0-foundations.md`).
+- **Authentication:** a 30-minute JWT access token and a 7-day refresh token in `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Refresh tokens are stored hashed, rotated on every refresh, and checked against the database, so a deactivated user loses access within 30 minutes (design in `docs/specs/phase-0-foundations/phase-0-foundations.md`).
 - **Audit:** `writeAuditEntry(tx, entry)` from `src/audit/`, inside the same transaction as the change.
-- **Layers:** routes → controller → service → repository. Each module's routes file composes its own layers, and `src/app.ts` mounts the routers (`docs/specs/phase-0.5-refactor.md`).
+- **Layers:** routes → controller → service → repository. Each module's routes file composes its own layers, and `src/app.ts` mounts the routers (`docs/specs/phase-0.5-refactor/phase-0.5-refactor.md`).
 
 Deliberately deferred for the MVP: Row-Level Security, login throttling, CSRF tokens, and database-enforced append-only audit (`docs/TECHNICAL_DECISIONS.md`, "Deferred hardening").
 

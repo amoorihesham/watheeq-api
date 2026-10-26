@@ -41,7 +41,7 @@ No changes.
 
 ### 4.2 API
 
-No changes.
+See [phase-0.5-refactor.API.md](phase-0.5-refactor.API.md).
 
 ### 4.3 Layer responsibilities
 

@@ -37,12 +37,11 @@ Only what this phase needs. Explain why each part exists.
 
 ### 4.1 Data model
 
-Tables and columns, constraints, indexes, row-level security policies.
+Tables and columns, constraints, indexes, and how each table is filtered by `tenant_id` (T2).
 
 ### 4.2 API
 
-| Method | Path | Realm | Permission | Request | Responses |
-| ------ | ---- | ----- | ---------- | ------- | --------- |
+See [phase-<N>-<name>.API.md](phase-<N>-<name>.API.md), written from `templates/SPEC_API_TEMPLATE.md`.
 
 ### 4.3 Key flows and state transitions
 
@@ -64,7 +63,9 @@ Trust boundaries, input validation, tenant isolation, permission checks, and wha
 
 ## 7. Implementation Steps
 
-Each step is small, reviewable, and independently verifiable. Implementation stops after each step for review.
+Each step is small, reviewable, and independently verifiable.
+Two sub-agents build the whole spec, each in its own git worktree, with the steps split between them along their dependencies and built in the order listed here.
+There is no review gate between steps; the whole spec is reviewed once after implementation (`CLAUDE.md`, lifecycle step 4).
 
 | Step  | Objective | Delivers | Acceptance criteria | Verification                    |
 | ----- | --------- | -------- | ------------------- | ------------------------------- |
