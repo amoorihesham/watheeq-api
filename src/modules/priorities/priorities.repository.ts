@@ -1,7 +1,8 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import { priorities } from "@/db/schema/index.js";
+import type { PageRequestType, SortKeyType } from "@/http/list.js";
 import type { PriorityRowType } from "./priorities.types.js";
 
 const priorityColumns = {
@@ -10,6 +11,13 @@ const priorityColumns = {
   days: priorities.days,
   retiredAt: priorities.retiredAt,
 };
+
+/** Active priorities by place, then retired ones (no place) by name; the ID breaks ties. */
+export const PRIORITY_SORT_KEYS: SortKeyType[] = [
+  { expr: sql`coalesce(${priorities.sortOrder}, 999999999)`, type: "integer" },
+  { expr: byName(priorities.name), type: "text" },
+  { expr: sql`${priorities.id}`, type: "uuid" },
+];
 
 const ofTenant = (tenantId: string, priorityId: string) =>
   and(eq(priorities.tenantId, tenantId), eq(priorities.id, priorityId));
@@ -27,22 +35,31 @@ export function createPrioritiesRepository() {
       );
     },
 
-    /** The display order: active priorities by place, then retired ones by name. */
-    list(db: Executor, tenantId: string, includeRetired: boolean): Promise<PriorityRowType[]> {
+    /** The tenant's priorities that match the `retired` filter. */
+    listWhere(tenantId: string, retired: string): SQL | undefined {
+      return and(
+        eq(priorities.tenantId, tenantId),
+        retired === "all"
+          ? undefined
+          : retired === "true"
+            ? isNotNull(priorities.retiredAt)
+            : isNull(priorities.retiredAt),
+      );
+    },
+
+    /** One page in the display order of `PRIORITY_SORT_KEYS`. */
+    selectPage(db: Executor, page: PageRequestType) {
       return db
-        .select(priorityColumns)
+        .select({ ...priorityColumns, sortValues: page.sortValues })
         .from(priorities)
-        .where(
-          and(
-            eq(priorities.tenantId, tenantId),
-            includeRetired ? undefined : isNull(priorities.retiredAt),
-          ),
-        )
-        .orderBy(
-          sql`${priorities.sortOrder} asc nulls last`,
-          byName(priorities.name),
-          priorities.id,
-        );
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db.select({ total: count() }).from(priorities).where(where);
+      return Number(row?.total ?? 0);
     },
 
     findById(db: Executor, tenantId: string, priorityId: string): Promise<PriorityRowType[]> {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { booleanFilter, pageQuery } from "@/http/filters.js";
 import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import {
   MAX_PRIORITY_DAYS,
@@ -23,8 +24,6 @@ export const reorderPrioritiesRequestSchema = z.strictObject({ ids: z.array(z.st
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listPrioritiesQuerySchema = z.object({
-  includeRetired: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
+  retired: booleanFilter("false"),
+  ...pageQuery,
 });

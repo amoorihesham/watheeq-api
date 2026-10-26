@@ -6,7 +6,6 @@ export const NOT_YET_MIGRATED: string[] = [
   "calendar",
   "escalation",
   "positions",
-  "priorities",
   "requests",
   "services",
   "workflows",

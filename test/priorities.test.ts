@@ -46,14 +46,14 @@ interface PriorityBody {
 async function create(name: string, days: number, token = huda): Promise<string> {
   const res = await as(token).post("/priorities", { name, days });
   expect(res.status).toBe(201);
-  return res.body.priority.id;
+  return res.body.data.id;
 }
 
 const orderOf = async (token = huda, query = "") =>
-  (await as(token).get(`/priorities${query}`)).body.priorities.map((p: PriorityBody) => p.name);
+  (await as(token).get(`/priorities${query}`)).body.data.map((p: PriorityBody) => p.name);
 
 const idsOf = async (token = huda) =>
-  (await as(token).get("/priorities")).body.priorities.map((p: PriorityBody) => p.id) as string[];
+  (await as(token).get("/priorities")).body.data.map((p: PriorityBody) => p.id) as string[];
 
 const auditOf = (resourceId: string) =>
   pool
@@ -149,13 +149,13 @@ describe("creating and ordering priorities (R5.12)", () => {
   it("lists Urgent, High, Normal in order, appends Low, and audits each create", async () => {
     const { urgent } = await seedAlNoorList();
     expect(await orderOf()).toEqual(["Urgent", "High", "Normal"]);
-    const list = (await as(huda).get("/priorities")).body.priorities;
+    const list = (await as(huda).get("/priorities")).body.data;
     expect(list.map((p: PriorityBody) => p.days)).toEqual([2, 5, 10]);
     expect(list[0]).toEqual({ id: urgent, name: "Urgent", days: 2, retired: false });
 
     const low = await as(huda).post("/priorities", { name: "Low", days: 20 });
     expect(low.status).toBe(201);
-    expect(low.body.priority).toEqual({
+    expect(low.body.data).toEqual({
       id: expect.any(String),
       name: "Low",
       days: 20,
@@ -164,7 +164,7 @@ describe("creating and ordering priorities (R5.12)", () => {
     expect(await orderOf()).toEqual(["Urgent", "High", "Normal", "Low"]);
     expect(await placesOf(alNoor)).toEqual([1, 2, 3, 4]);
 
-    const audit = await auditOf(low.body.priority.id);
+    const audit = await auditOf(low.body.data.id);
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({
       action: "priority.created",
@@ -212,12 +212,8 @@ describe("reordering (R5.12)", () => {
   it("sets the order as a whole list, audited with before and after", async () => {
     const { urgent, high, normal } = await seedAlNoorList();
     const res = await as(huda).put("/priorities/order", { ids: [normal, urgent, high] });
-    expect(res.status).toBe(200);
-    expect(res.body.priorities.map((p: PriorityBody) => p.name)).toEqual([
-      "Normal",
-      "Urgent",
-      "High",
-    ]);
+    expect(res.status).toBe(204);
+    expect(res.body).toEqual({});
     expect(await orderOf()).toEqual(["Normal", "Urgent", "High"]);
     expect(await placesOf(alNoor)).toEqual([1, 2, 3]);
 
@@ -243,8 +239,7 @@ describe("reordering (R5.12)", () => {
     const { urgent, high, normal } = await seedAlNoorList();
     const before = (await auditOf(alNoor)).length;
     const res = await as(huda).put("/priorities/order", { ids: [urgent, high, normal] });
-    expect(res.status).toBe(200);
-    expect(res.body.priorities).toHaveLength(3);
+    expect(res.status).toBe(204);
     expect((await auditOf(alNoor)).length).toBe(before);
   });
 
@@ -285,9 +280,9 @@ describe("changing priorities (R5.12)", () => {
     const { high } = await seedAlNoorList();
     const res = await as(huda).patch(`/priorities/${high}`, { days: 3 });
     expect(res.status).toBe(200);
-    expect(res.body.priority).toEqual({ id: high, name: "High", days: 3, retired: false });
+    expect(res.body.data).toEqual({ id: high, name: "High", days: 3, retired: false });
     const renamed = await as(huda).patch(`/priorities/${high}`, { name: "Important", days: 4 });
-    expect(renamed.body.priority).toMatchObject({ name: "Important", days: 4 });
+    expect(renamed.body.data).toMatchObject({ name: "Important", days: 4 });
     expect(await orderOf()).toEqual(["Urgent", "Important", "Normal"]);
     expect((await auditOf(high)).map((e) => [e.action, e.details])).toEqual([
       ["priority.created", { name: "High", days: 5 }],
@@ -344,18 +339,59 @@ describe("changing priorities (R5.12)", () => {
   });
 });
 
+describe("listing (Phase 8 spec 4.2.3, R8.5-R8.9)", () => {
+  it("answers a page with the total, retired priorities hidden by default", async () => {
+    const { high } = await seedAlNoorList();
+    await as(huda).post(`/priorities/${high}/retire`);
+    const res = await as(huda).get("/priorities");
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((p: PriorityBody) => p.name)).toEqual(["Urgent", "Normal"]);
+    expect(res.body.page).toEqual({ nextCursor: null, total: 2 });
+    expect((await as(huda).get("/priorities?retired=true")).body.data).toEqual([
+      { id: high, name: "High", days: 5, retired: true },
+    ]);
+    expect((await as(huda).get("/priorities?retired=all")).body.page.total).toBe(3);
+  });
+
+  it("pages in display order with a cursor, to the end", async () => {
+    await seedAlNoorList();
+    const first = await as(huda).get("/priorities?limit=2");
+    expect(first.body.data.map((p: PriorityBody) => p.name)).toEqual(["Urgent", "High"]);
+    expect(first.body.page.total).toBe(3);
+    expect(first.body.page.nextCursor).toEqual(expect.any(String));
+    const second = await as(huda).get(
+      `/priorities?limit=2&cursor=${first.body.page.nextCursor}`,
+    );
+    expect(second.body.data.map((p: PriorityBody) => p.name)).toEqual(["Normal"]);
+    expect(second.body.page).toEqual({ nextCursor: null, total: 3 });
+  });
+
+  it("refuses an unknown filter value and a cursor from other filters", async () => {
+    await seedAlNoorList();
+    const bad = await as(huda).get("/priorities?retired=maybe");
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.details).toEqual([{ path: "retired", code: "invalid_value" }]);
+    const first = await as(huda).get("/priorities?limit=1");
+    const replay = await as(huda).get(
+      `/priorities?limit=1&retired=all&cursor=${first.body.page.nextCursor}`,
+    );
+    expect(replay.status).toBe(400);
+    expect(replay.body.error.details).toEqual([{ path: "cursor", code: "invalid_cursor" }]);
+  });
+});
+
 describe("retiring and restoring (R5.15)", () => {
   it("takes a retired priority out of the order and appends it again on restore", async () => {
     const { high } = await seedAlNoorList();
     const retired = await as(huda).post(`/priorities/${high}/retire`);
     expect(retired.status).toBe(200);
-    expect(retired.body.priority.retired).toBe(true);
+    expect(retired.body.data.retired).toBe(true);
     expect(await orderOf()).toEqual(["Urgent", "Normal"]);
-    expect(await orderOf(huda, "?includeRetired=true")).toEqual(["Urgent", "Normal", "High"]);
+    expect(await orderOf(huda, "?retired=all")).toEqual(["Urgent", "Normal", "High"]);
 
     const restored = await as(huda).post(`/priorities/${high}/restore`);
     expect(restored.status).toBe(200);
-    expect(restored.body.priority.retired).toBe(false);
+    expect(restored.body.data.retired).toBe(false);
     expect(await orderOf()).toEqual(["Urgent", "Normal", "High"]);
     expect(await placesOf(alNoor)).toEqual([1, 3, 4]);
   });
@@ -376,7 +412,7 @@ describe("retiring and restoring (R5.15)", () => {
   it("keeps a retired priority readable with its days", async () => {
     const { high } = await seedAlNoorList();
     await as(huda).post(`/priorities/${high}/retire`);
-    const all = (await as(huda).get("/priorities?includeRetired=true")).body.priorities;
+    const all = (await as(huda).get("/priorities?retired=all")).body.data;
     expect(all.find((p: PriorityBody) => p.id === high)).toEqual({
       id: high,
       name: "High",
@@ -482,7 +518,7 @@ describe("concurrent changes to the order (section 5)", () => {
     });
     const results = await Promise.all(pending);
 
-    expect(results.map((res) => res.status)).toEqual([200, 200]);
+    expect(results.map((res) => res.status)).toEqual([204, 204]);
     const [first, second] = (await reordersOf()).slice(known);
     expect(first?.details.before).toEqual(original);
     expect(second?.details.before).toEqual(first?.details.after);
@@ -509,7 +545,7 @@ describe("concurrent changes to the order (section 5)", () => {
 
     expect(created?.status).toBe(201);
     const order = await orderOf();
-    if (reorder?.status === 200) {
+    if (reorder?.status === 204) {
       expect(order).toEqual(["Normal", "High", "Urgent", "Raced"]);
     } else {
       expect(reorder?.status).toBe(400);
@@ -549,7 +585,7 @@ describe("concurrent changes to the order (section 5)", () => {
           .then((res) => res),
       ),
     );
-    expect(results.map((res) => res.status)).toEqual(Array(5).fill(200));
+    expect(results.map((res) => res.status)).toEqual(Array(5).fill(204));
     expect(await placesOf(alNoor)).toEqual([1, 2, 3]);
     expect(permutations).toContainEqual(await idsOf());
   });

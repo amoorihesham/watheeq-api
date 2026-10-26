@@ -9,6 +9,7 @@ import type {
   reorderPrioritiesRequestSchema,
   updatePriorityRequestSchema,
 } from "./priorities.schemas.js";
+import type { priorityResponseSchema } from "./priorities.responses.js";
 import type { createPrioritiesService } from "./priorities.service.js";
 
 export interface PriorityRowType {
@@ -23,19 +24,7 @@ export type UpdatePriorityRequestType = z.input<typeof updatePriorityRequestSche
 export type ReorderPrioritiesRequestType = z.input<typeof reorderPrioritiesRequestSchema>;
 export type ListPrioritiesQueryType = z.output<typeof listPrioritiesQuerySchema>;
 
-export interface PriorityType {
-  id: string;
-  name: string;
-  days: number;
-  retired: boolean;
-}
-
-export interface ListPrioritiesResponseType {
-  priorities: PriorityType[];
-}
-export interface PriorityResponseType {
-  priority: PriorityType;
-}
+export type PriorityType = z.output<typeof priorityResponseSchema>;
 
 export interface PrioritiesRouterDepsType {
   db: Db;

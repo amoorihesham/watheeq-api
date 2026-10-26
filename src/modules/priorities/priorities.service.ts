@@ -3,7 +3,10 @@ import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError } from "@/http/errors.js";
+import { listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { validate } from "@/http/validate.js";
+import { PRIORITY_SORT_KEYS } from "./priorities.repository.js";
 import {
   createPriorityRequestSchema,
   listPrioritiesQuerySchema,
@@ -13,7 +16,6 @@ import {
 } from "./priorities.schemas.js";
 import type {
   CreatePriorityRequestType,
-  ListPrioritiesResponseType,
   PrioritiesRepositoryType,
   PriorityRowType,
   PriorityType,
@@ -59,10 +61,19 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
   }
 
   return {
-    async list(tenantId: string, input: unknown): Promise<ListPrioritiesResponseType> {
-      const { includeRetired } = validate(listPrioritiesQuerySchema, input);
-      const rows = await repo.list(db, tenantId, includeRetired);
-      return { priorities: rows.map(toPriority) };
+    async list(tenantId: string, input: unknown): Promise<PageType<PriorityType>> {
+      const query = validate(listPrioritiesQuerySchema, input);
+      const page = await listPage({
+        db,
+        list: "priorities",
+        query,
+        keys: PRIORITY_SORT_KEYS,
+        direction: "asc",
+        where: ({ retired }) => repo.listWhere(tenantId, retired),
+        selectPage: (tx, request) => repo.selectPage(tx, request),
+        count: (tx, where) => repo.count(tx, where),
+      });
+      return { ...page, items: page.items.map(toPriority) };
     },
 
     /** Appends the priority to the end of the order (R5.12). A duplicate name reaches the error handler as PRIORITY_NAME_TAKEN. */
@@ -145,7 +156,7 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
       tenantId: string,
       input: ReorderPrioritiesRequestType,
       context: AuditContextType,
-    ): Promise<ListPrioritiesResponseType> {
+    ): Promise<void> {
       const { ids } = validate(reorderPrioritiesRequestSchema, input);
       return withTx(db, async (tx) => {
         await repo.lockOrder(tx, tenantId);
@@ -168,7 +179,6 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
             details: { before, after: ids },
           });
         }
-        return { priorities: (await repo.list(tx, tenantId, false)).map(toPriority) };
       });
     },
 
