@@ -48,68 +48,19 @@ If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` an
 | `STORAGE_REGION` | `us-east-1` | Region the S3 client signs for; most S3-compatible servers ignore it. |
 | `STORAGE_FORCE_PATH_STYLE` | `false` | `true` for servers addressed as `host/bucket/key` (local servers); `false` for virtual-hosted style. |
 
-## HTTP behavior
+## HTTP contract
 
-- Every response has an `X-Request-Id` header.
-  A client-sent `X-Request-Id` is reused only if it matches `^[A-Za-z0-9._-]{1,64}$`; otherwise a UUID is generated.
-- Every log line of a request carries it as `reqId`.
-- Errors use one JSON shape: `{"error":{"code","requestId","details?"}}`, with no human-readable message.
-  `details` (a list of `{path, code}`) appears only for validation errors.
-- Request bodies must be `application/json` and at most 100 KB (otherwise 415 or 413).
-- Logs are JSON on stdout. `password`, `cookie`, `set-cookie`, and `authorization` are redacted.
-- On `SIGTERM` or `SIGINT` the server stops accepting connections, lets in-flight requests finish (up to 10 seconds), closes the database pool, and exits.
+How the API behaves over HTTP is written once in `docs/api/`:
 
-## Authentication
+- `docs/api/conventions.md`: the success shape, lists and cursors, filters, request methods, value formats, uploads and downloads.
+- `docs/api/errors.md`: the error shape, every error code and detail code.
+- `docs/api/auth.md`: the cookies, login, refresh, logout, the access-token payload, password and verification links.
+- `docs/api/access.md`: permissions, scopes, subscription states, and request visibility.
 
-| Endpoint             | Needs                 | Result |
-| -------------------- | --------------------- | ------ |
-| `POST /auth/login`   | `{email, password}`   | 200 `{user:{id, email, userName, role, tenant}}` and both cookies. 401 `INVALID_CREDENTIALS` for any failure. |
-| `POST /auth/refresh` | `wq_refresh` cookie   | 200 `{user}` and new cookies; the old refresh token is revoked. 401 `UNAUTHENTICATED` (and both cookies cleared) if the token is unknown, revoked, or expired, or the user is inactive. |
-| `POST /auth/logout`  | nothing               | 204; the refresh token is revoked and both cookies are cleared. |
-| `GET /auth/me`       | `wq_access` cookie    | 200 `{user, subscription}`: `subscription` is `{state, endDate, graceEndsOn}` for a tenant user and `null` for an operator. 401 `UNAUTHENTICATED`. |
-
-- `wq_access` holds a 30-minute JWT (`Path=/`); `wq_refresh` holds a 7-day random token (`Path=/auth`). Both are `HttpOnly`, `Secure`, `SameSite=Lax`.
-  Browsers treat `http://localhost` as secure; `curl` also sends `Secure` cookies to `localhost`.
-- Only the SHA-256 hash of a refresh token is stored.
-- A deactivated user keeps a valid access token for at most 30 minutes; the next refresh fails.
-- The access token's payload is `{sub, iss: "watheeq_api", iat, exp, username, email, role, tenant}`. `tenant` is `{id, roleId, roleName, permissions}` for a tenant user (until Phase 3: `roleId` null, `roleName` `admin` or `member`, `permissions` empty) and `null` for an operator.
-- Protect a route with `authenticate(jwtSecret)` and, for operator routes, `requireRole("operator")`, both from `src/modules/auth/`.
-- Create an operator with `pnpm operator:create <email> "<full name>"`. Tenant users are created in Phase 1 (tenant creation) and Phase 2 (user management).
-
-## Operator API
-
-Operator routes require an operator's access token and each declares a platform permission; tenant users get 403.
-
-| Endpoint | Permission | Result |
-| -------- | ---------- | ------ |
-| `POST /operator/plans` | `platform.plan.create` | 201 `{plan}`; 409 `PLAN_NAME_TAKEN` for a name that exists in any case |
-| `GET /operator/plans` | `platform.plan.view` | 200 `{plans}`, ordered by name |
-| `GET /operator/plans/:planId` | `platform.plan.view` | 200 `{plan}`; 404 |
-| `PATCH /operator/plans/:planId` | `platform.plan.update` | 200 `{plan}`; existing subscriptions keep their copied terms |
-| `POST /operator/tenants` | `platform.tenant.create` | 201 `{tenant, subscription, admin}`; creates the tenant, its subscription, and the first Tenant Admin, and emails the admin a verification link. 409 `EMAIL_TAKEN` or `SLUG_TAKEN` |
-| `GET /operator/tenants` | `platform.tenant.view` | 200 `{tenants:[{tenant, subscription, usage}]}`, ordered by name |
-| `GET /operator/tenants/:tenantId` | `platform.tenant.view` | 200 `{tenant, subscription, usage}`; 404 |
-| `PUT /operator/tenants/:tenantId/subscription` | `platform.subscription.update` | 200 `{subscription, usage}`. Body `{planId, startDate, endDate, customerDiscountPercent?, reason?}`: renews, extends, changes plan, or ends early (a past end date). Copies the plan's current terms; an omitted customer discount is kept |
-| `POST /operator/tenants/:tenantId/admin/resend-verification` | `platform.tenant.create` | 204; older links stop working. 409 `ALREADY_VERIFIED` |
-
-A plan is `{name, userLimit, graceDays, priceHalalas, paymentPeriod, discountPercent}`: the price is in halalas per payment period (`monthly` or `yearly`), and the discount is a percentage with up to two decimals.
-Every plan write is audited as a platform-level entry.
-A subscription shows `state` (`active`, `grace`, or `read_only`, derived from today's date in Riyadh) and `pricing`, including `effectivePriceHalalas` (plan discount, then customer discount).
-
-The first Tenant Admin has no password until they open the emailed link, which posts `{token, password}` to `POST /auth/verify` (204; 400 `VERIFICATION_INVALID` for an unknown, used, replaced, or expired link).
-Until then their login returns the same 401 as an unknown email. The full design is in `docs/specs/phase-1-platform-subscriptions/phase-1-platform-subscriptions.md`.
-
-## Tenant API
-
-| Endpoint | Who | Result |
-| -------- | --- | ------ |
-| `GET /subscription` | a tenant user | 200 `{subscription, usage}`: every field of the tenant's subscription, including pricing (permission `subscription.view` is enforced from Phase 3) |
-
-Every tenant route is mounted behind `authenticate()`, `requireRole("user")`, and `subscriptionGuard(db)` from `src/modules/subscriptions/`:
-
-- In **Read-only**, `POST`, `PUT`, `PATCH`, and `DELETE` return 403 `SUBSCRIPTION_READ_ONLY`; reads still work. `/auth/*` is not behind the guard, so users can always log in, refresh, and log out.
-- Routes that need **Active** add `requireActiveSubscription()`, which returns 403 `SUBSCRIPTION_NOT_ACTIVE` in Grace and Read-only.
-- The guard reads the subscription on every request, so a renewal takes effect immediately.
+Each endpoint is a row in the `.API.md` file of the phase that designed it, in `docs/specs/`.
+Logs are JSON on stdout; `password`, `cookie`, `set-cookie`, and `authorization` are redacted, and every log line of a request carries its `reqId`.
+On `SIGTERM` or `SIGINT` the server stops accepting connections, lets in-flight requests finish (up to 10 seconds), closes the database pool, and exits.
+Create an operator with `pnpm operator:create <email> "<full name>"`; tenant users are created through tenant creation and user management.
 
 ## Architecture in brief
 

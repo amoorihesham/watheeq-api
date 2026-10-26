@@ -37,6 +37,7 @@ Each document is authoritative for its own topic. Do not duplicate content betwe
 | `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1-D46; open product questions |
 | `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T51; deferred hardening                 |
 | `docs/ROADMAP_AND_STATUS.md`  | Phase list, phase status, next action                                            |
+| `docs/api/`                   | The HTTP contract for clients: success, list, and error shapes, auth, access     |
 | `docs/specs/phase-<N>-*/phase-<N>-*.md` | Detailed requirements, design, steps, and acceptance criteria for one phase |
 | `docs/specs/phase-<N>-*/phase-<N>-*.API.md` | The endpoints one phase adds or changes (the spec's section 4.2) |
 | `templates/SPEC_TEMPLATE.md`  | Structure every phase spec must follow                                           |
