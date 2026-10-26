@@ -11,6 +11,7 @@ import type {
   renamePositionRequestSchema,
   setHoldersRequestSchema,
 } from "./positions.schemas.js";
+import type { assigneeTargetResponseSchema, positionResponseSchema } from "./positions.responses.js";
 import type { createPositionsService } from "./positions.service.js";
 
 export type AssigneeBuiltinType = (typeof ASSIGNEE_BUILTINS)[number];
@@ -45,26 +46,13 @@ export interface UnitRowType {
   parentId: string | null;
 }
 
-/** A position as the API returns it (Phase 5 spec, 4.2). */
-export interface PositionType {
-  id: string;
-  unitId: string | null;
-  name: string;
-  retired: boolean;
-  holders: { userId: string; name: string }[];
-}
+export type PositionType = z.output<typeof positionResponseSchema>;
+export type AssigneeTargetResponseType = z.output<typeof assigneeTargetResponseSchema>;
 
 export type CreatePositionRequestType = z.input<typeof createPositionRequestSchema>;
 export type RenamePositionRequestType = z.input<typeof renamePositionRequestSchema>;
 export type SetHoldersRequestType = z.input<typeof setHoldersRequestSchema>;
 export type ListPositionsQueryType = z.output<typeof listPositionsQuerySchema>;
-
-export interface ListPositionsResponseType {
-  positions: PositionType[];
-}
-export interface PositionResponseType {
-  position: PositionType;
-}
 
 /** Who a request is about; the handler is unknown until acceptance (Phase 5 spec, 4.3). */
 export interface AssigneeContextType {

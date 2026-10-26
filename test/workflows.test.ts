@@ -115,12 +115,12 @@ async function createPosition(name: string, unitId: string, holders: string[] = 
   const res = await as(huda).post("/positions", { unitId, name });
   expect(res.status).toBe(201);
   if (holders.length > 0) {
-    const held = await as(huda).put(`/positions/${res.body.position.id}/holders`, {
+    const held = await as(huda).put(`/positions/${res.body.data.id}/holders`, {
       userIds: holders,
     });
     expect(held.status).toBe(200);
   }
-  return res.body.position.id as string;
+  return res.body.data.id as string;
 }
 
 /** Creates a workflow as Huda through the API. Returns its id. */
@@ -240,7 +240,7 @@ beforeAll(async () => {
   viewer = (await login(app, VIEWER, PASSWORD)).access;
   rashid = (await login(app, RASHID_ADMIN, PASSWORD)).access;
   const theirs = await as(rashid).post("/positions", { unitId: rashidUnit, name: "Their Post" });
-  rashidPosition = theirs.body.position.id;
+  rashidPosition = theirs.body.data.id;
 });
 
 afterAll(async () => {
@@ -487,7 +487,7 @@ describe("reading workflows", () => {
     await as(huda).post(`/workflows/${id}/retire`);
     const active = await as(huda).get("/workflows");
     expect(active.body.workflows.map((w: { id: string }) => w.id)).not.toContain(id);
-    const all = await as(huda).get("/workflows?includeRetired=true");
+    const all = await as(huda).get("/workflows?retired=all");
     expect(all.body.workflows.find((w: { id: string }) => w.id === id).retired).toBe(true);
   });
 
@@ -908,7 +908,7 @@ describe("a position in use cannot be retired (R5.16)", () => {
     const res = await as(huda).post(`/positions/${position}/retire`);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("POSITION_IN_USE");
-    expect((await as(huda).get(`/positions/${position}`)).body.position.retired).toBe(false);
+    expect((await as(huda).get(`/positions/${position}`)).body.data.retired).toBe(false);
   });
 
   it("refuses retiring Legal Intake while a workflow names it, with its holders kept", async () => {
@@ -917,7 +917,7 @@ describe("a position in use cannot be retired (R5.16)", () => {
     ]);
     expect((await as(huda).post(`/positions/${positionIds.intake}/retire`)).status).toBe(409);
     const read = await as(huda).get(`/positions/${positionIds.intake}`);
-    expect(read.body.position.holders.map((h: { userId: string }) => h.userId)).toEqual([
+    expect(read.body.data.holders.map((h: { userId: string }) => h.userId)).toEqual([
       ids.ahmed,
     ]);
   });
@@ -959,10 +959,10 @@ describe("a position in use cannot be retired (R5.16)", () => {
     const theirs = await as(rashid).post("/positions", { unitId: rashidUnit, name: nextName("R") });
     await as(rashid).post("/workflows", {
       name: nextName("Rashid Flow"),
-      stages: [stage("A", { position: theirs.body.position.id })],
+      stages: [stage("A", { position: theirs.body.data.id })],
     });
     expect((await as(huda).post(`/positions/${position}/retire`)).status).toBe(200);
-    expect((await as(rashid).post(`/positions/${theirs.body.position.id}/retire`)).status).toBe(
+    expect((await as(rashid).post(`/positions/${theirs.body.data.id}/retire`)).status).toBe(
       409,
     );
   });
@@ -1062,7 +1062,7 @@ describe("races (section 5)", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("POSITION_IN_USE");
-    expect((await as(huda).get(`/positions/${position}`)).body.position.retired).toBe(false);
+    expect((await as(huda).get(`/positions/${position}`)).body.data.retired).toBe(false);
   });
 });
 

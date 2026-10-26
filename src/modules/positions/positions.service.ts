@@ -2,7 +2,10 @@ import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
+import { listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { validate } from "@/http/validate.js";
+import { POSITION_SORT_KEYS } from "./positions.repository.js";
 import {
   createPositionRequestSchema,
   listPositionsQuerySchema,
@@ -13,7 +16,6 @@ import {
 import type {
   CreatePositionRequestType,
   HolderRowType,
-  ListPositionsResponseType,
   PositionRowType,
   PositionsRepositoryType,
   PositionType,
@@ -66,13 +68,20 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
   };
 
   return {
-    async list(tenantId: string, input: unknown): Promise<ListPositionsResponseType> {
+    async list(tenantId: string, input: unknown): Promise<PageType<PositionType>> {
       const query = validate(listPositionsQuerySchema, input);
-      const [rows, holders] = await Promise.all([
-        repo.list(db, tenantId, query),
-        repo.listHolders(db, tenantId),
-      ]);
-      return { positions: rows.map((row) => toPosition(row, holders)) };
+      const page = await listPage({
+        db,
+        list: "positions",
+        query,
+        keys: POSITION_SORT_KEYS,
+        direction: "asc",
+        where: (filters) => repo.listWhere(tenantId, filters),
+        selectPage: (tx, request) => repo.selectPage(tx, request),
+        count: (tx, where) => repo.count(tx, where),
+      });
+      const holders = await repo.listHolders(db, tenantId);
+      return { ...page, items: page.items.map((row) => toPosition(row, holders)) };
     },
 
     get(tenantId: string, positionId: string): Promise<PositionType> {

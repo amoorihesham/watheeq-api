@@ -105,7 +105,7 @@ async function insertUnit(tenantId: string, name: string): Promise<string> {
 async function createPosition(name: string, unitId = legal, token = huda): Promise<string> {
   const res = await as(token).post("/positions", { unitId, name });
   expect(res.status).toBe(201);
-  return res.body.position.id as string;
+  return res.body.data.id as string;
 }
 
 async function detailsOf(body: object, token = huda) {
@@ -196,7 +196,7 @@ describe("not configured (R5.14)", () => {
     const res = await as(huda).get("/escalation");
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body).toEqual({ configured: false });
+    expect(res.body).toEqual({ data: { configured: false, settings: null } });
   });
 });
 
@@ -205,22 +205,25 @@ describe("saving Al-Noor's configuration (R5.13)", () => {
     const res = await put(alNoorConfig());
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
+    const handler = { position: null, name: null, builtin: "handler" };
     expect(res.body).toEqual({
-      configured: true,
-      settings: {
-        r0: {
-          enabled: true,
-          days: 2,
-          recipients: [{ position: intake, name: "Legal Intake" }],
-        },
-        r1: { enabled: true, percent: 75, recipients: [{ builtin: "handler" }] },
-        r2: {
-          enabled: true,
-          recipients: [
-            { builtin: "handler" },
-            { builtin: "handler_unit_managers" },
-            { builtin: "handler_department_managers" },
-          ],
+      data: {
+        configured: true,
+        settings: {
+          r0: {
+            enabled: true,
+            days: 2,
+            recipients: [{ position: intake, name: "Legal Intake", builtin: null }],
+          },
+          r1: { enabled: true, percent: 75, recipients: [handler] },
+          r2: {
+            enabled: true,
+            recipients: [
+              handler,
+              { ...handler, builtin: "handler_unit_managers" },
+              { ...handler, builtin: "handler_department_managers" },
+            ],
+          },
         },
       },
     });
@@ -316,8 +319,8 @@ describe("saving Al-Noor's configuration (R5.13)", () => {
     });
     const res = await put(config);
     expect(res.status).toBe(200);
-    expect(res.body.settings.r0.days).toBe(30);
-    expect(res.body.settings.r1.percent).toBe(99);
+    expect(res.body.data.settings.r0.days).toBe(30);
+    expect(res.body.data.settings.r1.percent).toBe(99);
     expect((await put(alNoorConfig())).status).toBe(200);
   });
 });
@@ -508,25 +511,30 @@ describe("a rule that is off keeps its values and recipients (R5.13)", () => {
     });
     const res = await put(off);
     expect(res.status).toBe(200);
-    expect(res.body.settings.r1).toEqual({
+    expect(res.body.data.settings.r1).toEqual({
       enabled: false,
       percent: 60,
-      recipients: [{ builtin: "handler" }, { position: intake, name: "Legal Intake" }],
+      recipients: [
+        { position: null, name: null, builtin: "handler" },
+        { position: intake, name: "Legal Intake", builtin: null },
+      ],
     });
-    expect((await as(huda).get("/escalation")).body.settings.r1).toEqual(res.body.settings.r1);
+    expect((await as(huda).get("/escalation")).body.data.settings.r1).toEqual(
+      res.body.data.settings.r1,
+    );
   });
 
   it("accepts a rule that is off with no recipients, and turns back on with its threshold intact", async () => {
     const off = configWith({ r2: { enabled: false, recipients: [] } });
     const res = await put(off);
     expect(res.status).toBe(200);
-    expect(res.body.settings.r2).toEqual({ enabled: false, recipients: [] });
+    expect(res.body.data.settings.r2).toEqual({ enabled: false, recipients: [] });
     const on = await put(alNoorConfig());
     expect(on.status).toBe(200);
-    expect(on.body.settings.r1).toEqual({
+    expect(on.body.data.settings.r1).toEqual({
       enabled: true,
       percent: 75,
-      recipients: [{ builtin: "handler" }],
+      recipients: [{ position: null, name: null, builtin: "handler" }],
     });
   });
 });
@@ -536,7 +544,7 @@ describe("position in use (R5.16)", () => {
     const res = await as(huda).post(`/positions/${intake}/retire`);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("POSITION_IN_USE");
-    expect((await as(huda).get(`/positions/${intake}`)).body.position.retired).toBe(false);
+    expect((await as(huda).get(`/positions/${intake}`)).body.data.retired).toBe(false);
   });
 
   it("refuses retiring a position named only by a rule that is off, until it is taken out", async () => {
@@ -625,7 +633,7 @@ describe("races with retiring a position (R5.16)", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("POSITION_IN_USE");
-    expect((await as(huda).get(`/positions/${position}`)).body.position.retired).toBe(false);
+    expect((await as(huda).get(`/positions/${position}`)).body.data.retired).toBe(false);
     await pool.query("delete from escalation_recipients where target_position_id = $1", [position]);
   });
 });
@@ -674,7 +682,7 @@ describe("concurrent saves", () => {
     expect(entries).toHaveLength(2);
     expect(entries[0].details.before).toBeNull();
     expect(entries[1].details.before).toEqual(entries[0].details.after);
-    const stored = (await as(admin).get("/escalation")).body.settings;
+    const stored = (await as(admin).get("/escalation")).body.data.settings;
     expect(stored.r1.percent).toBe(entries[1].details.after.r1.percent);
     const { rows } = await pool.query(
       "select count(*)::int as n from escalation_recipients where tenant_id = $1",
@@ -746,7 +754,7 @@ describe("authorization (R5.17)", () => {
   it("lets escalation.view read but not change", async () => {
     const read = await as(viewer).get("/escalation");
     expect(read.status).toBe(200);
-    expect(read.body.configured).toBe(true);
+    expect(read.body.data.configured).toBe(true);
     expect((await put(alNoorConfig(), viewer)).status).toBe(403);
   });
 
@@ -786,14 +794,16 @@ describe("Read-only subscriptions (R5.18)", () => {
     expect(res.body.error.code).toBe("SUBSCRIPTION_READ_ONLY");
     const read = await as(admin).get("/escalation");
     expect(read.status).toBe(200);
-    expect(read.body.settings.r2.enabled).toBe(false);
+    expect(read.body.data.settings.r2.enabled).toBe(false);
   });
 });
 
 describe("tenant isolation (R5.19)", () => {
   it("shows Al-Rashid its own state, however Al-Noor is configured", async () => {
-    expect((await as(huda).get("/escalation")).body.configured).toBe(true);
-    expect((await as(rashid).get("/escalation")).body).toEqual({ configured: false });
+    expect((await as(huda).get("/escalation")).body.data.configured).toBe(true);
+    expect((await as(rashid).get("/escalation")).body).toEqual({
+      data: { configured: false, settings: null },
+    });
     expect(await isEscalationConfigured(db, rashidTenant)).toBe(false);
   });
 
@@ -807,7 +817,7 @@ describe("tenant isolation (R5.19)", () => {
     const rashidEntries = (await auditOf(rashidTenant)).length;
     expect((await put(config, rashid)).status).toBe(200);
     expect((await as(huda).get("/escalation")).body).toEqual(mine);
-    expect((await as(rashid).get("/escalation")).body.settings.r1.percent).toBe(40);
+    expect((await as(rashid).get("/escalation")).body.data.settings.r1.percent).toBe(40);
     expect(await auditOf(rashidTenant)).toHaveLength(rashidEntries + 1);
     await pool.query("delete from escalation_recipients where tenant_id = $1", [rashidTenant]);
     await pool.query("delete from escalation_settings where tenant_id = $1", [rashidTenant]);

@@ -233,7 +233,7 @@ export async function seedAlNoor(
     field("Contract type")?.options?.find((o) => o.label === label)?.id ?? "";
 
   const priority = async (name: string, days: number) =>
-    (await created(await sara.post("/priorities", { name, days }))).body.priority.id as string;
+    (await created(await sara.post("/priorities", { name, days }))).body.data.id as string;
   const urgent = await priority("Urgent", 2);
   const high = await priority("High", 5);
   const normal = await priority("Normal", 10);

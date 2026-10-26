@@ -5,6 +5,7 @@ import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { createEscalationController } from "./escalation.controller.js";
 import type { createEscalationRepository } from "./escalation.repository.js";
 import type { putEscalationRequestSchema } from "./escalation.schemas.js";
+import type { escalationResponseSchema } from "./escalation.responses.js";
 import type { createEscalationService } from "./escalation.service.js";
 
 export type PutEscalationRequestType = z.input<typeof putEscalationRequestSchema>;
@@ -12,7 +13,7 @@ export type EscalationInputType = z.output<typeof putEscalationRequestSchema>;
 
 export type EscalationRuleType = "r0" | "r1" | "r2";
 
-/** A recipient as the API returns it; a position carries its name (Phase 5 spec, 4.2). */
+/** A recipient as the settings are read inside the API; `toResponse` gives it its response shape. */
 export type RecipientType =
   | { position: string; name: string | null }
   | { builtin: AssigneeBuiltinType };
@@ -45,14 +46,7 @@ export interface PositionStateRowType {
   retiredAt: Date | null;
 }
 
-export type GetEscalationResponseType =
-  | { configured: false }
-  | { configured: true; settings: EscalationType };
-
-export interface PutEscalationResponseType {
-  configured: true;
-  settings: EscalationType;
-}
+export type EscalationResponseType = z.output<typeof escalationResponseSchema>;
 
 export interface EscalationRouterDepsType {
   db: Db;

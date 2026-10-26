@@ -9,9 +9,8 @@ import type {
   EscalationRepositoryType,
   EscalationRuleType,
   EscalationType,
-  GetEscalationResponseType,
   PutEscalationRequestType,
-  PutEscalationResponseType,
+  EscalationResponseType,
   RecipientType,
 } from "./escalation.types.js";
 import { readEscalation } from "./shared/settings.js";
@@ -43,6 +42,26 @@ function canonical(settings: EscalationType | EscalationInputType) {
       recipients: canonicalRecipients(settings.r1.recipients),
     },
     r2: { enabled: settings.r2.enabled, recipients: canonicalRecipients(settings.r2.recipients) },
+  };
+}
+
+const toRecipient = (target: RecipientType) =>
+  "position" in target
+    ? { position: target.position, name: target.name, builtin: null }
+    : { position: null, name: null, builtin: target.builtin };
+
+/** The response shape of the read: every rule with its recipients, and the saved flag. */
+function toResponse(settings: EscalationType | null): EscalationResponseType {
+  if (!settings) {
+    return { configured: false, settings: null };
+  }
+  return {
+    configured: true,
+    settings: {
+      r0: { ...settings.r0, recipients: settings.r0.recipients.map(toRecipient) },
+      r1: { ...settings.r1, recipients: settings.r1.recipients.map(toRecipient) },
+      r2: { ...settings.r2, recipients: settings.r2.recipients.map(toRecipient) },
+    },
   };
 }
 
@@ -90,9 +109,8 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
   }
 
   return {
-    async get(tenantId: string): Promise<GetEscalationResponseType> {
-      const settings = await readEscalation(db, tenantId);
-      return settings ? { configured: true, settings } : { configured: false };
+    async get(tenantId: string): Promise<EscalationResponseType> {
+      return toResponse(await readEscalation(db, tenantId));
     },
 
     /**
@@ -103,7 +121,7 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
       tenantId: string,
       input: PutEscalationRequestType,
       context: AuditContextType,
-    ): Promise<PutEscalationResponseType> {
+    ): Promise<EscalationResponseType> {
       const body = validate(putEscalationRequestSchema, input);
       return withTx(db, async (tx) => {
         await repo.lockSettings(tx, tenantId);
@@ -113,7 +131,7 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
         const stored = await readEscalation(tx, tenantId);
         const before = stored ? canonical(stored) : null;
         if (stored && JSON.stringify(before) === JSON.stringify(after)) {
-          return { configured: true, settings: stored };
+          return toResponse(stored);
         }
         await repo.upsertSettings(tx, tenantId, body);
         await repo.deleteRecipients(tx, tenantId);
@@ -130,7 +148,7 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
         if (!settings) {
           throw new Error("escalation settings missing after save");
         }
-        return { configured: true, settings };
+        return toResponse(settings);
       });
     },
   };

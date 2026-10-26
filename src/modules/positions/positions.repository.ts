@@ -1,4 +1,14 @@
-import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import {
@@ -10,6 +20,7 @@ import {
   workflowStages,
   workflows,
 } from "@/db/schema/index.js";
+import type { PageRequestType, SortKeyType } from "@/http/list.js";
 import type {
   HolderRowType,
   MemberStateRowType,
@@ -24,6 +35,12 @@ const positionColumns = {
   retiredAt: positions.retiredAt,
 };
 
+/** By name, then ID (T20). */
+export const POSITION_SORT_KEYS: SortKeyType[] = [
+  { expr: byName(positions.name), type: "text" },
+  { expr: sql`${positions.id}`, type: "uuid" },
+];
+
 const ofTenant = (tenantId: string, positionId: string) =>
   and(eq(positions.tenantId, tenantId), eq(positions.id, positionId));
 
@@ -34,22 +51,31 @@ const activeMember = (tenantId: string) =>
 /** Tenant code: every query is filtered by the caller's tenant (T2). */
 export function createPositionsRepository() {
   return {
-    list(
-      db: Executor,
-      tenantId: string,
-      filter: { unitId?: string | undefined; includeRetired: boolean },
-    ): Promise<PositionRowType[]> {
+    /** The tenant's positions that match the `unitId` and `retired` filters. */
+    listWhere(tenantId: string, filters: { unitId: string; retired: string }): SQL | undefined {
+      return and(
+        eq(positions.tenantId, tenantId),
+        filters.unitId === "all" ? undefined : eq(positions.unitId, filters.unitId),
+        filters.retired === "all"
+          ? undefined
+          : filters.retired === "true"
+            ? isNotNull(positions.retiredAt)
+            : isNull(positions.retiredAt),
+      );
+    },
+
+    selectPage(db: Executor, page: PageRequestType) {
       return db
-        .select(positionColumns)
+        .select({ ...positionColumns, sortValues: page.sortValues })
         .from(positions)
-        .where(
-          and(
-            eq(positions.tenantId, tenantId),
-            filter.unitId ? eq(positions.unitId, filter.unitId) : undefined,
-            filter.includeRetired ? undefined : isNull(positions.retiredAt),
-          ),
-        )
-        .orderBy(byName(positions.name), positions.id);
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db.select({ total: count() }).from(positions).where(where);
+      return Number(row?.total ?? 0);
     },
 
     findById(db: Executor, tenantId: string, positionId: string): Promise<PositionRowType[]> {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { booleanFilter, idFilter, pageQuery } from "@/http/filters.js";
 import { idSchema } from "@/http/validate.js";
 import {
   ASSIGNEE_BUILTINS,
@@ -24,11 +25,9 @@ export const setHoldersRequestSchema = z.strictObject({
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listPositionsQuerySchema = z.object({
-  unitId: idSchema.optional(),
-  includeRetired: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
+  unitId: idFilter({ none: false }),
+  retired: booleanFilter("false"),
+  ...pageQuery,
 });
 
 /** What a stage or an escalation recipient points at: a tenant position or a built-in one (Phase 5 spec, 4.1). */

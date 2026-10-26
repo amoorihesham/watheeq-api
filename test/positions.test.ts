@@ -105,11 +105,11 @@ async function addMember(
 async function createPosition(name: string, unitId: string): Promise<string> {
   const res = await as(huda).post("/positions", { unitId, name });
   expect(res.status).toBe(201);
-  return res.body.position.id;
+  return res.body.data.id;
 }
 
 const holdersOf = async (positionId: string) =>
-  (await as(huda).get(`/positions/${positionId}`)).body.position.holders.map(
+  (await as(huda).get(`/positions/${positionId}`)).body.data.holders.map(
     (holder: { userId: string }) => holder.userId,
   );
 
@@ -209,14 +209,14 @@ describe("creating positions (R5.1)", () => {
     });
     expect(res.status).toBe(201);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body.position).toEqual({
+    expect(res.body.data).toEqual({
       id: expect.any(String),
       unitId: contracts,
       name: "Contracts Intake",
       retired: false,
       holders: [],
     });
-    expect(await auditOf(res.body.position.id)).toEqual([
+    expect(await auditOf(res.body.data.id)).toEqual([
       {
         action: "position.created",
         tenant_id: alNoor,
@@ -271,7 +271,7 @@ describe("renaming positions (R5.1)", () => {
     const id = await createPosition(nextName("Old Name"), contracts);
     const res = await as(huda).patch(`/positions/${id}`, { name: "New Name Clerk" });
     expect(res.status).toBe(200);
-    expect(res.body.position).toMatchObject({ unitId: contracts, name: "New Name Clerk" });
+    expect(res.body.data).toMatchObject({ unitId: contracts, name: "New Name Clerk" });
     expect((await auditOf(id)).at(-1)).toMatchObject({
       action: "position.updated",
       details: {
@@ -304,7 +304,7 @@ describe("renaming positions (R5.1)", () => {
   it("refuses a name another active position has, in any case", async () => {
     const taken = await createPosition(nextName("Taken"), contracts);
     const other = await createPosition(nextName("Other"), procurement);
-    const name = (await as(huda).get(`/positions/${taken}`)).body.position.name.toUpperCase();
+    const name = (await as(huda).get(`/positions/${taken}`)).body.data.name.toUpperCase();
     const res = await as(huda).patch(`/positions/${other}`, { name });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("TAKEN");
@@ -325,7 +325,7 @@ describe("holders (R5.2)", () => {
     const id = await createPosition(nextName("Supervisor"), contracts);
     const res = await as(huda).put(`/positions/${id}/holders`, { userIds: [ids.faisal] });
     expect(res.status).toBe(200);
-    expect(res.body.position.holders).toEqual([{ userId: ids.faisal, name: "Faisal" }]);
+    expect(res.body.data.holders).toEqual([{ userId: ids.faisal, name: "Faisal" }]);
     expect(await positionOf(ids.faisal)).toBe(id);
     expect((await auditOf(id)).at(-1)).toMatchObject({
       action: "position.holders_set",
@@ -354,7 +354,7 @@ describe("holders (R5.2)", () => {
     const id = await createPosition(nextName("Vacated"), contracts);
     await as(huda).put(`/positions/${id}/holders`, { userIds: [holder] });
     const res = await as(huda).put(`/positions/${id}/holders`, { userIds: [] });
-    expect(res.body.position.holders).toEqual([]);
+    expect(res.body.data.holders).toEqual([]);
     expect(await positionOf(holder)).toBeNull();
   });
 
@@ -411,7 +411,7 @@ describe("holders (R5.2)", () => {
     const id = await createPosition(nextName("Repeat"), contracts);
     const res = await as(huda).put(`/positions/${id}/holders`, { userIds: [holder, holder] });
     expect(res.status).toBe(200);
-    expect(res.body.position.holders).toHaveLength(1);
+    expect(res.body.data.holders).toHaveLength(1);
     await as(huda).put(`/positions/${id}/holders`, { userIds: [] });
   });
 
@@ -560,7 +560,7 @@ describe("listing and viewing positions", () => {
     const res = await as(huda).get(`/positions?unitId=${litigation}`);
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body.positions).toEqual([
+    expect(res.body.data).toEqual([
       { id: alpha, unitId: litigation, name: "Alpha Litigation Desk", retired: false, holders: [] },
       {
         id: zulu,
@@ -571,11 +571,48 @@ describe("listing and viewing positions", () => {
       },
     ]);
     const all = await as(huda).get("/positions");
-    const names = all.body.positions.map((position: { name: string }) => position.name);
+    const names = all.body.data.map((position: { name: string }) => position.name);
     expect(names).toEqual(
       [...names].sort((a: string, b: string) => a.localeCompare(b, "und", { sensitivity: "base" })),
     );
     await as(huda).put(`/positions/${zulu}/holders`, { userIds: [] });
+  });
+
+  it("pages by name to the end with the total, and checks its filters", async () => {
+    const first = await as(huda).get("/positions?limit=2");
+    expect(first.body.data).toHaveLength(2);
+    const total = first.body.page.total as number;
+    expect(total).toBeGreaterThan(2);
+    const seen: string[] = first.body.data.map((position: { id: string }) => position.id);
+    let cursor: string | null = first.body.page.nextCursor;
+    while (cursor) {
+      const next = await as(huda).get(`/positions?limit=2&cursor=${cursor}`);
+      expect(next.body.page.total).toBe(total);
+      seen.push(...next.body.data.map((position: { id: string }) => position.id));
+      cursor = next.body.page.nextCursor;
+    }
+    expect(seen).toHaveLength(total);
+    expect(new Set(seen).size).toBe(total);
+
+    const bad = await as(huda).get("/positions?retired=maybe");
+    expect(bad.body.error.details).toEqual([{ path: "retired", code: "invalid_value" }]);
+    const badUnit = await as(huda).get("/positions?unitId=none");
+    expect(badUnit.body.error.details).toEqual([{ path: "unitId", code: "invalid_value" }]);
+    const replay = await as(huda).get(
+      `/positions?limit=2&retired=all&cursor=${first.body.page.nextCursor}`,
+    );
+    expect(replay.body.error.details).toEqual([{ path: "cursor", code: "invalid_cursor" }]);
+  });
+
+  it("filters retired: true shows only retired, all shows both", async () => {
+    const id = await createPosition(nextName("Retired Filter"), contracts);
+    await as(huda).post(`/positions/${id}/retire`);
+    const only = await as(huda).get("/positions?retired=true");
+    expect(only.body.data.every((position: { retired: boolean }) => position.retired)).toBe(true);
+    expect(only.body.data.map((position: { id: string }) => position.id)).toContain(id);
+    const all = (await as(huda).get("/positions?retired=all")).body.page.total;
+    const active = (await as(huda).get("/positions")).body.page.total;
+    expect(all).toBeGreaterThan(active);
   });
 
   it("hides retired positions unless asked", async () => {
@@ -584,10 +621,10 @@ describe("listing and viewing positions", () => {
     const listed = (path: string) =>
       as(huda)
         .get(path)
-        .then((res) => res.body.positions.map((position: { id: string }) => position.id));
+        .then((res) => res.body.data.map((position: { id: string }) => position.id));
     expect(await listed("/positions")).not.toContain(id);
-    expect(await listed("/positions?includeRetired=true")).toContain(id);
-    expect((await as(huda).get(`/positions/${id}`)).body.position.retired).toBe(true);
+    expect(await listed("/positions?retired=all")).toContain(id);
+    expect((await as(huda).get(`/positions/${id}`)).body.data.retired).toBe(true);
   });
 
   it("answers an unknown or malformed id with 404", async () => {
@@ -609,7 +646,7 @@ describe("retiring and restoring (R5.15, R5.16)", () => {
 
     const res = await as(huda).post(`/positions/${id}/retire`);
     expect(res.status).toBe(200);
-    expect(res.body.position).toMatchObject({ retired: true, holders: [] });
+    expect(res.body.data).toMatchObject({ retired: true, holders: [] });
     expect(await positionOf(holder)).toBeNull();
     expect((await auditOf(id)).at(-1)).toMatchObject({
       action: "position.retired",
@@ -633,7 +670,7 @@ describe("retiring and restoring (R5.15, R5.16)", () => {
 
     const res = await as(huda).post(`/positions/${id}/restore`);
     expect(res.status).toBe(200);
-    expect(res.body.position).toMatchObject({ retired: false, holders: [] });
+    expect(res.body.data).toMatchObject({ retired: false, holders: [] });
     expect((await auditOf(id)).at(-1).action).toBe("position.restored");
     const entries = (await auditOf(id)).length;
     expect((await as(huda).post(`/positions/${id}/restore`)).status).toBe(200);
@@ -673,7 +710,7 @@ describe("deleting a unit with positions (R5.15)", () => {
     await as(sara).delete(`/org-units/${unit}`);
 
     const read = await as(huda).get(`/positions/${id}`);
-    expect(read.body.position).toMatchObject({ unitId: null, retired: true });
+    expect(read.body.data).toMatchObject({ unitId: null, retired: true });
     const res = await as(huda).post(`/positions/${id}/restore`);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("POSITION_UNIT_GONE");
@@ -777,14 +814,14 @@ describe("tenant isolation (R5.19)", () => {
       name: "Al-Rashid Only",
     });
     expect(theirs.status).toBe(201);
-    const noorIds = (await as(huda).get("/positions")).body.positions.map(
+    const noorIds = (await as(huda).get("/positions")).body.data.map(
       (position: { id: string }) => position.id,
     );
-    const rashidIds = (await as(rashid).get("/positions")).body.positions.map(
+    const rashidIds = (await as(rashid).get("/positions")).body.data.map(
       (position: { id: string }) => position.id,
     );
-    expect(noorIds).not.toContain(theirs.body.position.id);
-    expect(rashidIds).toEqual([theirs.body.position.id]);
+    expect(noorIds).not.toContain(theirs.body.data.id);
+    expect(rashidIds).toEqual([theirs.body.data.id]);
     expect(rashidIds).not.toContain(mine);
   });
 
@@ -795,7 +832,7 @@ describe("tenant isolation (R5.19)", () => {
     expect((await as(rashid).put(`/positions/${id}/holders`, { userIds: [] })).status).toBe(404);
     expect((await as(rashid).post(`/positions/${id}/retire`)).status).toBe(404);
     expect((await as(rashid).post(`/positions/${id}/restore`)).status).toBe(404);
-    expect((await as(huda).get(`/positions/${id}`)).body.position.retired).toBe(false);
+    expect((await as(huda).get(`/positions/${id}`)).body.data.retired).toBe(false);
   });
 
   it("lets two tenants use the same position name", async () => {
