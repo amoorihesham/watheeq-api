@@ -7,7 +7,12 @@ export {
   calendarRecurrences,
   workingHours,
 } from "./calendar.js";
-export { escalationRecipients, escalationRules, escalationSettings } from "./escalation.js";
+export {
+  escalationRecipients,
+  escalationRules,
+  escalationSettings,
+  requestEscalations,
+} from "./escalation.js";
 export { fileStates, files } from "./files.js";
 export {
   informationAskedIn,

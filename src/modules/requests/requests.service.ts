@@ -71,6 +71,7 @@ import type {
   StageRunViewRowType,
   SubmitRequestType,
 } from "./requests.types.js";
+import { escalationsOf } from "./shared/escalations.js";
 import { notifyAbout, notifyStageChanges, numberOf } from "./shared/notices.js";
 import { nextNumber } from "./shared/numbers.js";
 import { awaitingInfoDaysOf, closeRequest, frozenSlaOf, slaOf } from "./shared/sla.js";
@@ -437,6 +438,7 @@ export function createRequestsService({
               awaitingInfoDaysOf(calendar, row.acceptedAt, questions, new Date()),
             )
           : frozenSlaOf(row),
+      escalations: await escalationsOf(executor, row.tenantId, row.id),
       allowedActions: await allowedActionsOf(executor, repo, row, callerId, grants, runs, can),
     };
   }

@@ -6,12 +6,14 @@ import {
   type PgTableExtraConfigValue,
   pgEnum,
   pgTable,
+  primaryKey,
   smallint,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { assigneeBuiltins, positions } from "./positions.js";
+import { requests } from "./requests.js";
 import { tenants } from "./tenants.js";
 
 /** The three escalation rules (MVP scope 3.7): R0 before acceptance, R1 at a share of the deadline, R2 when late. */
@@ -65,5 +67,31 @@ export const escalationRecipients = pgTable(
     uniqueIndex("escalation_recipients_builtin_unique")
       .on(t.tenantId, t.rule, t.targetBuiltin)
       .where(sql`${t.targetBuiltin} is not null`),
+  ],
+);
+
+/**
+ * One row per rule that fired on a request. The primary key makes "at most once" (D9) a database fact across
+ * instances: a second insert does nothing (Phase 7 spec, 4.1).
+ */
+export const requestEscalations = pgTable(
+  "request_escalations",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    requestId: uuid("request_id").notNull(),
+    rule: escalationRules().notNull(),
+    // When the threshold passed; differs from `firedAt` when the check was not running (R7.6).
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    firedAt: timestamp("fired_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t): PgTableExtraConfigValue[] => [
+    primaryKey({ name: "request_escalations_pk", columns: [t.requestId, t.rule] }),
+    foreignKey({
+      name: "request_escalations_request_fk",
+      columns: [t.tenantId, t.requestId],
+      foreignColumns: [requests.tenantId, requests.id],
+    }),
   ],
 );

@@ -8,6 +8,7 @@ import type {
   requestStates,
   requests,
 } from "@/db/schema/index.js";
+import type { EscalationRuleType } from "@/modules/escalation/index.js";
 import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { AnswerSnapshotType } from "@/modules/services/shared/answers.js";
 import type { FormFieldType } from "@/modules/services/shared/form.js";
@@ -231,12 +232,20 @@ export interface InformationRequestType {
   files: RequestFileType[];
 }
 
+/** A rule that fired on the request (D9), and the moment it was due. */
+export interface EscalationFiringType {
+  rule: EscalationRuleType;
+  dueAt: Date;
+  firedAt: Date;
+}
+
 export interface RequestType extends RequestSummaryType {
   answers: RequestAnswerType[];
   files: RequestFileType[];
   informationRequests: InformationRequestType[];
   stages: StageRunType[];
   sla: SlaType | null;
+  escalations: EscalationFiringType[];
   allowedActions: string[];
 }
 
@@ -267,3 +276,31 @@ export interface RequestsRouterDepsType {
 export type RequestsRepositoryType = ReturnType<typeof createRequestsRepository>;
 export type RequestsServiceType = ReturnType<typeof createRequestsService>;
 export type RequestsControllerType = ReturnType<typeof createRequestsController>;
+
+/** An open request with the escalation settings and firings the check needs to decide what is due. */
+export interface EscalationCandidateRowType {
+  tenantId: string;
+  id: string;
+  year: number;
+  number: number;
+  title: string;
+  state: "in_review" | "in_progress";
+  submittedAt: Date;
+  acceptedAt: Date | null;
+  priorityDays: number;
+  r0: { enabled: boolean; days: number; fired: boolean };
+  r1: { enabled: boolean; percent: number; fired: boolean };
+  r2: { enabled: boolean; fired: boolean };
+}
+
+/** The request as a firing locks it. */
+export interface LockedRequestRowType {
+  id: string;
+  tenantId: string;
+  year: number;
+  number: number;
+  title: string;
+  state: RequestStateType;
+  requesterId: string;
+  handlerId: string | null;
+}

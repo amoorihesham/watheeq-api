@@ -46,6 +46,7 @@ describe("database baseline", () => {
       "positions",
       "priorities",
       "refresh_tokens",
+      "request_escalations",
       "request_files",
       "request_stage_assignees",
       "request_stage_runs",
