@@ -128,7 +128,7 @@ beforeAll(async () => {
       excludeParties: false,
     },
   ];
-  workflow = (await as(huda).post("/workflows", { name: "Form flow", stages })).body.workflow.id;
+  workflow = (await as(huda).post("/workflows", { name: "Form flow", stages })).body.data.id;
   rashidWorkflow = (await as(rashid).post("/workflows", { name: "Their flow", stages })).body
     .workflow.id;
 });
@@ -497,7 +497,7 @@ describe("authorization, subscription, tenants (R5.5.14, R5.5.16)", () => {
           },
         ],
       })
-    ).body.workflow.id;
+    ).body.data.id;
     const id = await createService(admin, flow);
     await pool.query(
       "update subscriptions set start_date = start_date - 400, end_date = start_date - 100 where tenant_id = $1",

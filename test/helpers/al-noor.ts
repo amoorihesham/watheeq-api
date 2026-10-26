@@ -182,7 +182,7 @@ export async function seedAlNoor(
     }),
   ];
   const workflowId = async (name: string, stages: object[]) =>
-    (await created(await sara.post("/workflows", { name, stages }))).body.workflow.id as string;
+    (await created(await sara.post("/workflows", { name, stages }))).body.data.id as string;
   const vendor = await workflowId("Vendor contract", vendorStages);
   const complex = await workflowId("Complex contract", [
     ...vendorStages,

@@ -61,7 +61,7 @@ const simpleStages = () => [
 async function createWorkflow(name: string, token = huda): Promise<string> {
   const res = await as(token).post("/workflows", { name, stages: simpleStages() });
   expect(res.status).toBe(201);
-  return res.body.workflow.id;
+  return res.body.data.id;
 }
 
 /** A service allowing the given workflows; the first is the default. */
@@ -525,7 +525,7 @@ describe("a workflow in use cannot be retired (R5.16)", () => {
     const refused = await as(huda).post(`/workflows/${flow}/retire`);
     expect(refused.status).toBe(409);
     expect(refused.body.error.code).toBe("WORKFLOW_IN_USE");
-    expect((await as(huda).get(`/workflows/${flow}`)).body.workflow.retired).toBe(false);
+    expect((await as(huda).get(`/workflows/${flow}`)).body.data.retired).toBe(false);
 
     await as(huda).post(`/services/${service}/retire`);
     expect((await as(huda).post(`/workflows/${flow}/retire`)).status).toBe(200);
@@ -685,7 +685,7 @@ describe("races (section 5)", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("WORKFLOW_IN_USE");
-    expect((await as(huda).get(`/workflows/${flow}`)).body.workflow.retired).toBe(false);
+    expect((await as(huda).get(`/workflows/${flow}`)).body.data.retired).toBe(false);
   });
 
   it("refuses restoring a service whose workflow retire is in flight", async () => {

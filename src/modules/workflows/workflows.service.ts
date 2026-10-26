@@ -3,7 +3,10 @@ import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
+import { listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { validate } from "@/http/validate.js";
+import { WORKFLOW_SORT_KEYS } from "./workflows.repository.js";
 import {
   createWorkflowRequestSchema,
   listWorkflowsQuerySchema,
@@ -13,7 +16,6 @@ import {
 } from "./workflows.schemas.js";
 import type {
   CreateWorkflowRequestType,
-  ListWorkflowsResponseType,
   StageInputType,
   StageRowType,
   StageType,
@@ -37,8 +39,12 @@ const toStage = (row: StageRowType): StageType => ({
   id: row.id,
   name: row.name,
   assignee: row.targetPositionId
-    ? { position: row.targetPositionId, name: row.positionName }
-    : { builtin: row.targetBuiltin as NonNullable<StageRowType["targetBuiltin"]> },
+    ? { position: row.targetPositionId, name: row.positionName, builtin: null }
+    : {
+        position: null,
+        name: null,
+        builtin: row.targetBuiltin as NonNullable<StageRowType["targetBuiltin"]>,
+      },
   whenUnresolved: row.whenUnresolved,
   handlerMayNarrow: row.handlerMayNarrow,
   handlerMayEscalate: row.handlerMayEscalate,
@@ -178,10 +184,19 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
   };
 
   return {
-    async list(tenantId: string, input: unknown): Promise<ListWorkflowsResponseType> {
-      const { includeRetired } = validate(listWorkflowsQuerySchema, input);
-      const rows = await repo.list(db, tenantId, includeRetired);
-      return { workflows: rows.map(toSummary) };
+    async list(tenantId: string, input: unknown): Promise<PageType<WorkflowSummaryType>> {
+      const query = validate(listWorkflowsQuerySchema, input);
+      const page = await listPage({
+        db,
+        list: "workflows",
+        query,
+        keys: WORKFLOW_SORT_KEYS,
+        direction: "asc",
+        where: ({ retired }) => repo.listWhere(tenantId, retired),
+        selectPage: (tx, request) => repo.selectPage(tx, request),
+        count: (tx, where) => repo.count(tx, where),
+      });
+      return { ...page, items: page.items.map(toSummary) };
     },
 
     get(tenantId: string, workflowId: string): Promise<WorkflowType> {

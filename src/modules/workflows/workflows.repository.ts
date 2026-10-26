@@ -1,4 +1,14 @@
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import {
@@ -9,6 +19,7 @@ import {
   workflows,
   workflowVersions,
 } from "@/db/schema/index.js";
+import type { PageRequestType, SortKeyType } from "@/http/list.js";
 import type {
   LockedWorkflowRowType,
   PositionStateRowType,
@@ -35,24 +46,43 @@ const versionColumns = {
   createdBy: workflowVersions.createdBy,
 };
 
+/** By name, then ID (T20). */
+export const WORKFLOW_SORT_KEYS: SortKeyType[] = [
+  { expr: byName(workflows.name), type: "text" },
+  { expr: sql`${workflows.id}`, type: "uuid" },
+];
+
 const ofTenant = (tenantId: string, workflowId: string) =>
   and(eq(workflows.tenantId, tenantId), eq(workflows.id, workflowId));
 
 /** Tenant code: every query is filtered by the caller's tenant (T2). */
 export function createWorkflowsRepository() {
   return {
-    list(db: Executor, tenantId: string, includeRetired: boolean): Promise<WorkflowRowType[]> {
+    /** The tenant's workflows that match the `retired` filter. */
+    listWhere(tenantId: string, retired: string): SQL | undefined {
+      return and(
+        eq(workflows.tenantId, tenantId),
+        retired === "all"
+          ? undefined
+          : retired === "true"
+            ? isNotNull(workflows.retiredAt)
+            : isNull(workflows.retiredAt),
+      );
+    },
+
+    selectPage(db: Executor, page: PageRequestType) {
       return db
-        .select(workflowColumns)
+        .select({ ...workflowColumns, sortValues: page.sortValues })
         .from(workflows)
         .innerJoin(workflowVersions, eq(workflowVersions.id, workflows.currentVersionId))
-        .where(
-          and(
-            eq(workflows.tenantId, tenantId),
-            includeRetired ? undefined : isNull(workflows.retiredAt),
-          ),
-        )
-        .orderBy(byName(workflows.name), workflows.id);
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db.select({ total: count() }).from(workflows).where(where);
+      return Number(row?.total ?? 0);
     },
 
     findById(db: Executor, tenantId: string, workflowId: string): Promise<WorkflowRowType[]> {

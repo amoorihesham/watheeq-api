@@ -131,7 +131,7 @@ async function createWorkflow(
 ): Promise<string> {
   const res = await as(token).post("/workflows", { name, stages });
   expect(res.status).toBe(201);
-  return res.body.workflow.id;
+  return res.body.data.id;
 }
 
 const save = (id: string, body: object, token = huda) => as(token).put(`/workflows/${id}`, body);
@@ -254,7 +254,7 @@ describe("creating workflows (R5.8)", () => {
       stages: [stage("Sign-off", { position: positionIds.supervisor.toUpperCase() })],
     });
     expect(res.status).toBe(201);
-    expect(res.body.workflow.version.stages[0].assignee.position).toBe(positionIds.supervisor);
+    expect(res.body.data.version.stages[0].assignee.position).toBe(positionIds.supervisor);
   });
 
   it("creates Al-Noor's Vendor contract as version 1, and audits it", async () => {
@@ -262,7 +262,7 @@ describe("creating workflows (R5.8)", () => {
     const res = await as(huda).post("/workflows", { name: "  Vendor contract  ", stages });
     expect(res.status).toBe(201);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body.workflow).toEqual({
+    expect(res.body.data).toEqual({
       id: expect.any(String),
       name: "Vendor contract",
       retired: false,
@@ -272,22 +272,34 @@ describe("creating workflows (R5.8)", () => {
         createdAt: expect.any(String),
         createdBy: ids.huda,
         stages: [
-          { id: expect.any(String), ...stages[0] },
-          { id: expect.any(String), ...stages[1] },
+          {
+            id: expect.any(String),
+            ...stages[0],
+            assignee: { position: null, name: null, builtin: "requester_department_managers" },
+          },
+          {
+            id: expect.any(String),
+            ...stages[1],
+            assignee: { position: null, name: null, builtin: "handler" },
+          },
           {
             id: expect.any(String),
             ...stages[2],
-            assignee: { position: positionIds.reviewer, name: "Procurement Reviewer" },
+            assignee: { position: positionIds.reviewer, name: "Procurement Reviewer", builtin: null },
           },
           {
             id: expect.any(String),
             ...stages[3],
-            assignee: { position: positionIds.supervisor, name: "Contracts Supervisor" },
+            assignee: {
+              position: positionIds.supervisor,
+              name: "Contracts Supervisor",
+              builtin: null,
+            },
           },
         ],
       },
     });
-    expect(await auditOf(res.body.workflow.id)).toEqual([
+    expect(await auditOf(res.body.data.id)).toEqual([
       {
         action: "workflow.created",
         tenant_id: alNoor,
@@ -305,7 +317,7 @@ describe("creating workflows (R5.8)", () => {
     ];
     const res = await as(huda).post("/workflows", { name: "Complex contract", stages });
     expect(res.status).toBe(201);
-    expect(res.body.workflow.version.stages.map((s: { name: string }) => s.name)).toEqual([
+    expect(res.body.data.version.stages.map((s: { name: string }) => s.name)).toEqual([
       "Business approval",
       "Drafting",
       "Procurement check",
@@ -321,7 +333,7 @@ describe("creating workflows (R5.8)", () => {
       stage("Mike", { builtin: "requester_unit_managers" }),
     ]);
     const read = await as(huda).get(`/workflows/${id}`);
-    expect(read.body.workflow.version.stages.map((s: { name: string }) => s.name)).toEqual([
+    expect(read.body.data.version.stages.map((s: { name: string }) => s.name)).toEqual([
       "Zulu",
       "Alpha",
       "Mike",
@@ -470,7 +482,7 @@ describe("reading workflows", () => {
     const b = await createWorkflow(nextName("List Alpha"));
     const res = await as(huda).get("/workflows");
     expect(res.status).toBe(200);
-    const mine = res.body.workflows.filter((w: { id: string }) => [a, b].includes(w.id));
+    const mine = res.body.data.filter((w: { id: string }) => [a, b].includes(w.id));
     expect(mine.map((w: { id: string }) => w.id)).toEqual([b, a]);
     expect(mine[0]).toEqual({
       id: b,
@@ -482,13 +494,47 @@ describe("reading workflows", () => {
     expect(mine[0]).not.toHaveProperty("stages");
   });
 
+  it("pages by name to the end with the total, and checks its filters", async () => {
+    await createWorkflow(nextName("Paging A"));
+    await createWorkflow(nextName("Paging B"));
+    await createWorkflow(nextName("Paging C"));
+    const first = await as(huda).get("/workflows?limit=2");
+    const total = first.body.page.total as number;
+    expect(total).toBeGreaterThanOrEqual(3);
+    const seen: string[] = first.body.data.map((w: { id: string }) => w.id);
+    let cursor: string | null = first.body.page.nextCursor;
+    while (cursor) {
+      const next = await as(huda).get(`/workflows?limit=2&cursor=${cursor}`);
+      expect(next.body.page.total).toBe(total);
+      seen.push(...next.body.data.map((w: { id: string }) => w.id));
+      cursor = next.body.page.nextCursor;
+    }
+    expect(seen).toHaveLength(total);
+    expect(new Set(seen).size).toBe(total);
+
+    const bad = await as(huda).get("/workflows?retired=maybe");
+    expect(bad.body.error.details).toEqual([{ path: "retired", code: "invalid_value" }]);
+    const replay = await as(huda).get(
+      `/workflows?limit=2&retired=all&cursor=${first.body.page.nextCursor}`,
+    );
+    expect(replay.body.error.details).toEqual([{ path: "cursor", code: "invalid_cursor" }]);
+  });
+
+  it("shows only retired workflows with retired=true", async () => {
+    const id = await createWorkflow(nextName("Only Retired"));
+    await as(huda).post(`/workflows/${id}/retire`);
+    const only = await as(huda).get("/workflows?retired=true&limit=100");
+    expect(only.body.data.every((w: { retired: boolean }) => w.retired)).toBe(true);
+    expect(only.body.data.map((w: { id: string }) => w.id)).toContain(id);
+  });
+
   it("hides retired workflows unless asked", async () => {
     const id = await createWorkflow(nextName("Hidden"));
     await as(huda).post(`/workflows/${id}/retire`);
     const active = await as(huda).get("/workflows");
-    expect(active.body.workflows.map((w: { id: string }) => w.id)).not.toContain(id);
+    expect(active.body.data.map((w: { id: string }) => w.id)).not.toContain(id);
     const all = await as(huda).get("/workflows?retired=all");
-    expect(all.body.workflows.find((w: { id: string }) => w.id === id).retired).toBe(true);
+    expect(all.body.data.find((w: { id: string }) => w.id === id).retired).toBe(true);
   });
 
   it("answers 404 for an unknown or malformed id", async () => {
@@ -505,15 +551,15 @@ describe("reading workflows", () => {
 describe("versions (R5.9)", () => {
   it("creates version 2 when the stages change, and keeps version 1 readable and unchanged", async () => {
     const id = await createWorkflow("Versioned", vendorStages().slice(0, 2));
-    const v1 = (await as(huda).get(`/workflows/${id}/versions/1`)).body.version;
+    const v1 = (await as(huda).get(`/workflows/${id}/versions/1`)).body.data;
 
     const stages = [...vendorStages().slice(0, 2), stage("Negotiation", { builtin: "requester" })];
     const res = await save(id, { name: "Versioned", baseVersion: 1, stages });
     expect(res.status).toBe(200);
-    expect(res.body.workflow.versionCount).toBe(2);
-    expect(res.body.workflow.version.number).toBe(2);
-    expect(res.body.workflow.version.createdBy).toBe(ids.huda);
-    expect(res.body.workflow.version.stages.map((s: { name: string }) => s.name)).toEqual([
+    expect(res.body.data.versionCount).toBe(2);
+    expect(res.body.data.version.number).toBe(2);
+    expect(res.body.data.version.createdBy).toBe(ids.huda);
+    expect(res.body.data.version.stages.map((s: { name: string }) => s.name)).toEqual([
       "Business approval",
       "Drafting",
       "Negotiation",
@@ -521,12 +567,12 @@ describe("versions (R5.9)", () => {
 
     const again = await as(huda).get(`/workflows/${id}/versions/1`);
     expect(again.status).toBe(200);
-    expect(again.body.version).toEqual(v1);
-    expect(again.body.version.stages).toHaveLength(2);
+    expect(again.body.data).toEqual(v1);
+    expect(again.body.data.stages).toHaveLength(2);
     const current = await as(huda).get(`/workflows/${id}`);
-    expect(current.body.workflow.version.number).toBe(2);
-    expect((await as(huda).get(`/workflows/${id}/versions/2`)).body.version).toEqual(
-      res.body.workflow.version,
+    expect(current.body.data.version.number).toBe(2);
+    expect((await as(huda).get(`/workflows/${id}/versions/2`)).body.data).toEqual(
+      res.body.data.version,
     );
     expect(await auditOf(id)).toEqual([
       expect.objectContaining({ action: "workflow.created" }),
@@ -552,7 +598,7 @@ describe("versions (R5.9)", () => {
       [id],
     );
     await save(id, {
-      name: (await as(huda).get(`/workflows/${id}`)).body.workflow.name,
+      name: (await as(huda).get(`/workflows/${id}`)).body.data.name,
       baseVersion: 1,
       stages: [stage("Changed", { builtin: "handler" })],
     });
@@ -583,7 +629,7 @@ describe("versions (R5.9)", () => {
     for (const stages of variants) {
       const res = await save(id, { name, baseVersion, stages });
       expect(res.status).toBe(200);
-      expect(res.body.workflow.version.number).toBe(++baseVersion);
+      expect(res.body.data.version.number).toBe(++baseVersion);
     }
   });
 
@@ -595,8 +641,8 @@ describe("versions (R5.9)", () => {
       stages: vendorStages(),
     });
     expect(res.status).toBe(200);
-    expect(res.body.workflow.name).toBe("After Rename");
-    expect(res.body.workflow.version.number).toBe(1);
+    expect(res.body.data.name).toBe("After Rename");
+    expect(res.body.data.version.number).toBe(1);
     expect(await versionCountOf(id)).toBe(1);
     const entries = await auditOf(id);
     expect(entries).toHaveLength(2);
@@ -625,7 +671,7 @@ describe("versions (R5.9)", () => {
       baseVersion: 1,
       stages: [stage("Other", { builtin: "requester" })],
     });
-    expect(res.body.workflow.version.number).toBe(2);
+    expect(res.body.data.version.number).toBe(2);
     expect(await auditOf(id)).toHaveLength(2);
   });
 
@@ -647,7 +693,7 @@ describe("versions (R5.9)", () => {
     expect(ahmed.status).toBe(409);
     expect(ahmed.body.error.code).toBe("VERSION_CHANGED");
     expect(ahmed.body.error.details).toEqual([{ path: "baseVersion", code: "version_changed" }]);
-    const read = (await as(huda).get(`/workflows/${id}`)).body.workflow;
+    const read = (await as(huda).get(`/workflows/${id}`)).body.data;
     expect(read.name).toBe(name);
     expect(read.version.stages.map((s: { name: string }) => s.name)).toEqual(["Negotiation"]);
     expect(await auditOf(id)).toHaveLength(2);
@@ -677,7 +723,7 @@ describe("versions (R5.9)", () => {
     const id = await createWorkflow("case flow");
     const res = await save(id, { name: "Case Flow", baseVersion: 1, stages: simpleStages() });
     expect(res.status).toBe(200);
-    expect(res.body.workflow.name).toBe("Case Flow");
+    expect(res.body.data.name).toBe("Case Flow");
   });
 
   it("refuses a retired workflow", async () => {
@@ -840,12 +886,12 @@ describe("retiring and restoring (R5.15)", () => {
     const id = await createWorkflow(nextName("Cycle"));
     const retired = await as(huda).post(`/workflows/${id}/retire`);
     expect(retired.status).toBe(200);
-    expect(retired.body.workflow.retired).toBe(true);
+    expect(retired.body.data.retired).toBe(true);
     expect((await as(huda).post(`/workflows/${id}/retire`)).status).toBe(200);
 
     const restored = await as(huda).post(`/workflows/${id}/restore`);
     expect(restored.status).toBe(200);
-    expect(restored.body.workflow.retired).toBe(false);
+    expect(restored.body.data.retired).toBe(false);
     expect((await as(huda).post(`/workflows/${id}/restore`)).status).toBe(200);
 
     expect((await auditOf(id)).map((entry) => entry.action)).toEqual([
@@ -866,7 +912,7 @@ describe("retiring and restoring (R5.15)", () => {
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("TAKEN");
     expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
-    expect((await as(huda).get(`/workflows/${old}`)).body.workflow.retired).toBe(true);
+    expect((await as(huda).get(`/workflows/${old}`)).body.data.retired).toBe(true);
   });
 
   it("refuses to restore a workflow naming a retired position until the position is restored", async () => {
@@ -884,7 +930,7 @@ describe("retiring and restoring (R5.15)", () => {
     expect(refused.body.error.details).toEqual([
       { path: "stages.1.assignee.position", code: "position_retired" },
     ]);
-    expect((await as(huda).get(`/workflows/${id}`)).body.workflow.retired).toBe(true);
+    expect((await as(huda).get(`/workflows/${id}`)).body.data.retired).toBe(true);
     expect((await auditOf(id)).map((e) => e.action)).not.toContain("workflow.restored");
 
     expect((await as(huda).post(`/positions/${position}/restore`)).status).toBe(200);
@@ -929,7 +975,11 @@ describe("a position in use cannot be retired (R5.16)", () => {
     await save(id, { name, baseVersion: 1, stages: [stage("A", { builtin: "handler" })] });
     expect((await as(huda).post(`/positions/${position}/retire`)).status).toBe(200);
     const v1 = await as(huda).get(`/workflows/${id}/versions/1`);
-    expect(v1.body.version.stages[0].assignee).toEqual({ position, name: expect.any(String) });
+    expect(v1.body.data.stages[0].assignee).toEqual({
+      position,
+      name: expect.any(String),
+      builtin: null,
+    });
   });
 
   it("allows it when the only workflow naming the position is retired", async () => {
@@ -994,8 +1044,8 @@ describe("races (section 5)", () => {
     expect(loser?.body.error.details).toEqual([{ path: "baseVersion", code: "version_changed" }]);
     expect(await versionCountOf(id)).toBe(2);
     const winner = results.find((res) => res.status === 200);
-    const read = (await as(huda).get(`/workflows/${id}`)).body.workflow;
-    expect(read.version.stages).toEqual(winner?.body.workflow.version.stages);
+    const read = (await as(huda).get(`/workflows/${id}`)).body.data;
+    expect(read.version.stages).toEqual(winner?.body.data.version.stages);
   });
 
   it("refuses a save naming a position whose retire is in flight", async () => {
@@ -1105,7 +1155,7 @@ describe("authorization (R5.17)", () => {
       stages: simpleStages(),
     });
     expect(res.status).toBe(201);
-    expect(res.body.workflow.version.createdBy).not.toBe(ids.huda);
+    expect(res.body.data.version.createdBy).not.toBe(ids.huda);
   });
 
   it("requires a signed-in user", async () => {
@@ -1149,12 +1199,12 @@ describe("tenant isolation (R5.19)", () => {
       stages: simpleStages(),
     });
     expect(theirsRes.status).toBe(201);
-    const theirs = theirsRes.body.workflow.id;
+    const theirs = theirsRes.body.data.id;
 
-    const noorIds = (await as(huda).get("/workflows")).body.workflows.map(
+    const noorIds = (await as(huda).get("/workflows")).body.data.map(
       (workflow: { id: string }) => workflow.id,
     );
-    const rashidIds = (await as(rashid).get("/workflows")).body.workflows.map(
+    const rashidIds = (await as(rashid).get("/workflows")).body.data.map(
       (workflow: { id: string }) => workflow.id,
     );
     expect(noorIds).toContain(mine);

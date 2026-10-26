@@ -10,6 +10,11 @@ import type {
   listWorkflowsQuerySchema,
   updateWorkflowRequestSchema,
 } from "./workflows.schemas.js";
+import type {
+  versionResponseSchema,
+  workflowResponseSchema,
+  workflowSummaryResponseSchema,
+} from "./workflows.responses.js";
 import type { createWorkflowsService } from "./workflows.service.js";
 
 export type StageFallbackType = (typeof STAGE_FALLBACKS)[number];
@@ -64,48 +69,10 @@ export type UpdateWorkflowRequestType = z.input<typeof updateWorkflowRequestSche
 export type ListWorkflowsQueryType = z.output<typeof listWorkflowsQuerySchema>;
 export type StageInputType = z.output<typeof createWorkflowRequestSchema>["stages"][number];
 
-/** A stage as the API returns it; a position target carries the position's name (Phase 5 spec, 4.2). */
-export interface StageType {
-  id: string;
-  name: string;
-  assignee: { position: string; name: string | null } | { builtin: AssigneeBuiltinType };
-  whenUnresolved: StageFallbackType;
-  handlerMayNarrow: boolean;
-  handlerMayEscalate: boolean;
-  excludeParties: boolean;
-}
-
-export interface VersionHeaderType {
-  number: number;
-  createdAt: Date;
-  createdBy: string;
-}
-
-export interface VersionType extends VersionHeaderType {
-  stages: StageType[];
-}
-
-export interface WorkflowSummaryType {
-  id: string;
-  name: string;
-  retired: boolean;
-  version: VersionHeaderType;
-  versionCount: number;
-}
-
-export interface WorkflowType extends Omit<WorkflowSummaryType, "version"> {
-  version: VersionType;
-}
-
-export interface ListWorkflowsResponseType {
-  workflows: WorkflowSummaryType[];
-}
-export interface WorkflowResponseType {
-  workflow: WorkflowType;
-}
-export interface VersionResponseType {
-  version: VersionType;
-}
+export type StageType = z.output<typeof versionResponseSchema>["stages"][number];
+export type VersionType = z.output<typeof versionResponseSchema>;
+export type WorkflowSummaryType = z.output<typeof workflowSummaryResponseSchema>;
+export type WorkflowType = z.output<typeof workflowResponseSchema>;
 
 export interface WorkflowsRouterDepsType {
   db: Db;

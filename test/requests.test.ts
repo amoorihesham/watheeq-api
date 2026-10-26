@@ -709,7 +709,7 @@ describe("accepting (R6.10, R6.11)", () => {
           },
         ],
       })
-    ).body.workflow.id;
+    ).body.data.id;
     expect(detailsOf(await accepting(stray))).toEqual([
       { path: "workflowId", code: "workflow_not_allowed" },
     ]);

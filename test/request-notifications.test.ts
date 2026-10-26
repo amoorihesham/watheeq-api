@@ -42,7 +42,7 @@ const stage = (
 async function offer(name: string, stages: object[]): Promise<string> {
   const created = await as("sara").post("/workflows", { name: `${name} ${++counter}`, stages });
   expect(created.status, JSON.stringify(created.body)).toBe(201);
-  const id = created.body.workflow.id as string;
+  const id = created.body.data.id as string;
   offered.push({ id, isDefault: false });
   const res = await as("sara").patch(`/services/${alNoor.serviceId}`, {
     workflows: [

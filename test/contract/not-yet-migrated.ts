@@ -5,5 +5,4 @@
 export const NOT_YET_MIGRATED: string[] = [
   "requests",
   "services",
-  "workflows",
 ];

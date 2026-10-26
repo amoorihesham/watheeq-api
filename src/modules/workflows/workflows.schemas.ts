@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { booleanFilter, pageQuery } from "@/http/filters.js";
 import { idSchema } from "@/http/validate.js";
 import { assigneeTargetSchema } from "@/modules/positions/index.js";
 import {
@@ -71,10 +72,8 @@ export const updateWorkflowRequestSchema = z.strictObject({
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listWorkflowsQuerySchema = z.object({
-  includeRetired: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
+  retired: booleanFilter("false"),
+  ...pageQuery,
 });
 
 /** A version number in a path; anything else is answered like an unknown version. */
