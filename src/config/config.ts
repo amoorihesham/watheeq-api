@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseJobsSetting } from "../scheduler/select.js";
 
 const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -39,6 +40,19 @@ const configSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+  // The background jobs this process runs: `all`, `none`, or comma-separated job names. Names are checked against the
+  // job list at startup (`selectJobs`), which config does not know (Phase 7 spec, 4.3).
+  JOBS: z
+    .string()
+    .default("all")
+    .transform((value, ctx) => {
+      const setting = parseJobsSetting(value);
+      if (setting === null) {
+        ctx.addIssue({ code: "custom", message: "empty job name" });
+        return z.NEVER;
+      }
+      return setting;
+    }),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 

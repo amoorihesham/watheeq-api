@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import {
   passwordTokens,
@@ -176,6 +176,37 @@ export function createAuthRepository() {
         .update(refreshTokens)
         .set({ revokedAt: sql`now()` })
         .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
+    },
+
+    /**
+     * Deletes up to `limit` refresh tokens whose lifetime has ended, revoked or not. `SKIP LOCKED` lets several
+     * instances split the work instead of waiting on each other.
+     */
+    deleteExpiredRefreshTokens(db: Executor, limit: number): Promise<{ id: string }[]> {
+      const due = db
+        .select({ id: refreshTokens.id })
+        .from(refreshTokens)
+        .where(lt(refreshTokens.expiresAt, sql`now()`))
+        .limit(limit)
+        .for("update", { skipLocked: true });
+      return db
+        .delete(refreshTokens)
+        .where(inArray(refreshTokens.id, due))
+        .returning({ id: refreshTokens.id });
+    },
+
+    /** As `deleteExpiredRefreshTokens`, for invitation and reset links, used or not. */
+    deleteExpiredPasswordTokens(db: Executor, limit: number): Promise<{ id: string }[]> {
+      const due = db
+        .select({ id: passwordTokens.id })
+        .from(passwordTokens)
+        .where(lt(passwordTokens.expiresAt, sql`now()`))
+        .limit(limit)
+        .for("update", { skipLocked: true });
+      return db
+        .delete(passwordTokens)
+        .where(inArray(passwordTokens.id, due))
+        .returning({ id: passwordTokens.id });
     },
 
     setVerifiedPassword(db: Executor, userId: string, passwordHash: string) {

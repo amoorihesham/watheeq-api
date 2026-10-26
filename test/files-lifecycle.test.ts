@@ -4,14 +4,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type Db } from "../src/db/pool.js";
 import { withTx } from "../src/db/tx.js";
 import { AppError } from "../src/http/errors.js";
+import type { Logger } from "../src/logging/logger.js";
 import {
   attachFiles,
   countOverdueFiles,
+  createFileSweepJob,
   discardFiles,
-  startFileSweeps,
   storageKeyOf,
   sweepFiles,
 } from "../src/modules/files/index.js";
+import { startScheduler } from "../src/scheduler/index.js";
 import type { FileStoreType } from "../src/storage/index.js";
 import {
   createIsolatedDb,
@@ -499,11 +501,20 @@ describe("usage counts what the sweep has not deleted yet (R5.5.18)", () => {
   });
 });
 
-describe("the sweep schedule (4.3 When it runs, Observability)", () => {
+describe("the sweep job on the scheduler (4.3 When it runs, Observability)", () => {
+  function startSweeps(options: { store?: FileStoreType; logger: Logger; intervalMs: number }) {
+    const job = createFileSweepJob({ store: options.store ?? store });
+    return startScheduler({
+      jobs: [{ ...job, intervalMs: options.intervalMs }],
+      db,
+      logger: options.logger,
+    });
+  }
+
   it("runs at once, then again after the interval, logs what it deleted, and stops on request", async () => {
     const capture = captureLogs();
     const [first] = await seedWithBytes(alNoor, khalid, { count: 1, state: "discarded" });
-    const schedule = startFileSweeps({ db, store, logger: capture.logger, intervalMs: 150 });
+    const schedule = startSweeps({ logger: capture.logger, intervalMs: 150 });
     try {
       await eventually(
         async () => (await stateOf(alNoor.id, first ?? "")) === undefined,
@@ -517,10 +528,11 @@ describe("the sweep schedule (4.3 When it runs, Observability)", () => {
     } finally {
       await schedule.stop();
     }
-    const logged = capture.lines().filter((line) => line.msg === "file sweep finished");
+    const logged = capture.lines().filter((line) => line.msg === "job finished");
     expect(logged.length).toBeGreaterThanOrEqual(2);
     expect(logged[0]).toMatchObject({
-      deleted: {
+      job: "files.sweep",
+      counts: {
         discarded: expect.any(Number),
         expired: expect.any(Number),
         abandoned: expect.any(Number),
@@ -552,12 +564,7 @@ describe("the sweep schedule (4.3 When it runs, Observability)", () => {
       },
     };
     await seedFiles(pool, { tenantId: alNoor.id, userId: khalid, count: 1, state: "discarded" });
-    const schedule = startFileSweeps({
-      db,
-      store: slow,
-      logger: captureLogs().logger,
-      intervalMs: 10,
-    });
+    const schedule = startSweeps({ store: slow, logger: captureLogs().logger, intervalMs: 10 });
     await new Promise((resolve) => setTimeout(resolve, 700));
     await schedule.stop();
     expect(overlapped).toBe(false);
@@ -567,18 +574,20 @@ describe("the sweep schedule (4.3 When it runs, Observability)", () => {
   it("logs a failed run as an error and keeps going", async () => {
     const capture = captureLogs();
     await seedFiles(pool, { tenantId: alNoor.id, userId: khalid, count: 1, state: "discarded" });
-    const schedule = startFileSweeps({
-      db,
+    const schedule = startSweeps({
       store: failingStore(store, { delete: true }),
       logger: capture.logger,
       intervalMs: 50,
     });
     await eventually(
-      async () => capture.lines().filter((line) => line.msg === "file sweep failed").length >= 2,
+      async () => capture.lines().filter((line) => line.msg === "job failed").length >= 2,
       "two failed runs",
     );
     await schedule.stop();
-    expect(capture.lines().find((line) => line.msg === "file sweep failed")?.level).toBe(50);
+    expect(capture.lines().find((line) => line.msg === "job failed")).toMatchObject({
+      level: 50,
+      job: "files.sweep",
+    });
     await sweepFiles(db, store);
   });
 
@@ -607,9 +616,9 @@ describe("the sweep schedule (4.3 When it runs, Observability)", () => {
     });
     expect(await countOverdueFiles(db)).toBeGreaterThanOrEqual(2);
     const capture = captureLogs();
-    const schedule = startFileSweeps({ db, store, logger: capture.logger, intervalMs: 60_000 });
+    const schedule = startSweeps({ logger: capture.logger, intervalMs: 60_000 });
     await eventually(
-      async () => capture.lines().some((line) => line.msg === "file sweep finished"),
+      async () => capture.lines().some((line) => line.msg === "job finished"),
       "a run",
     );
     await schedule.stop();

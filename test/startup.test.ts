@@ -36,4 +36,23 @@ describe("startup", () => {
     expect(output).not.toContain("topsecret");
     expect(output).not.toContain("abc");
   });
+
+  it("refuses to start when JOBS names an unknown job, naming it", async () => {
+    const { code, output } = await runMain({
+      DATABASE_URL: "postgres://u:p@localhost:1/db",
+      JWT_SECRET: "a-jwt-secret-of-at-least-32-characters",
+      SMTP_HOST: "localhost",
+      SMTP_PORT: "1025",
+      EMAIL_FROM: "Watheeq <no-reply@watheeq.sa>",
+      APP_BASE_URL: "http://localhost:5173",
+      STORAGE_ENDPOINT: "http://localhost:8333",
+      STORAGE_BUCKET: "watheeq-files",
+      STORAGE_ACCESS_KEY: "access",
+      STORAGE_SECRET_KEY: "secret",
+      JOBS: "files.sweep,files.swep",
+    });
+    expect(code).toBe(1);
+    expect(output).toContain("files.swep");
+    expect(output).toContain("invalid JOBS setting");
+  });
 });

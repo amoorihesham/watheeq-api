@@ -39,6 +39,7 @@ describe("parseConfig", () => {
         STORAGE_ACCESS_KEY: valid.STORAGE_ACCESS_KEY,
         STORAGE_SECRET_KEY: valid.STORAGE_SECRET_KEY,
         STORAGE_FORCE_PATH_STYLE: false,
+        JOBS: "all",
         LOG_LEVEL: "info",
       },
     });
@@ -86,6 +87,28 @@ describe("parseConfig", () => {
       ok: false,
       message: "Invalid configuration: STORAGE_ENDPOINT (invalid_format)",
     });
+  });
+
+  it("reads JOBS as all, none, or a list of job names", () => {
+    const read = (JOBS: string) => {
+      const result = parseConfig({ ...valid, JOBS });
+      return result.ok ? result.config.JOBS : result.message;
+    };
+    expect(read("none")).toBe("none");
+    expect(read("files.sweep")).toEqual(["files.sweep"]);
+    expect(read(" files.sweep , auth.token_cleanup ")).toEqual([
+      "files.sweep",
+      "auth.token_cleanup",
+    ]);
+  });
+
+  it("rejects an empty job name in JOBS", () => {
+    for (const JOBS of ["", "files.sweep,", ",", " "]) {
+      expect(parseConfig({ ...valid, JOBS })).toEqual({
+        ok: false,
+        message: "Invalid configuration: JOBS (custom)",
+      });
+    }
   });
 
   it("coerces PORT to a number", () => {
