@@ -29,7 +29,8 @@
   Its main decisions are D34-D36 in `MVP_SCOPE.md` and T38-T42 in `TECHNICAL_DECISIONS.md`. Migrations `0013` and `0014` add the form and file tables; local development now also needs the SeaweedFS storage service from `docker-compose.yml` and the `STORAGE_*` settings in `.env.example`.
 - **Phase 6 (request lifecycle) implemented** (`docs/specs/phase-6-request-lifecycle.md`): requests numbered `REQ-<n>-<year>`, submission with the service's form and files, visibility by party and recorded units, review with priority changes, acceptance with a handler and a workflow, rejection and withdrawal, stage runs with recorded assignees and the skip, hold, and escalate fallbacks, complete, return, narrow, escalate, refresh, handler reassignment, information requests with the no-response closure, attachments, and the live SLA deadline with a closure record frozen at closure.
   Its main decisions are D37-D40 in `MVP_SCOPE.md` (resolving open question 4) and T43-T46 in `TECHNICAL_DECISIONS.md`. Migrations `0015`-`0019` add the tables.
-- **Next action:** draft the Phase 7 spec (escalation and notifications) when the owner asks; it resolves MVP open questions 6 and 8.
+- **Phase 7 (escalation & notifications) spec drafted** (`docs/specs/phase-7-escalation-notifications.md`): every question (Q1-Q11) is resolved, including MVP open questions 6 and 8.
+- **Next action:** the owner reviews the Phase 7 spec for approval.
 
 ---
 
@@ -48,7 +49,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 5   | Legal configuration             | Services, priority levels, linear workflows, escalation settings                            | 3, 4       | Implemented                             |
 | 5.5 | Service forms & file storage    | Per-service request forms, answer validation, file uploads, pending-file cleanup            | 5          | Implemented                             |
 | 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure, attachments             | 5.5        | Implemented                             |
-| 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | Not started                             |
+| 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | In Implementation                       |
 
 Audit is cross-cutting: built in Phase 0, used by every later phase.
 
