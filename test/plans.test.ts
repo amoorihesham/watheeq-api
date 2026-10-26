@@ -4,6 +4,7 @@ import { createLogger } from "../src/logging/logger.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
 import { connectToTestDb, seedTenant, seedUser } from "./helpers/db.js";
+import { listAll } from "./helpers/list-all.js";
 
 const PASSWORD = "correct horse battery staple";
 const pool = connectToTestDb();
@@ -148,34 +149,28 @@ describe("list and view plans", () => {
     for (const name of ["Plans Page A", "Plans Page B", "Plans Page C"]) {
       await as(omar).post("/operator/plans", { ...basic, name });
     }
-    // The database is shared with other test files, so walk to the end in big pages, then compare small ones.
-    const names: string[] = [];
-    let total = 0;
+    // Other test files add plans to the same database at any moment, so the walks compare only this file's plans
+    // ("Plans "), whose order among themselves no concurrent insert can change.
+    const own = (names: string[]) => names.filter((name) => name.startsWith("Plans "));
+    const all = await listAll<{ name: string }>(app, omar, "/operator/plans");
+    const expected = own(all.items.map((p) => p.name));
+    expect(expected.length).toBeGreaterThan(2);
+
+    const seen: string[] = [];
     let cursor = "";
     for (;;) {
-      const res = await as(omar).get(
-        `/operator/plans?limit=100${cursor ? `&cursor=${cursor}` : ""}`,
-      );
-      names.push(...res.body.data.map((p: { name: string }) => p.name));
-      total = res.body.page.total;
+      const res = await as(omar).get(`/operator/plans?limit=2${cursor ? `&cursor=${cursor}` : ""}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeLessThanOrEqual(2);
+      expect(res.body.page.total).toBeGreaterThanOrEqual(expected.length);
+      seen.push(...res.body.data.map((p: { name: string }) => p.name));
       if (!res.body.page.nextCursor) {
         break;
       }
       cursor = res.body.page.nextCursor;
     }
-    expect(names).toHaveLength(total);
-
-    const seen: string[] = [];
-    cursor = "";
-    for (let page = 0; page < 3; page++) {
-      const res = await as(omar).get(`/operator/plans?limit=2${cursor ? `&cursor=${cursor}` : ""}`);
-      expect(res.status).toBe(200);
-      expect(res.body.page.total).toBe(total);
-      seen.push(...res.body.data.map((p: { name: string }) => p.name));
-      cursor = res.body.page.nextCursor;
-      expect(cursor).toEqual(expect.any(String));
-    }
-    expect(seen).toEqual(names.slice(0, 6));
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(own(seen)).toEqual(expected);
   });
 
   it("refuses a bad limit and a cursor from another list or a broken one", async () => {

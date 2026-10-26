@@ -467,37 +467,30 @@ describe("list and view tenants (R1.7)", () => {
   });
 
   it("pages the tenants by name, each item the full tenant detail, with the total on every page", async () => {
-    const slugs: string[] = [];
-    let total = 0;
+    // Other test files add tenants to the same database at any moment, so the walks compare only this file's
+    // tenants ("tn-"), whose order among themselves no concurrent insert can change.
+    const own = (slugs: string[]) => slugs.filter((slug) => slug.startsWith("tn-"));
+    const all = await listAll<{ tenant: { slug: string } }>(app, omar, "/operator/tenants");
+    expect(Object.keys(all.items[0] ?? {}).sort()).toEqual(["subscription", "tenant", "usage"]);
+    const expected = own(all.items.map((t) => t.tenant.slug));
+    expect(expected.length).toBeGreaterThan(2);
+
+    const seen: string[] = [];
     let cursor = "";
     for (;;) {
       const res = await as(omar).get(
-        `/operator/tenants?limit=100${cursor ? `&cursor=${cursor}` : ""}`,
+        `/operator/tenants?limit=2${cursor ? `&cursor=${cursor}` : ""}`,
       );
-      if (slugs.length === 0) {
-        expect(Object.keys(res.body.data[0]).sort()).toEqual(["subscription", "tenant", "usage"]);
-      }
-      slugs.push(...res.body.data.map((t: { tenant: { slug: string } }) => t.tenant.slug));
-      total = res.body.page.total;
+      expect(res.body.data.length).toBeLessThanOrEqual(2);
+      expect(res.body.page.total).toBeGreaterThanOrEqual(expected.length);
+      seen.push(...res.body.data.map((t: { tenant: { slug: string } }) => t.tenant.slug));
       if (!res.body.page.nextCursor) {
         break;
       }
       cursor = res.body.page.nextCursor;
     }
-    expect(slugs).toHaveLength(total);
-
-    const seen: string[] = [];
-    cursor = "";
-    for (let page = 0; page < 3; page++) {
-      const res = await as(omar).get(
-        `/operator/tenants?limit=2${cursor ? `&cursor=${cursor}` : ""}`,
-      );
-      expect(res.body.page.total).toBe(total);
-      seen.push(...res.body.data.map((t: { tenant: { slug: string } }) => t.tenant.slug));
-      cursor = res.body.page.nextCursor;
-      expect(cursor).toEqual(expect.any(String));
-    }
-    expect(seen).toEqual(slugs.slice(0, 6));
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(own(seen)).toEqual(expected);
   });
 
   it("answers each list item as GET /operator/tenants/:id does", async () => {
