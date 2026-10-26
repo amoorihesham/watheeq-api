@@ -9,21 +9,26 @@ All dates are Riyadh dates (`YYYY-MM-DD`); all times are Riyadh wall-clock times
 
 | Method | Path                                          | Permission        | Request                                                     | Responses                                                                                                         |
 | ------ | --------------------------------------------- | ----------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| GET    | `/calendar`                                   | `calendar.view`   | `includeEnded?` (default false)                             | 200 `{today, hours:[version], periods:[period]}`                                                                  |
-| GET    | `/calendar/days`                              | `calendar.view`   | `from`, `to` (at most 366 days)                             | 200 `{days:[day]}`; 400                                                                                           |
-| PUT    | `/calendar/hours/:effectiveFrom`              | `calendar.manage` | a week shape                                                | 200 `{version}`; 400; 409 `CALENDAR_DATE_LOCKED`                                                                  |
+| GET    | `/calendar`                                   | `calendar.view`   | `includeEnded?` (default false)                             | 200 `{today, hours:[hours version], periods:[period]}`                                                            |
+| GET    | `/calendar/days`                              | `calendar.view`   | `from`, `to` (at most 366 days)                             | 200 `{from, to, days:[day]}`; 400                                                                                 |
+| PUT    | `/calendar/hours/:effectiveFrom`              | `calendar.manage` | a week shape                                                | 200 the hours version, as in `GET /calendar`'s `hours`; 400; 409 `CALENDAR_DATE_LOCKED`                           |
 | DELETE | `/calendar/hours/:effectiveFrom`              | `calendar.manage` | none                                                        | 204; 404; 409 `CALENDAR_DATE_LOCKED`                                                                              |
-| POST   | `/calendar/periods`                           | `calendar.manage` | a period definition                                         | 201 `{period}`; 400; 409 `CALENDAR_DATE_LOCKED`                                                                   |
-| PATCH  | `/calendar/periods/:periodId`                 | `calendar.manage` | any fields of the definition except `kind` and `recurrence` | 200 `{period}` (a new ID when a version was ended); 400; 404; 409 `CALENDAR_DATE_LOCKED`, `CALENDAR_PERIOD_ENDED` |
+| POST   | `/calendar/periods`                           | `calendar.manage` | a period definition                                         | 201 the period, as in `GET /calendar`'s `periods`; 400; 409 `CALENDAR_DATE_LOCKED`                                |
+| PATCH  | `/calendar/periods/:periodId`                 | `calendar.manage` | any fields of the definition except `kind` and `recurrence` | 200 the period (a new ID when a version was ended); 400; 404; 409 `CALENDAR_DATE_LOCKED`, `CALENDAR_PERIOD_ENDED` |
 | DELETE | `/calendar/periods/:periodId`                 | `calendar.manage` | none                                                        | 204; 404; 409 `CALENDAR_DATE_LOCKED`, `CALENDAR_PERIOD_ENDED`                                                     |
-| PUT    | `/calendar/periods/:periodId/overrides/:year` | `calendar.manage` | `{action:"move", startDate, endDate}` or `{action:"skip"}`  | 200 `{period}`; 400; 404; 409 `CALENDAR_DATE_LOCKED`, `CALENDAR_PERIOD_ENDED`                                     |
+| PUT    | `/calendar/periods/:periodId/overrides/:year` | `calendar.manage` | `{action:"move", startDate, endDate}` or `{action:"skip"}`  | 200 the period; 400; 404; 409 `CALENDAR_DATE_LOCKED`, `CALENDAR_PERIOD_ENDED`                                     |
 | DELETE | `/calendar/periods/:periodId/overrides/:year` | `calendar.manage` | none                                                        | 204; 404; 409 `CALENDAR_DATE_LOCKED`                                                                              |
 
-A **period definition**: `{kind, name, recurrence, startDate?, endDate?, start?: {month, day}, end?: {month, day}, week?, rank?}`.
-A **period** in a response adds `id`, `validFrom`, `validUntil`, `replacesId`, `overrides:[{year, action, startDate?, endDate?}]`, and `next`: the next occurrence's Gregorian range (after adjustments), so a client shows "Eid al-Fitr: 2027-03-09 to 2027-03-12" without converting Hijri dates itself.
+A **period definition** (the request): `{kind, name, recurrence, startDate?, endDate?, start?: {month, day}, end?: {month, day}, week?, rank?}`.
+An **hours version** (`data` of the hours write, an entry of `GET /calendar`'s `hours`): `{effectiveFrom, week}`, where `week` is `{start, end, days}` and each day is `"default"`, `"off"`, or `{start, end}`.
+A **period** (`data` of a period or override write, an entry of `GET /calendar`'s `periods`) always has every key; the keys its kind and recurrence do not use are `null`:
+`{id, name, kind, recurrence, startDate, endDate, start, end, validFrom, validUntil, overrides, week, rank, replacesId, next}`.
+`startDate` and `endDate` belong to a one-off period, `start`, `end`, `validFrom`, `validUntil`, and `overrides` to a recurring one (`overrides` is `[]` for a one-off), and `week` and `rank` to a season.
+An override is `{year, action, startDate, endDate}`, with the dates `null` for a skip.
+`next` is the next occurrence's Gregorian range `{startDate, endDate}` after adjustments, or `null`, so a client shows "Eid al-Fitr: 2027-03-09 to 2027-03-12" without converting Hijri dates itself.
 A recurring period is created with `validFrom` = tomorrow.
 `kind` and `recurrence` cannot change; a different kind of period is a new period.
-A **day**: `{date, hijriDate: {year, month, day}, working, start?, end?, holidays:[{id, name}], season?: {id, name}}`.
+A **day**: `{date, hijriDate: {year, month, day}, working, start, end, holidays:[{id, name}], season}`; `start` and `end` are `null` on a day off, and `season` is `{id, name}` or `null`.
 
 `GET /calendar` lists every hours version (they are few) and, unless `includeEnded`, leaves out period versions ended by an edit or a delete and one-off periods already over; periods are listed in creation order.
 A `DELETE` of a missing hours version is 404 before the date check.

@@ -17,7 +17,7 @@ Every successful response with a body is JSON with `data` at the top level.
 Nothing else sits at the top level except `page` on a list.
 A bare array would leave no place for `page`, and named keys such as `{priority}` would need a different key for every endpoint.
 
-Example: `GET /priorities/<urgent>` answers `{"data": {"id": "...", "name": "Urgent", "days": 2, "retired": false}}`, and `GET /subscription` answers `{"data": {"subscription": {...}, "usage": {...}}}`.
+Example: `PATCH /priorities/<urgent>` answers `{"data": {"id": "...", "name": "Urgent", "days": 2, "retired": false}}`, and `GET /subscription` answers `{"data": {"subscription": {...}, "usage": {...}}}`.
 
 - 201 is only for a creation that has its own URL: Sara creates a priority and gets 201.
   An action on an existing resource, such as Faisal asking Khalid a question on request #42, is 200 with the request.
