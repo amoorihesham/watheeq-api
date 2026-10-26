@@ -33,8 +33,9 @@
   Its main decisions are D41-D46 in `MVP_SCOPE.md` (resolving open questions 6 and 8) and T47-T51 in `TECHNICAL_DECISIONS.md` (resolving the deferred job-runner decision). Migrations `0020`-`0022` add the tables. A running server now also reads the `JOBS` setting (default `all`) from `.env.example`.
 - **The MVP phase list is complete.** Before production: the KSA hosting provider and SMTP provider (known open items above) and the "Deferred hardening" items marked "before production" in `TECHNICAL_DECISIONS.md`.
 - **Specs reorganized (2026-10-26):** each phase now has its own folder in `docs/specs/`, holding the spec and a `<phase>.API.md` file with the endpoints that used to be the spec's section 4.2.
-- **Next action:** the API contract for the frontend, served from a local staging setup.
-  Before a Phase 8 spec, the owner and the agent discuss the errors and the request and response shapes, to be unified across every endpoint and described once in `docs/api/`.
+- **Phase 8 (API contract) in implementation** (`docs/specs/phase-8-api-contract/phase-8-api-contract.md`): one success, list, and error shape for every endpoint, cursor paging with totals, one filter rule, the request-side rules, `docs/api/`, and the helpers and tests that enforce them. Spec approved 2026-10-26.
+  A local staging setup follows as its own phase.
+- **Next action:** implement Phase 8 (steps 8.1-8.4 by two agents), then one review and report.
 
 ---
 
@@ -54,6 +55,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 5.5 | Service forms & file storage    | Per-service request forms, answer validation, file uploads, pending-file cleanup            | 5          | Implemented                             |
 | 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure, attachments             | 5.5        | Implemented                             |
 | 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | Implemented                             |
+| 8   | API contract                    | One response, list, and error shape; cursor paging; filters; `docs/api/`; contract checks   | 0-7        | In Implementation                       |
 
 Audit is cross-cutting: built in Phase 0, used by every later phase.
 
