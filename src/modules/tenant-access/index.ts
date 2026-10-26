@@ -2,6 +2,7 @@ export {
   assertGrantsHeld,
   grantListOf,
   grantMapOf,
+  holdersOf,
   loadMemberGrants,
   loadRoleGrants,
   missingGrants,

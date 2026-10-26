@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, exists, or } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import { rolePermissions, roles, tenantMembers, users } from "@/db/schema/index.js";
 
@@ -55,6 +55,39 @@ export function createTenantAccessRepository() {
         )
         .leftJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
         .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)));
+    },
+
+    /** Active members whose role is the system role or stores the permission at any scope. */
+    holders(db: Executor, tenantId: string, permission: string): Promise<string[]> {
+      return db
+        .select({ userId: tenantMembers.userId })
+        .from(tenantMembers)
+        .innerJoin(users, eq(users.id, tenantMembers.userId))
+        .innerJoin(
+          roles,
+          and(eq(roles.tenantId, tenantMembers.tenantId), eq(roles.id, tenantMembers.roleId)),
+        )
+        .where(
+          and(
+            eq(tenantMembers.tenantId, tenantId),
+            eq(users.isActive, true),
+            or(
+              eq(roles.isSystem, true),
+              exists(
+                db
+                  .select({ one: rolePermissions.roleId })
+                  .from(rolePermissions)
+                  .where(
+                    and(
+                      eq(rolePermissions.roleId, roles.id),
+                      eq(rolePermissions.permission, permission),
+                    ),
+                  ),
+              ),
+            ),
+          ),
+        )
+        .then((rows) => rows.map((row) => row.userId));
     },
   };
 }

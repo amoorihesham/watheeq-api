@@ -14,6 +14,7 @@ import { createCalendarRouter } from "./modules/calendar/index.js";
 import { createEscalationRouter } from "./modules/escalation/index.js";
 import { createFilesRouter } from "./modules/files/index.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
+import { createNotificationsRouter } from "./modules/notifications/index.js";
 import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
 import { createPositionsRouter } from "./modules/positions/index.js";
@@ -69,6 +70,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/priorities", createPrioritiesRouter({ db, config }));
   app.use("/escalation", createEscalationRouter({ db, config }));
   app.use("/requests", createRequestsRouter({ db, config, store }));
+  app.use("/notifications", createNotificationsRouter({ db, config }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

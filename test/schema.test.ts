@@ -38,6 +38,7 @@ describe("database baseline", () => {
       "escalation_settings",
       "files",
       "information_requests",
+      "notifications",
       "number_sequences",
       "org_units",
       "password_tokens",

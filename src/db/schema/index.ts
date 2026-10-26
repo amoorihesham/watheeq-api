@@ -14,6 +14,7 @@ export {
   informationRequestStates,
   informationRequests,
 } from "./information-requests.js";
+export { notificationKinds, notifications } from "./notifications.js";
 export { orgUnitKinds, orgUnits } from "./org-units.js";
 export { passwordTokenPurposes, passwordTokens } from "./password-tokens.js";
 export { paymentPeriods, plans } from "./plans.js";

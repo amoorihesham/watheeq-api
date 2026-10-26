@@ -110,3 +110,10 @@ export async function assertGrantsHeld(
     );
   }
 }
+
+/** The active members whose role grants `permission` at any scope, or is the system role (T26). */
+export const holdersOf = (
+  executor: Executor,
+  tenantId: string,
+  permission: TenantPermissionType,
+): Promise<string[]> => repo.holders(executor, tenantId, permission);
