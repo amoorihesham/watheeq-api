@@ -1,2 +1,6 @@
 export const DEFAULT_NOTIFICATION_PAGE_SIZE = 25;
 export const MAX_NOTIFICATION_PAGE_SIZE = 100;
+
+export const RETENTION_DAYS = 90;
+export const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const CLEANUP_BATCH_SIZE = 1000;

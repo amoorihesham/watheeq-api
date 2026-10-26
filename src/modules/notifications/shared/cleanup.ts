@@ -1,0 +1,37 @@
+import type { Db } from "@/db/pool.js";
+import type { JobType } from "@/scheduler/index.js";
+import {
+  CLEANUP_BATCH_SIZE,
+  CLEANUP_INTERVAL_MS,
+  RETENTION_DAYS,
+} from "../notifications.config.js";
+import { createNotificationsRepository } from "../notifications.repository.js";
+
+const repo = createNotificationsRepository();
+
+/**
+ * Deletes notifications read more than 90 days ago, a batch per statement until one comes up short; unread ones are
+ * kept however old. A shutdown stops the run between batches (Phase 7 spec, R7.16).
+ */
+export async function deleteOldReadNotifications(
+  db: Db,
+  { batchSize = CLEANUP_BATCH_SIZE, signal }: { batchSize?: number; signal?: AbortSignal } = {},
+): Promise<{ deleted: number }> {
+  let deleted = 0;
+  while (!signal?.aborted) {
+    const batch = await repo.deleteReadBefore(db, RETENTION_DAYS, batchSize);
+    deleted += batch.length;
+    if (batch.length < batchSize) {
+      break;
+    }
+  }
+  return { deleted };
+}
+
+export function createNotificationsCleanupJob(): JobType {
+  return {
+    name: "notifications.cleanup",
+    intervalMs: CLEANUP_INTERVAL_MS,
+    run: ({ db, signal }) => deleteOldReadNotifications(db, { signal }),
+  };
+}

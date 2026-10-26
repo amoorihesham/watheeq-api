@@ -57,6 +57,7 @@ describe("database baseline", () => {
       "services",
       "subscriptions",
       "tenant_members",
+      "tenant_notices",
       "tenants",
       "users",
       "workflow_stages",

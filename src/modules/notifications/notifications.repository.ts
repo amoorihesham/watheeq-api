@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, lt, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import { notifications, tenantMembers, users } from "@/db/schema/index.js";
 import type { NewNotificationType, NotificationRowType } from "./notifications.types.js";
@@ -101,6 +101,23 @@ export function createNotificationsRepository() {
             sql`(${notifications.createdAt}, ${notifications.id}) <= ${positionOf(tenantId, userId, upTo)}`,
           ),
         );
+    },
+
+    /**
+     * Deletes up to `limit` notifications read more than `days` days ago; unread ones are never touched. `SKIP LOCKED`
+     * lets several instances split the work.
+     */
+    deleteReadBefore(db: Executor, days: number, limit: number): Promise<{ id: string }[]> {
+      const due = db
+        .select({ id: notifications.id })
+        .from(notifications)
+        .where(lt(notifications.readAt, sql`now() - ${days} * interval '1 day'`))
+        .limit(limit)
+        .for("update", { skipLocked: true });
+      return db
+        .delete(notifications)
+        .where(inArray(notifications.id, due))
+        .returning({ id: notifications.id });
     },
   };
 }

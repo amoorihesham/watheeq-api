@@ -1,14 +1,23 @@
 import { Readable } from "node:stream";
-import type { Db } from "@/db/pool.js";
+import type { Db, Tx } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError } from "@/http/errors.js";
 import type { Logger } from "@/logging/logger.js";
-import { BYTES_PER_GB, createSubscriptionsRepository } from "@/modules/subscriptions/index.js";
+import { notify } from "@/modules/notifications/index.js";
+import {
+  BYTES_PER_GB,
+  clearNotice,
+  createSubscriptionsRepository,
+  recordNotice,
+} from "@/modules/subscriptions/index.js";
+import { holdersOf } from "@/modules/tenant-access/index.js";
 import type { FileStoreType } from "@/storage/index.js";
 import {
   CONTENT_TYPE_BY_KIND,
   MAX_PENDING_UPLOADS,
   PENDING_LIFETIME_HOURS,
+  STORAGE_REARM_PERCENT,
+  STORAGE_WARNING_PERCENT,
 } from "./files.config.js";
 import { fileIdSchema } from "./files.schemas.js";
 import type {
@@ -31,6 +40,32 @@ function existingFileId(fileId: string): string {
     throw new AppError("NOT_FOUND");
   }
   return parsed.data;
+}
+
+/**
+ * The storage warning (Phase 7 spec, 4.3), inside the reservation's transaction, which holds the tenant's upload
+ * lock and has just summed the stored bytes: usage seen below 80% before the upload re-arms it, and usage at 90% or
+ * more after it sends it once. The re-arm comes first, so one upload that jumps across both sends a new warning.
+ */
+async function warnWhenNearlyFull(
+  tx: Tx,
+  tenantId: string,
+  usage: { before: number; after: number; limitBytes: number },
+): Promise<void> {
+  const { before, after, limitBytes } = usage;
+  if (before * 100 < limitBytes * STORAGE_REARM_PERCENT) {
+    await clearNotice(tx, tenantId, "storage_nearly_full", "");
+  }
+  if (after * 100 >= limitBytes * STORAGE_WARNING_PERCENT) {
+    if (await recordNotice(tx, tenantId, "storage_nearly_full", "")) {
+      await notify(tx, {
+        tenantId,
+        recipients: await holdersOf(tx, tenantId, "subscription.view"),
+        kind: "storage.nearly_full",
+        data: { usedBytes: after, limitBytes },
+      });
+    }
+  }
 }
 
 const toFile = (row: FileRowType): FileType => {
@@ -76,9 +111,15 @@ export function createFilesService({
         throw new Error(`tenant ${input.tenantId} has no subscription`);
       }
       const [stored] = await subscriptionsRepo.sumStoredBytes(tx, input.tenantId);
-      if ((stored?.storedBytes ?? 0) + input.declaredSize > limit.storageLimitGb * BYTES_PER_GB) {
+      const usage = {
+        before: stored?.storedBytes ?? 0,
+        after: (stored?.storedBytes ?? 0) + input.declaredSize,
+        limitBytes: limit.storageLimitGb * BYTES_PER_GB,
+      };
+      if (usage.after > usage.limitBytes) {
         throw new AppError("STORAGE_LIMIT_REACHED");
       }
+      await warnWhenNearlyFull(tx, input.tenantId, usage);
       const [row] = await repo.insert(tx, {
         tenantId: input.tenantId,
         uploadedBy: input.userId,

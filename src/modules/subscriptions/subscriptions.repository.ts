@@ -1,9 +1,10 @@
 import { and, count, eq, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
-import { files, subscriptions, tenantMembers, users } from "@/db/schema/index.js";
+import { files, subscriptions, tenantMembers, tenantNotices, users } from "@/db/schema/index.js";
 import { SUBSCRIPTION_TIME_ZONE } from "./subscriptions.config.js";
 import type {
   NewSubscriptionType,
+  NoticeKindType,
   SubscriptionChangesType,
   SubscriptionRowType,
 } from "./subscriptions.types.js";
@@ -23,6 +24,32 @@ export function createSubscriptionsRepository() {
 
     today(db: Executor) {
       return db.execute<{ today: string }>(sql`select ${riyadhToday} as today`);
+    },
+
+    /** Every tenant that has a subscription, for the hourly notice check. */
+    listTenantIds(db: Executor): Promise<{ tenantId: string }[]> {
+      return db.select({ tenantId: subscriptions.tenantId }).from(subscriptions);
+    },
+
+    /** One row when the notice is new; none when it was already sent (the primary key decides, across instances). */
+    insertNotice(db: Executor, tenantId: string, kind: NoticeKindType, key: string) {
+      return db
+        .insert(tenantNotices)
+        .values({ tenantId, kind, key })
+        .onConflictDoNothing()
+        .returning({ kind: tenantNotices.kind });
+    },
+
+    deleteNotice(db: Executor, tenantId: string, kind: NoticeKindType, key: string) {
+      return db
+        .delete(tenantNotices)
+        .where(
+          and(
+            eq(tenantNotices.tenantId, tenantId),
+            eq(tenantNotices.kind, kind),
+            eq(tenantNotices.key, key),
+          ),
+        );
     },
 
     findByTenantId(db: Executor, tenantId: string): Promise<SubscriptionRowType[]> {

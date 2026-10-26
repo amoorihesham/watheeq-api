@@ -1,6 +1,6 @@
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type { subscriptions } from "@/db/schema/index.js";
+import type { subscriptions, tenantNoticeKinds } from "@/db/schema/index.js";
 import type { SUBSCRIPTION_STATES } from "./subscriptions.config.js";
 import type { createSubscriptionsController } from "./subscriptions.controller.js";
 import type { createSubscriptionsRepository } from "./subscriptions.repository.js";
@@ -9,6 +9,7 @@ import type { createSubscriptionsService } from "./subscriptions.service.js";
 export type SubscriptionStateType = (typeof SUBSCRIPTION_STATES)[number];
 
 export type SubscriptionRowType = typeof subscriptions.$inferSelect;
+export type NoticeKindType = (typeof tenantNoticeKinds.enumValues)[number];
 export type NewSubscriptionType = typeof subscriptions.$inferInsert;
 export type SubscriptionChangesType = Omit<NewSubscriptionType, "tenantId" | "updatedAt">;
 
