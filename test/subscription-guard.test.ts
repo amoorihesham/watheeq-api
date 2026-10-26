@@ -82,7 +82,7 @@ beforeAll(async () => {
       paymentPeriod: "monthly",
       discountPercent: 15,
     })
-  ).body.plan.id;
+  ).body.data.id;
   const { rows } = await pool.query(
     "select (now() at time zone 'Asia/Riyadh')::date::text as today",
   );
@@ -101,7 +101,7 @@ beforeAll(async () => {
         customerDiscountPercent: 10,
       },
     });
-  tenantId = created.body.tenant.id;
+  tenantId = created.body.data.tenant.id;
   // Stands in for Sara following her verification link (covered in tenants.test.ts).
   await pool.query(
     "update users set password_hash = $2, email_verified_at = now() where email = $1",
@@ -172,7 +172,7 @@ describe("Read-only (R1.9)", () => {
       .put(`/operator/tenants/${tenantId}/subscription`)
       .set("Cookie", accessCookie(omar))
       .send({ planId: basicId, startDate: today, endDate: addDays(today, 364), reason: "Renewed" });
-    expect(renewed.body.subscription.state).toBe("active");
+    expect(renewed.body.data.subscription.state).toBe("active");
     // Same access token as before: the guard reads the subscription on every request.
     expect((await asSara.send("post", "/tenant-thing")).status).toBe(200);
   });
@@ -191,17 +191,18 @@ describe("GET /auth/me (R1.11)", () => {
     await setState("grace");
     const res = await asSara.get("/auth/me");
     expect(res.status).toBe(200);
-    expect(res.body.subscription).toEqual({
+    expect(res.body.data.subscription).toEqual({
       state: "grace",
       endDate: addDays(today, -1),
       graceEndsOn: addDays(today, 13),
     });
-    expect(res.body.user.tenant.id).toBe(tenantId);
+    expect(res.body.data.user.tenant.id).toBe(tenantId);
+    expect((await login(app, SARA, PASSWORD)).res.body).toEqual(res.body);
   });
 
   it("returns subscription null for an operator", async () => {
     const res = await request(app).get("/auth/me").set("Cookie", accessCookie(omar));
-    expect(res.body.subscription).toBeNull();
+    expect(res.body.data.subscription).toBeNull();
   });
 });
 
@@ -211,7 +212,7 @@ describe("GET /subscription (R1.11, P1.23)", () => {
     const res = await asSara.get("/subscription");
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body).toEqual({
+    expect(res.body.data).toEqual({
       subscription: {
         planId: basicId,
         planName: "SG Basic",

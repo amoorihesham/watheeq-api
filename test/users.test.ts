@@ -63,7 +63,7 @@ async function invite(body: Record<string, unknown> = {}): Promise<string> {
     ...body,
   });
   expect(res.status).toBe(201);
-  return res.body.user.id;
+  return res.body.data.id;
 }
 
 /** Invites a user and has them set a password, as following the emailed link does. */
@@ -90,7 +90,7 @@ const auditOf = (userId: string) =>
 const unitOf = (name: string, parentId?: string) =>
   as(sara)
     .post("/org-units", parentId ? { name, parentId } : { name })
-    .then((res) => res.body.unit.id as string);
+    .then((res) => res.body.data.id as string);
 
 beforeAll(async () => {
   const passwordHash = await hashPassword(PASSWORD);
@@ -143,7 +143,7 @@ beforeAll(async () => {
   finance = await unitOf("Finance");
   procurement = await unitOf("Procurement", finance);
   legal = await unitOf("Legal Affairs");
-  rashidUnit = (await as(rashid).post("/org-units", { name: "Rashid Unit" })).body.unit.id;
+  rashidUnit = (await as(rashid).post("/org-units", { name: "Rashid Unit" })).body.data.id;
 });
 
 afterAll(async () => {
@@ -161,7 +161,7 @@ describe("inviting a user (R2.8)", () => {
     });
     expect(res.status).toBe(201);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body.user).toMatchObject({
+    expect(res.body.data).toMatchObject({
       email: "huda@us-alnoor.test",
       userName: "Huda",
       unit: { id: legal, name: "Legal Affairs", kind: "department" },
@@ -173,7 +173,7 @@ describe("inviting a user (R2.8)", () => {
     const message = email.sent.filter((m) => m.to === "huda@us-alnoor.test").at(-1);
     expect(message?.text).toContain("Sara invited you to join us-al-noor");
     expect(message?.text).toContain(`${TEST_APP_BASE_URL}/verify-email?token=`);
-    expect(await auditOf(res.body.user.id)).toEqual([
+    expect(await auditOf(res.body.data.id)).toEqual([
       {
         action: "user.invited",
         tenant_id: alNoor,
@@ -194,13 +194,16 @@ describe("inviting a user (R2.8)", () => {
     const { id, email: address } = await inviteActive({ unitId: procurement });
     const session = await login(app, address, PASSWORD);
     expect(session.res.status).toBe(200);
-    expect(session.res.body.user.tenant).toMatchObject({ id: alNoor, roleId: memberRoleId });
-    expect((await as(sara).get(`/users/${id}`)).body.user.status).toBe("active");
+    expect(session.res.body.data.user.tenant).toMatchObject({
+      id: alNoor,
+      roleId: memberRoleId,
+    });
+    expect((await as(sara).get(`/users/${id}`)).body.data.status).toBe("active");
   });
 
   it("places a user directly under the organization when no unit is given (R2.10)", async () => {
     const id = await invite();
-    expect((await as(sara).get(`/users/${id}`)).body.user.unit).toBeNull();
+    expect((await as(sara).get(`/users/${id}`)).body.data.unit).toBeNull();
   });
 
   it("refuses an email that is already taken, in this or another tenant, and leaves nothing behind", async () => {
@@ -284,7 +287,7 @@ describe("inviting a user (R2.8)", () => {
     });
     expect(res.status).toBe(201);
     expect(email.lastTokenFor(address)).toBe("");
-    expect((await as(sara).post(`/users/${res.body.user.id}/resend-invitation`)).status).toBe(204);
+    expect((await as(sara).post(`/users/${res.body.data.id}/resend-invitation`)).status).toBe(204);
     expect(email.lastTokenFor(address)).not.toBe("");
   });
 });
@@ -334,13 +337,13 @@ describe("listing and viewing (R2.15)", () => {
   });
 
   const names = (res: request.Response) =>
-    res.body.users.map((user: { userName: string }) => user.userName);
+    res.body.data.map((user: { userName: string }) => user.userName);
 
   it("lists active users by default, ordered by name, with the total", async () => {
     const res = await as(sara).get(`/users?q=${prefix}`);
     expect(res.status).toBe(200);
     expect(names(res)).toEqual([`${prefix} 100%_done`, `${prefix} Alpha`, `${prefix} zed`]);
-    expect(res.body.total).toBe(3);
+    expect(res.body.page).toEqual({ nextCursor: null, total: 3 });
   });
 
   it("filters by status", async () => {
@@ -350,7 +353,7 @@ describe("listing and viewing (R2.15)", () => {
     expect(names(await as(sara).get(`/users?q=${prefix}&status=inactive`))).toEqual([
       `${prefix} Leaver`,
     ]);
-    expect((await as(sara).get(`/users?q=${prefix}&status=all`)).body.total).toBe(5);
+    expect((await as(sara).get(`/users?q=${prefix}&status=all`)).body.page.total).toBe(5);
   });
 
   it("filters by unit, organization level, and manager flag", async () => {
@@ -367,27 +370,106 @@ describe("listing and viewing (R2.15)", () => {
   });
 
   it("searches name and email ignoring case, and matches % and _ literally", async () => {
-    expect((await as(sara).get(`/users?q=${prefix.toLowerCase()}%20ALPHA`)).body.total).toBe(1);
+    expect((await as(sara).get(`/users?q=${prefix.toLowerCase()}%20ALPHA`)).body.page.total).toBe(
+      1,
+    );
     expect(names(await as(sara).get(`/users?q=${encodeURIComponent("100%_")}`))).toEqual([
       `${prefix} 100%_done`,
     ]);
-    expect((await as(sara).get("/users?q=sara@us-alnoor")).body.users[0].email).toBe(SARA);
+    expect((await as(sara).get("/users?q=sara@us-alnoor")).body.data[0].email).toBe(SARA);
   });
 
-  it("pages with limit and offset", async () => {
-    const page = await as(sara).get(`/users?q=${prefix}&limit=2&offset=1`);
-    expect(names(page)).toEqual([`${prefix} Alpha`, `${prefix} zed`]);
-    expect(page.body.total).toBe(3);
+  it("filters by status, with active as the default and all as every status", async () => {
+    const statusOf = async (query: string) =>
+      names(await as(sara).get(`/users?q=${prefix}${query}`)).length;
+    expect(await statusOf("")).toBe(3);
+    expect(await statusOf("&status=active")).toBe(3);
+    expect(await statusOf("&status=invited")).toBe(1);
+    expect(await statusOf("&status=inactive")).toBe(1);
+    expect(await statusOf("&status=all")).toBe(5);
   });
 
-  it("refuses an out-of-range limit or an unknown status", async () => {
-    expect((await as(sara).get("/users?limit=500")).status).toBe(400);
-    expect((await as(sara).get("/users?status=gone")).status).toBe(400);
+  it("filters by managers (true, false, all) and by role (an ID, all)", async () => {
+    const asked = async (query: string) =>
+      names(await as(sara).get(`/users?q=${prefix}&status=all${query}`));
+    expect(await asked("&managers=true")).toEqual([`${prefix} zed`]);
+    expect(await asked("&managers=false")).toHaveLength(4);
+    expect(await asked("&managers=all")).toHaveLength(5);
+    expect(await asked(`&roleId=${memberRoleId}`)).toHaveLength(5);
+    expect(await asked(`&roleId=${adminRoleId}`)).toEqual([]);
+    expect(await asked("&roleId=all")).toHaveLength(5);
+    expect(await asked(`&roleId=${memberRoleId.toUpperCase()}`)).toHaveLength(5);
+    expect(await asked("&unitId=all")).toHaveLength(5);
+  });
+
+  it("refuses a value a filter does not accept as invalid_value at the filter", async () => {
+    for (const [query, path] of [
+      ["status=gone", "status"],
+      ["managers=maybe", "managers"],
+      ["unitId=nowhere", "unitId"],
+      ["roleId=none", "roleId"],
+      ["roleId=nope", "roleId"],
+    ] as const) {
+      const res = await as(sara).get(`/users?${query}`);
+      expect(res.status, query).toBe(400);
+      expect(res.body.error.details, query).toEqual([{ path, code: "invalid_value" }]);
+    }
+  });
+
+  it("pages with a cursor in name order, with the total on every page and no cursor at the end", async () => {
+    const first = await as(sara).get(`/users?q=${prefix}&limit=2`);
+    expect(names(first)).toEqual([`${prefix} 100%_done`, `${prefix} Alpha`]);
+    expect(first.body.page).toEqual({ nextCursor: expect.any(String), total: 3 });
+    const second = await as(sara).get(
+      `/users?q=${prefix}&limit=2&cursor=${first.body.page.nextCursor}`,
+    );
+    expect(names(second)).toEqual([`${prefix} zed`]);
+    expect(second.body.page).toEqual({ nextCursor: null, total: 3 });
+  });
+
+  it("answers an empty list with no items and a total of 0", async () => {
+    const res = await as(sara).get(`/users?q=${prefix}-nobody`);
+    expect(res.body).toEqual({ data: [], page: { nextCursor: null, total: 0 } });
+  });
+
+  it("refuses a cursor used with other filters or on another list, and an altered one", async () => {
+    const first = await as(sara).get(`/users?q=${prefix}&limit=1`);
+    const cursor = first.body.page.nextCursor;
+    const roles = await as(sara).get("/roles?limit=1");
+    for (const query of [
+      `q=${prefix}&status=all&limit=1&cursor=${cursor}`,
+      `q=${prefix}x&limit=1&cursor=${cursor}`,
+      `limit=1&cursor=${roles.body.page.nextCursor}`,
+      `q=${prefix}&cursor=${cursor}x`,
+    ]) {
+      const res = await as(sara).get(`/users?${query}`);
+      expect(res.status, query).toBe(400);
+      expect(res.body.error.details, query).toEqual([{ path: "cursor", code: "invalid_cursor" }]);
+    }
+  });
+
+  it("refuses an out-of-range limit, and no longer reads offset", async () => {
+    for (const [limit, code] of [
+      ["0", "too_small"],
+      ["500", "too_big"],
+      ["abc", "invalid_type"],
+    ]) {
+      const res = await as(sara).get(`/users?limit=${limit}`);
+      expect(res.body.error.details).toEqual([{ path: "limit", code }]);
+    }
+    const ignored = await as(sara).get(`/users?q=${prefix}&offset=2`);
+    expect(ignored.status).toBe(200);
+    expect(names(ignored)).toHaveLength(3);
+  });
+
+  it("treats a blank q as no search", async () => {
+    const res = await as(sara).get("/users?q=%20%20&status=all&limit=100");
+    expect(res.body.page.total).toBeGreaterThan(5);
   });
 
   it("lets a member read the directory (Q5)", async () => {
-    expect((await as(khalid).get(`/users?q=${prefix}`)).body.total).toBe(3);
-    expect((await as(khalid).get(`/users/${saraId}`)).body.user).toMatchObject({
+    expect((await as(khalid).get(`/users?q=${prefix}`)).body.page.total).toBe(3);
+    expect((await as(khalid).get(`/users/${saraId}`)).body.data).toMatchObject({
       email: SARA,
       isOwner: true,
       role: adminRole(),
@@ -396,7 +478,7 @@ describe("listing and viewing (R2.15)", () => {
 
   it("never shows another tenant's users (R2.19)", async () => {
     const res = await as(rashid).get("/users?status=all");
-    expect(res.body.users.map((user: { email: string }) => user.email)).toEqual([RASHID_ADMIN]);
+    expect(res.body.data.map((user: { email: string }) => user.email)).toEqual([RASHID_ADMIN]);
     for (const id of [saraId, "00000000-0000-4000-8000-000000000000", "not-a-uuid"]) {
       expect((await as(rashid).get(`/users/${id}`)).status).toBe(404);
       expect((await as(rashid).patch(`/users/${id}`, { userName: "Taken" })).status).toBe(404);
@@ -410,7 +492,7 @@ describe("editing (R2.11, R2.13, R2.18)", () => {
     const id = await invite({ userName: "Before", unitId: procurement });
     const res = await as(sara).patch(`/users/${id}`, { userName: "After", unitId: finance });
     expect(res.status).toBe(200);
-    expect(res.body.user).toMatchObject({
+    expect(res.body.data).toMatchObject({
       userName: "After",
       unit: { id: finance, kind: "department" },
       role: memberRole(),
@@ -430,7 +512,7 @@ describe("editing (R2.11, R2.13, R2.18)", () => {
     const res = await as(sara).patch(`/users/${id}`, { userName: "Kept 2", roleId: adminRoleId });
     expect(res.status).toBe(400);
     expect(res.body.error.details).toEqual([{ path: "roleId", code: "unknown_field" }]);
-    expect((await as(sara).get(`/users/${id}`)).body.user).toMatchObject({
+    expect((await as(sara).get(`/users/${id}`)).body.data).toMatchObject({
       userName: "Kept",
       role: memberRole(),
     });
@@ -468,7 +550,7 @@ describe("editing (R2.11, R2.13, R2.18)", () => {
 
 describe("managers (R2.6, R2.7)", () => {
   const treeManagers = async (unitId: string) => {
-    const tree = (await as(sara).get("/org-units")).body;
+    const tree = (await as(sara).get("/org-units")).body.data;
     const units = tree.departments.flatMap((department: { sections: unknown[] }) => [
       department,
       ...department.sections,
@@ -490,11 +572,11 @@ describe("managers (R2.6, R2.7)", () => {
   it("marks and unmarks a manager", async () => {
     const unit = await unitOf("Treasury");
     const { id } = await inviteActive({ userName: "Faisal", unitId: unit });
-    expect((await as(sara).patch(`/users/${id}`, { isManager: true })).body.user.isManager).toBe(
+    expect((await as(sara).patch(`/users/${id}`, { isManager: true })).body.data.isManager).toBe(
       true,
     );
     expect(await treeManagers(unit)).toEqual(["Faisal"]);
-    expect((await as(sara).patch(`/users/${id}`, { isManager: false })).body.user.isManager).toBe(
+    expect((await as(sara).patch(`/users/${id}`, { isManager: false })).body.data.isManager).toBe(
       false,
     );
     expect(await treeManagers(unit)).toEqual([]);
@@ -505,7 +587,7 @@ describe("managers (R2.6, R2.7)", () => {
     const litigation = await unitOf("Litigation", legal);
     const { id } = await inviteActive({ userName: "Mover", unitId: contracts, isManager: true });
     const res = await as(sara).patch(`/users/${id}`, { unitId: litigation });
-    expect(res.body.user).toMatchObject({ unit: { id: litigation }, isManager: false });
+    expect(res.body.data).toMatchObject({ unit: { id: litigation }, isManager: false });
     expect(await treeManagers(contracts)).toEqual([]);
     expect((await auditOf(id)).at(-1).details).toEqual({
       before: { unitId: contracts, isManager: true },
@@ -518,7 +600,7 @@ describe("managers (R2.6, R2.7)", () => {
     const to = await unitOf("To Unit");
     const { id } = await inviteActive({ unitId: from, isManager: true });
     const res = await as(sara).patch(`/users/${id}`, { unitId: to, isManager: true });
-    expect(res.body.user).toMatchObject({ unit: { id: to }, isManager: true });
+    expect(res.body.data).toMatchObject({ unit: { id: to }, isManager: true });
   });
 
   it("refuses a manager at the organization level, in the API and in the database", async () => {
@@ -534,7 +616,7 @@ describe("managers (R2.6, R2.7)", () => {
     const unit = await unitOf("Leaving Unit");
     const { id } = await inviteActive({ unitId: unit, isManager: true });
     const res = await as(sara).patch(`/users/${id}`, { unitId: null });
-    expect(res.body.user).toMatchObject({ unit: null, isManager: false });
+    expect(res.body.data).toMatchObject({ unit: null, isManager: false });
   });
 });
 
@@ -547,7 +629,7 @@ describe("assigning a role (R3.3, R3.9-R3.11, R3.17)", () => {
     const res = await assign(sara, id, employeeRoleId);
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body.user.role).toEqual({ id: employeeRoleId, name: "Employee", isSystem: false });
+    expect(res.body.data.role).toEqual({ id: employeeRoleId, name: "Employee", isSystem: false });
     expect((await auditOf(id)).at(-1)).toMatchObject({
       action: "user.role_assigned",
       actor_id: saraId,
@@ -570,7 +652,7 @@ describe("assigning a role (R3.3, R3.9-R3.11, R3.17)", () => {
     expect((await as((await login(app, address, PASSWORD)).access).get("/users")).status).toBe(200);
     await assign(sara, id, employeeRoleId);
     const fresh = await login(app, address, PASSWORD);
-    expect(fresh.res.body.user.tenant).toMatchObject({
+    expect(fresh.res.body.data.user.tenant).toMatchObject({
       roleId: employeeRoleId,
       roleName: "Employee",
       permissions: ["org.view"],
@@ -650,7 +732,7 @@ describe("the subset rule for users (R3.10, P3.11)", () => {
     const res = await as(huda).put(`/users/${majedId}/role`, { roleId: employeeRoleId });
     expect(res.status).toBe(403);
     expect(res.body.error.details).toEqual([]);
-    expect((await as(sara).get(`/users/${majedId}`)).body.user.role).toEqual(adminRole());
+    expect((await as(sara).get(`/users/${majedId}`)).body.data.role).toEqual(adminRole());
   });
 
   it("lets Huda deactivate and reactivate a user within her grants, but not a Tenant Admin", async () => {
@@ -666,7 +748,7 @@ describe("the subset rule for users (R3.10, P3.11)", () => {
     const { id: admin } = await inviteActive({ roleId: adminRoleId });
     await as(sara).post(`/users/${admin}/deactivate`);
     expect((await as(huda).post(`/users/${admin}/reactivate`)).status).toBe(403);
-    expect((await as(sara).get(`/users/${admin}`)).body.user.status).toBe("inactive");
+    expect((await as(sara).get(`/users/${admin}`)).body.data.status).toBe("inactive");
   });
 
   it("checks Huda's role as it is now, not as her token says (R3.12)", async () => {
@@ -693,12 +775,12 @@ describe("deactivating and reactivating (R2.12, R2.13)", () => {
     const unit = await unitOf("Deactivation Unit");
     const { id, email: address } = await inviteActive({ unitId: unit, isManager: true });
     const session = await login(app, address, PASSWORD);
-    const usage = async () => (await as(sara).get("/subscription")).body.usage.activeUsers;
+    const usage = async () => (await as(sara).get("/subscription")).body.data.usage.activeUsers;
     const before = await usage();
 
     const res = await as(sara).post(`/users/${id}/deactivate`);
     expect(res.status).toBe(200);
-    expect(res.body.user).toMatchObject({
+    expect(res.body.data).toMatchObject({
       status: "inactive",
       isManager: false,
       unit: { id: unit },
@@ -748,7 +830,7 @@ describe("deactivating and reactivating (R2.12, R2.13)", () => {
     await as(sara).post(`/users/${id}/deactivate`);
     const res = await as(sara).post(`/users/${id}/reactivate`);
     expect(res.status).toBe(200);
-    expect(res.body.user).toMatchObject({ status: "active", isManager: false });
+    expect(res.body.data).toMatchObject({ status: "active", isManager: false });
     expect((await login(app, address, PASSWORD)).res.status).toBe(200);
     expect((await auditOf(id)).at(-1).action).toBe("user.reactivated");
     expect((await as(sara).post(`/users/${id}/reactivate`)).status).toBe(200);

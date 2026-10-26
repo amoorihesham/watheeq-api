@@ -1,5 +1,6 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { encodeCursor, fingerprintOf } from "../src/http/list.js";
 import { createLogger } from "../src/logging/logger.js";
 import { PERMISSION_CATALOG, TENANT_PERMISSIONS } from "../src/modules/tenant-access/index.js";
 import { testApp } from "./helpers/app.js";
@@ -52,7 +53,7 @@ const nextName = (prefix = "Role") => `${prefix} ${++counter}`;
 async function createRole(permissions: object[] = [], name = nextName()): Promise<string> {
   const res = await as(sara).post("/roles", { name, permissions });
   expect(res.status).toBe(201);
-  return res.body.role.id;
+  return res.body.data.id;
 }
 
 /** A member of Al-Noor holding `roleId`, signed in; returns their id and access token. */
@@ -129,16 +130,46 @@ afterAll(async () => {
 
 describe("the permission catalog (R3.1)", () => {
   it("lists every permission with the scopes it allows, in catalog order", async () => {
-    const res = await as(huda).get("/permissions");
+    const res = await as(huda).get("/permissions?limit=100");
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body.permissions).toEqual(
+    expect(res.body.data).toEqual(
       TENANT_PERMISSIONS.map((key) => ({ key, scopes: PERMISSION_CATALOG[key] })),
     );
-    expect(res.body.permissions.find((p: { key: string }) => p.key === "user.view")).toEqual({
+    expect(res.body.page).toEqual({ nextCursor: null, total: TENANT_PERMISSIONS.length });
+    expect(res.body.data.find((p: { key: string }) => p.key === "user.view")).toEqual({
       key: "user.view",
       scopes: ["own", "section", "department", "organization"],
     });
+  });
+
+  it("pages the catalog in catalog order, 25 at a time by default", async () => {
+    const first = await as(huda).get("/permissions");
+    expect(first.body.data.map((p: { key: string }) => p.key)).toEqual(
+      TENANT_PERMISSIONS.slice(0, 25),
+    );
+    expect(first.body.page).toEqual({
+      nextCursor: expect.any(String),
+      total: TENANT_PERMISSIONS.length,
+    });
+    const second = await as(huda).get(`/permissions?cursor=${first.body.page.nextCursor}`);
+    expect(second.body.data.map((p: { key: string }) => p.key)).toEqual(
+      TENANT_PERMISSIONS.slice(25),
+    );
+    expect(second.body.page.nextCursor).toBeNull();
+  });
+
+  it("refuses a cursor naming a permission the catalog no longer has, another list's cursor, and a broken one", async () => {
+    const stale = encodeCursor(["gone.permission"], fingerprintOf("permissions", {}));
+    const roles = await as(huda).get("/roles?limit=1");
+    for (const cursor of [stale, roles.body.page.nextCursor, "broken"]) {
+      const res = await as(huda).get(`/permissions?cursor=${cursor}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error.details).toEqual([{ path: "cursor", code: "invalid_cursor" }]);
+    }
+    expect((await as(huda).get("/permissions?limit=0")).body.error.details).toEqual([
+      { path: "limit", code: "too_small" },
+    ]);
   });
 
   it("requires role.view", async () => {
@@ -150,7 +181,7 @@ describe("listing and viewing roles", () => {
   it("shows the Tenant Admin with every permission at its widest scope, and its holders", async () => {
     const res = await as(huda).get(`/roles/${adminRoleId}`);
     expect(res.status).toBe(200);
-    expect(res.body.role).toEqual({
+    expect(res.body.data).toEqual({
       id: adminRoleId,
       name: "Tenant Admin",
       isSystem: true,
@@ -168,7 +199,7 @@ describe("listing and viewing roles", () => {
     const res = await as(huda).get("/roles");
     expect(res.status).toBe(200);
     const byName = Object.fromEntries(
-      res.body.roles.map((role: { name: string }) => [role.name, role]),
+      res.body.data.map((role: { name: string }) => [role.name, role]),
     );
     expect(byName["Head of Legal"]).toMatchObject({
       isSystem: false,
@@ -179,16 +210,39 @@ describe("listing and viewing roles", () => {
       { key: "user.view", scope: "section" },
       org("role.manage"),
     ]);
-    const names = res.body.roles.map((role: { name: string }) => role.name);
+    const names = res.body.data.map((role: { name: string }) => role.name);
     expect(names).toEqual(
       [...names].sort((a: string, b: string) => a.localeCompare(b, "und", { sensitivity: "base" })),
     );
     expect(names).not.toContain("Member (Al-Rashid)");
   });
 
+  it("pages the roles by name, with the total on every page and no cursor at the end", async () => {
+    const all = await as(huda).get("/roles?limit=100");
+    const names = all.body.data.map((role: { name: string }) => role.name);
+    expect(all.body.page).toEqual({ nextCursor: null, total: names.length });
+    expect(names.length).toBeGreaterThan(3);
+
+    const seen: string[] = [];
+    let cursor = "";
+    for (;;) {
+      const res = await as(huda).get(`/roles?limit=2${cursor ? `&cursor=${cursor}` : ""}`);
+      expect(res.body.page.total).toBe(names.length);
+      seen.push(...res.body.data.map((role: { name: string }) => role.name));
+      if (!res.body.page.nextCursor) {
+        break;
+      }
+      cursor = res.body.page.nextCursor;
+    }
+    expect(seen).toEqual(names);
+    expect((await as(huda).get("/roles?limit=101")).body.error.details).toEqual([
+      { path: "limit", code: "too_big" },
+    ]);
+  });
+
   it("never shows another tenant's roles (R3.18)", async () => {
     const res = await as(rashid).get("/roles");
-    expect(res.body.roles.map((role: { id: string }) => role.id)).not.toContain(headOfLegal);
+    expect(res.body.data.map((role: { id: string }) => role.id)).not.toContain(headOfLegal);
     for (const id of [headOfLegal, "00000000-0000-4000-8000-000000000000", "not-a-uuid"]) {
       expect((await as(rashid).get(`/roles/${id}`)).status).toBe(404);
       expect((await as(rashid).patch(`/roles/${id}`, { name: "Taken" })).status).toBe(404);
@@ -211,16 +265,16 @@ describe("creating a role (R3.4, R3.5)", () => {
     expect(res.status).toBe(201);
     expect(res.headers["cache-control"]).toBe("no-store");
     const grants = [org("org.view"), { key: "user.view", scope: "department" }];
-    expect(res.body.role).toMatchObject({
+    expect(res.body.data).toMatchObject({
       name: "Legal Staff",
       isSystem: false,
       permissions: grants,
       memberCount: 0,
     });
-    expect((await as(sara).get(`/roles/${res.body.role.id}`)).body.role.permissions).toEqual(
+    expect((await as(sara).get(`/roles/${res.body.data.id}`)).body.data.permissions).toEqual(
       grants,
     );
-    expect(await auditOf(res.body.role.id)).toMatchObject([
+    expect(await auditOf(res.body.data.id)).toMatchObject([
       {
         action: "role.created",
         tenant_id: alNoor,
@@ -232,7 +286,7 @@ describe("creating a role (R3.4, R3.5)", () => {
   it("allows a role with no permissions", async () => {
     const res = await as(sara).post("/roles", { name: nextName("Requester"), permissions: [] });
     expect(res.status).toBe(201);
-    expect(res.body.role.permissions).toEqual([]);
+    expect(res.body.data.permissions).toEqual([]);
   });
 
   it("reports each unknown permission, duplicate, and disallowed scope", async () => {
@@ -293,12 +347,12 @@ describe("editing a role (R3.6)", () => {
       permissions: [{ key: "user.view", scope: "section" }],
     });
     expect(res.status).toBe(200);
-    expect(res.body.role).toMatchObject({
+    expect(res.body.data).toMatchObject({
       name: "After Edit",
       permissions: [{ key: "user.view", scope: "section" }],
     });
-    expect(Date.parse(res.body.role.updatedAt)).toBeGreaterThan(
-      Date.parse(res.body.role.createdAt),
+    expect(Date.parse(res.body.data.updatedAt)).toBeGreaterThan(
+      Date.parse(res.body.data.createdAt),
     );
     expect((await auditOf(id)).at(-1)).toMatchObject({
       action: "role.updated",
@@ -431,7 +485,7 @@ describe("the subset rule (R3.8)", () => {
       expect(res.body.error.details).toEqual([]);
     }
     expect((await as(huda).delete(`/roles/${financeAdmin}`)).status).toBe(403);
-    expect((await as(sara).get(`/roles/${financeAdmin}`)).body.role.name).toBe("Finance Admin");
+    expect((await as(sara).get(`/roles/${financeAdmin}`)).body.data.name).toBe("Finance Admin");
   });
 
   it("lets Huda narrow her own role, but not widen it", async () => {
@@ -498,7 +552,7 @@ describe("concurrency (P3.5)", () => {
     } finally {
       client.release();
     }
-    expect((await as(sara).get(`/roles/${clerk}`)).body.role.permissions).toEqual([
+    expect((await as(sara).get(`/roles/${clerk}`)).body.data.permissions).toEqual([
       org("org.view"),
       org("user.deactivate"),
     ]);
@@ -579,6 +633,6 @@ describe("tenant isolation and subscription state", () => {
 
   it("records the actor of every role write", async () => {
     const res = await as(huda).post("/roles", { name: nextName(), permissions: [] });
-    expect((await auditOf(res.body.role.id))[0].actor_id).toBe(hudaId);
+    expect((await auditOf(res.body.data.id))[0].actor_id).toBe(hudaId);
   });
 });

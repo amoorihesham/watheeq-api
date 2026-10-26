@@ -86,17 +86,20 @@ describe("login (R0.10, R0.11)", () => {
     } = await login(app, "  Sara@Auth-AlNoor.test ", PASSWORD);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
-      user: {
-        id: saraId,
-        email: SARA,
-        userName: "Sara Al-Qahtani",
-        role: "user",
-        tenant: {
-          id: alNoor,
-          roleId: adminRoleId,
-          roleName: "Tenant Admin",
-          permissions: TENANT_PERMISSIONS,
+      data: {
+        user: {
+          id: saraId,
+          email: SARA,
+          userName: "Sara Al-Qahtani",
+          role: "user",
+          tenant: {
+            id: alNoor,
+            roleId: adminRoleId,
+            roleName: "Tenant Admin",
+            permissions: TENANT_PERMISSIONS,
+          },
         },
+        subscription: null,
       },
     });
     expect(res.headers["cache-control"]).toBe("no-store");
@@ -146,7 +149,7 @@ describe("login (R0.10, R0.11)", () => {
   it("logs in an operator created by the CLI, with no tenant (R0.13)", async () => {
     const { res, access } = await login(app, OMAR, PASSWORD);
     expect(res.status).toBe(200);
-    expect(res.body.user).toMatchObject({
+    expect(res.body.data.user).toMatchObject({
       email: OMAR,
       userName: "Omar Al-Harbi",
       role: "operator",
@@ -168,6 +171,13 @@ describe("login (R0.10, R0.11)", () => {
       });
       expect(res.headers["set-cookie"]).toBeUndefined();
     }
+  });
+
+  it("answers login and refresh with exactly what /auth/me answers (Q17)", async () => {
+    const { res, access, refresh: refreshToken } = await login(app, SARA, PASSWORD);
+    expect(res.body).toEqual((await me(access)).body);
+    const refreshed = await refresh(refreshToken);
+    expect(refreshed.body).toEqual(res.body);
   });
 
   it("rejects a malformed body and an oversized password before any lookup", async () => {
@@ -198,7 +208,7 @@ describe("access token (R0.11)", () => {
     const { access } = await login(app, SARA, PASSWORD);
     const res = await me(access);
     expect(res.status).toBe(200);
-    expect(res.body.user).toMatchObject({ id: saraId, tenant: { roleName: "Tenant Admin" } });
+    expect(res.body.data.user).toMatchObject({ id: saraId, tenant: { roleName: "Tenant Admin" } });
   });
 
   const sign = (
@@ -268,7 +278,7 @@ describe("refresh (R0.12a)", () => {
     const first = await login(app, SARA, PASSWORD);
     const res = await refresh(first.refresh);
     expect(res.status).toBe(200);
-    expect(res.body.user).toMatchObject({ id: saraId });
+    expect(res.body.data.user).toMatchObject({ id: saraId });
     const cookies = setCookiesOf(res);
     const nextRefresh = cookieValue(cookies[REFRESH_COOKIE]);
     expect(nextRefresh).not.toBe(first.refresh);

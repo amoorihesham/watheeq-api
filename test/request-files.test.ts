@@ -33,7 +33,7 @@ const detailsOf = (res: { body: { error: { details: unknown } } }) => res.body.e
 async function upload(person: PersonType, name = "contract.pdf"): Promise<string> {
   const res = await uploadAs(app, alNoor.tokens[person], name, fixture("contract.pdf"));
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body.file.id;
+  return res.body.data.id;
 }
 
 const draft = (overrides: object = {}) => ({

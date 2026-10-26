@@ -157,7 +157,7 @@ describe("submission, withdrawal, attachments, and narrowing tell nobody (4.3)",
     );
     expect(upload.status, JSON.stringify(upload.body)).toBe(201);
     const attached = await as("khalid").post(`/requests/${id}/files`, {
-      fileIds: [upload.body.file.id],
+      fileIds: [upload.body.data.id],
     });
     expect(attached.status, JSON.stringify(attached.body)).toBe(200);
     const withdrawn = await as("khalid").post(`/requests/${id}/withdraw`, { reason: "changed" });

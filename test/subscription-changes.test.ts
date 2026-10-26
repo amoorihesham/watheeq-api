@@ -43,7 +43,7 @@ async function createTenant(slug: string): Promise<string> {
     },
   });
   expect(res.status).toBe(201);
-  return res.body.tenant.id;
+  return res.body.data.tenant.id;
 }
 
 const change = (tenantId: string, body: object) =>
@@ -74,7 +74,7 @@ beforeAll(async () => {
       paymentPeriod: "monthly",
       discountPercent: 15,
     })
-  ).body.plan.id;
+  ).body.data.id;
   professionalId = (
     await plan({
       name: "SC Professional",
@@ -85,7 +85,7 @@ beforeAll(async () => {
       paymentPeriod: "yearly",
       discountPercent: 0,
     })
-  ).body.plan.id;
+  ).body.data.id;
   const { rows } = await pool.query(
     "select (now() at time zone 'Asia/Riyadh')::date::text as today",
   );
@@ -107,7 +107,14 @@ describe("change a subscription (R1.6)", () => {
     });
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body).toEqual({
+    expect(res.body.data).toEqual({
+      tenant: {
+        id,
+        name: expect.any(String),
+        slug: "sc-al-noor",
+        ownerId: expect.any(String),
+        createdAt: expect.any(String),
+      },
       subscription: {
         planId: professionalId,
         planName: "SC Professional",
@@ -133,6 +140,7 @@ describe("change a subscription (R1.6)", () => {
         storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
       },
     });
+    expect(res.body).toEqual((await as(omar).get(`/operator/tenants/${id}`)).body);
 
     const [entry] = await changesOf(id);
     expect(entry).toMatchObject({
@@ -165,7 +173,7 @@ describe("change a subscription (R1.6)", () => {
       endDate: addDays(today, 364),
       customerDiscountPercent: 0,
     });
-    expect(res.body.subscription.pricing).toMatchObject({
+    expect(res.body.data.subscription.pricing).toMatchObject({
       customerDiscountPercent: 0,
       effectivePriceHalalas: 85_000,
     });
@@ -175,13 +183,13 @@ describe("change a subscription (R1.6)", () => {
     const id = await createTenant("sc-recopy");
     await as(omar).patch(`/operator/plans/${basicId}`, { priceHalalas: 120_000 });
     const before = await as(omar).get(`/operator/tenants/${id}`);
-    expect(before.body.subscription.pricing.priceHalalas).toBe(100_000);
+    expect(before.body.data.subscription.pricing.priceHalalas).toBe(100_000);
     const res = await change(id, {
       planId: basicId,
       startDate: today,
       endDate: addDays(today, 364),
     });
-    expect(res.body.subscription.pricing.priceHalalas).toBe(120_000);
+    expect(res.body.data.subscription.pricing.priceHalalas).toBe(120_000);
     await as(omar).patch(`/operator/plans/${basicId}`, { priceHalalas: 100_000 });
   });
 
@@ -190,7 +198,7 @@ describe("change a subscription (R1.6)", () => {
     await change(id, { planId: professionalId, startDate: today, endDate: addDays(today, 364) });
     await as(omar).patch(`/operator/plans/${professionalId}`, { userLimit: 5, priceHalalas: 1 });
     const res = await as(omar).get(`/operator/tenants/${id}`);
-    expect(res.body.subscription).toMatchObject({
+    expect(res.body.data.subscription).toMatchObject({
       userLimit: 50,
       storageLimitGb: 10,
       pricing: { priceHalalas: 1_100_000 },
@@ -213,8 +221,8 @@ describe("end early and renew (R1.8)", () => {
       reason: "Contract terminated",
     });
     expect(ended.status).toBe(200);
-    expect(ended.body.subscription.state).toBe("read_only");
-    expect((await as(omar).get(`/operator/tenants/${id}`)).body.subscription.state).toBe(
+    expect(ended.body.data.subscription.state).toBe("read_only");
+    expect((await as(omar).get(`/operator/tenants/${id}`)).body.data.subscription.state).toBe(
       "read_only",
     );
 
@@ -224,8 +232,10 @@ describe("end early and renew (R1.8)", () => {
       endDate: addDays(today, 364),
       reason: "Renewed",
     });
-    expect(renewed.body.subscription.state).toBe("active");
-    expect((await as(omar).get(`/operator/tenants/${id}`)).body.subscription.state).toBe("active");
+    expect(renewed.body.data.subscription.state).toBe("active");
+    expect((await as(omar).get(`/operator/tenants/${id}`)).body.data.subscription.state).toBe(
+      "active",
+    );
     expect((await changesOf(id)).map((c) => c.reason)).toEqual(["Contract terminated", "Renewed"]);
   });
 });
@@ -318,7 +328,7 @@ describe("concurrent changes (R1.5)", () => {
     const [first, second] = await changesOf(id);
     expect(second.details.before).toEqual(first.details.after);
     const current = await as(omar).get(`/operator/tenants/${id}`);
-    expect(current.body.subscription.endDate).toBe(second.details.after.endDate);
+    expect(current.body.data.subscription.endDate).toBe(second.details.after.endDate);
     const { rows } = await pool.query(
       "select count(*)::int as n from subscriptions where tenant_id = $1",
       [id],

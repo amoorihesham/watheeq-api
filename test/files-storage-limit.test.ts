@@ -5,6 +5,7 @@ import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
 import { connectToTestDb, seedUser } from "./helpers/db.js";
 import { filesOf, fixture, seedFiles, uploadAs } from "./helpers/files.js";
+import { listAll } from "./helpers/list-all.js";
 import { connectToTestStore } from "./helpers/storage.js";
 
 // Phase 5.5 spec, R5.5.17-R5.5.21: the storage limit on plans and subscriptions, and storage usage in both views.
@@ -39,7 +40,7 @@ const planBody = (name: string, storageLimitGb: number) => ({
 });
 
 const createPlan = async (name: string, storageLimitGb: number): Promise<string> =>
-  (await as(omar).post("/operator/plans", planBody(name, storageLimitGb))).body.plan.id;
+  (await as(omar).post("/operator/plans", planBody(name, storageLimitGb))).body.data.id;
 
 /** Al-Noor through the real API, so its subscription copies the plan as production does. */
 async function createTenant(planId: string) {
@@ -51,7 +52,7 @@ async function createTenant(planId: string) {
     subscription: { planId, startDate: today, endDate: today },
   });
   expect(res.status).toBe(201);
-  const tenantId: string = res.body.tenant.id;
+  const tenantId: string = res.body.data.tenant.id;
   // The owner sets no password through the API here: give them one so they can log in.
   await pool.query(
     "update users set password_hash = $2, email_verified_at = now() where email = $1",
@@ -81,13 +82,11 @@ describe("plans carry a storage limit (R5.5.17)", () => {
   it("creates a plan with storageLimitGb and returns it", async () => {
     const res = await as(omar).post("/operator/plans", planBody("Limit Business", 20));
     expect(res.status).toBe(201);
-    expect(res.body.plan).toMatchObject({ userLimit: 50, storageLimitGb: 20 });
-    const got = await as(omar).get(`/operator/plans/${res.body.plan.id}`);
-    expect(got.body.plan.storageLimitGb).toBe(20);
-    const list = await as(omar).get("/operator/plans");
-    expect(
-      list.body.plans.find((p: { name: string }) => p.name === "Limit Business"),
-    ).toMatchObject({
+    expect(res.body.data).toMatchObject({ userLimit: 50, storageLimitGb: 20 });
+    const got = await as(omar).get(`/operator/plans/${res.body.data.id}`);
+    expect(got.body.data.storageLimitGb).toBe(20);
+    const list = await listAll<{ name: string }>(app, omar, "/operator/plans");
+    expect(list.items.find((p) => p.name === "Limit Business")).toMatchObject({
       storageLimitGb: 20,
     });
   });
@@ -121,7 +120,7 @@ describe("plans carry a storage limit (R5.5.17)", () => {
     const planId = await createPlan("Limit Updatable", 5);
     const res = await as(omar).patch(`/operator/plans/${planId}`, { storageLimitGb: 8 });
     expect(res.status).toBe(200);
-    expect(res.body.plan.storageLimitGb).toBe(8);
+    expect(res.body.data.storageLimitGb).toBe(8);
     const bad = await as(omar).patch(`/operator/plans/${planId}`, { storageLimitGb: 0 });
     expect(bad.status).toBe(400);
     const { rows } = await pool.query(
@@ -137,11 +136,11 @@ describe("a subscription copies the limit (R5.5.17)", () => {
   it("copies 20 GB for Al-Noor, and a later plan change does not touch it", async () => {
     const planId = await createPlan("Limit Copy Business", 20);
     const { tenantId, create } = await createTenant(planId);
-    expect(create.body.subscription.storageLimitGb).toBe(20);
+    expect(create.body.data.subscription.storageLimitGb).toBe(20);
     await as(omar).patch(`/operator/plans/${planId}`, { storageLimitGb: 30 });
     const view = await as(omar).get(`/operator/tenants/${tenantId}`);
-    expect(view.body.subscription.storageLimitGb).toBe(20);
-    expect(view.body.usage.storage.limitBytes).toBe(20 * GB);
+    expect(view.body.data.subscription.storageLimitGb).toBe(20);
+    expect(view.body.data.usage.storage.limitBytes).toBe(20 * GB);
   });
 
   it("copies the plan's current limit again when the subscription is changed", async () => {
@@ -154,8 +153,12 @@ describe("a subscription copies the limit (R5.5.17)", () => {
       endDate: today,
     });
     expect(res.status).toBe(200);
-    expect(res.body.subscription.storageLimitGb).toBe(40);
-    expect(res.body.usage.storage).toEqual({ usedBytes: 0, limitBytes: 40 * GB, overLimit: false });
+    expect(res.body.data.subscription.storageLimitGb).toBe(40);
+    expect(res.body.data.usage.storage).toEqual({
+      usedBytes: 0,
+      limitBytes: 40 * GB,
+      overLimit: false,
+    });
     const { rows } = await pool.query(
       "select details from audit_log where tenant_id = $1 and action = 'subscription.changed'",
       [tenantId],
@@ -193,26 +196,30 @@ describe("usage in both views (R5.5.18, R5.5.21)", () => {
     const expected = { usedBytes: 4_000_000, limitBytes: 20 * GB, overLimit: false };
     const mine = await as(sara).get("/subscription");
     expect(mine.status).toBe(200);
-    expect(mine.body.subscription.storageLimitGb).toBe(20);
-    expect(mine.body.usage).toEqual({
+    expect(mine.body.data.subscription.storageLimitGb).toBe(20);
+    expect(mine.body.data.usage).toEqual({
       activeUsers: 1,
       userLimit: 50,
       overLimit: false,
       storage: expected,
     });
     const operatorView = await as(omar).get(`/operator/tenants/${tenantId}`);
-    expect(operatorView.body.usage.storage).toEqual(expected);
-    const list = await as(omar).get("/operator/tenants");
-    const row = list.body.tenants.find((t: { tenant: { id: string } }) => t.tenant.id === tenantId);
-    expect(row.usage.storage).toEqual(expected);
+    expect(operatorView.body.data.usage.storage).toEqual(expected);
+    const list = await listAll<{ tenant: { id: string }; usage: { storage: unknown } }>(
+      app,
+      omar,
+      "/operator/tenants",
+    );
+    const row = list.items.find((t) => t.tenant.id === tenantId);
+    expect(row?.usage.storage).toEqual(expected);
   });
 
   it("counts only the tenant's own files", async () => {
     const a = await createTenant(await createPlan("Limit Usage A", 20));
     const b = await createTenant(await createPlan("Limit Usage B", 20));
     await seedFiles(pool, { tenantId: a.tenantId, userId: a.ownerId, count: 3, sizeBytes: 1000 });
-    expect((await as(b.sara).get("/subscription")).body.usage.storage.usedBytes).toBe(0);
-    expect((await as(a.sara).get("/subscription")).body.usage.storage.usedBytes).toBe(3000);
+    expect((await as(b.sara).get("/subscription")).body.data.usage.storage.usedBytes).toBe(0);
+    expect((await as(a.sara).get("/subscription")).body.data.usage.storage.usedBytes).toBe(3000);
   });
 
   it("counts a real upload at its size", async () => {
@@ -220,7 +227,9 @@ describe("usage in both views (R5.5.18, R5.5.21)", () => {
     const bytes = fixture("contract.pdf");
     const res = await uploadAs(app, sara, "draft.pdf", bytes);
     expect(res.status).toBe(201);
-    expect((await as(sara).get("/subscription")).body.usage.storage.usedBytes).toBe(bytes.length);
+    expect((await as(sara).get("/subscription")).body.data.usage.storage.usedBytes).toBe(
+      bytes.length,
+    );
   });
 });
 
@@ -247,7 +256,7 @@ describe("a downgrade below the usage (R5.5.20)", () => {
       endDate: today,
     });
     expect(res.status).toBe(200);
-    expect(res.body.usage.storage).toEqual({
+    expect(res.body.data.usage.storage).toEqual({
       usedBytes: used + fixture("contract.pdf").length,
       limitBytes: 10 * GB,
       overLimit: true,
@@ -267,7 +276,7 @@ describe("a downgrade below the usage (R5.5.20)", () => {
       [tenantId, Math.ceil((8.1 * GB) / 26_214_400)],
     );
     const view = await as(sara).get("/subscription");
-    expect(view.body.usage.storage.overLimit).toBe(false);
+    expect(view.body.data.usage.storage.overLimit).toBe(false);
     expect((await uploadAs(app, sara, "now-fits.pdf", fixture("contract.pdf"))).status).toBe(201);
   }, 60_000);
 });

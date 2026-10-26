@@ -37,7 +37,7 @@ const as = (access: string) => ({
 async function unit(name: string, parentId?: string): Promise<string> {
   const res = await as(sara).post("/org-units", parentId ? { name, parentId } : { name });
   expect(res.status).toBe(201);
-  return res.body.unit.id;
+  return res.body.data.id;
 }
 
 const placeKhalid = (unitId: string | null) =>
@@ -74,7 +74,7 @@ describe("a new tenant (R2.1)", () => {
     const res = await as(rashid).get("/org-units");
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body).toEqual({ organization: { memberCount: 1 }, departments: [] });
+    expect(res.body).toEqual({ data: { organization: { memberCount: 1 }, departments: [] } });
   });
 });
 
@@ -82,26 +82,26 @@ describe("creating units (R2.2, R2.3)", () => {
   it("creates a department, then a section under it, and audits both", async () => {
     const finance = await as(sara).post("/org-units", { name: "  Finance  " });
     expect(finance.status).toBe(201);
-    expect(finance.body.unit).toMatchObject({
+    expect(finance.body.data).toMatchObject({
       kind: "department",
       parentId: null,
       name: "Finance",
     });
     const procurement = await as(sara).post("/org-units", {
       name: "Procurement",
-      parentId: finance.body.unit.id,
+      parentId: finance.body.data.id,
     });
     expect(procurement.status).toBe(201);
-    expect(procurement.body.unit).toMatchObject({
+    expect(procurement.body.data).toMatchObject({
       kind: "section",
-      parentId: finance.body.unit.id,
+      parentId: finance.body.data.id,
     });
-    expect(await auditRows(procurement.body.unit.id)).toEqual([
+    expect(await auditRows(procurement.body.data.id)).toEqual([
       {
         action: "org_unit.created",
         tenant_id: alNoor,
         actor_type: "user",
-        details: { name: "Procurement", kind: "section", parentId: finance.body.unit.id },
+        details: { name: "Procurement", kind: "section", parentId: finance.body.data.id },
       },
     ]);
   });
@@ -115,7 +115,7 @@ describe("creating units (R2.2, R2.3)", () => {
   });
 
   it("refuses a parent that does not exist or belongs to another tenant", async () => {
-    const rashidHr = (await as(rashid).post("/org-units", { name: "HR" })).body.unit.id;
+    const rashidHr = (await as(rashid).post("/org-units", { name: "HR" })).body.data.id;
     for (const parentId of [rashidHr, "00000000-0000-4000-8000-000000000000"]) {
       const res = await as(sara).post("/org-units", { name: "Payroll", parentId });
       expect(res.status).toBe(400);
@@ -168,7 +168,7 @@ describe("the tree (R2.15)", () => {
     ]);
     const admin = (await login(app, "admin@ou-tree.test", PASSWORD)).access;
     const create = async (name: string, parentId?: string) =>
-      (await as(admin).post("/org-units", parentId ? { name, parentId } : { name })).body.unit.id;
+      (await as(admin).post("/org-units", parentId ? { name, parentId } : { name })).body.data.id;
     const legal = await create("legal");
     const finance = await create("Finance");
     const procurement = await create("Procurement", finance);
@@ -179,20 +179,22 @@ describe("the tree (R2.15)", () => {
     ]);
     const res = await as(admin).get("/org-units");
     expect(res.body).toEqual({
-      organization: { memberCount: 1 },
-      departments: [
-        {
-          id: finance,
-          name: "Finance",
-          managers: [],
-          memberCount: 0,
-          sections: [
-            { id: budgeting, name: "budgeting", managers: [], memberCount: 0 },
-            { id: procurement, name: "Procurement", managers: [], memberCount: 1 },
-          ],
-        },
-        { id: legal, name: "legal", managers: [], memberCount: 0, sections: [] },
-      ],
+      data: {
+        organization: { memberCount: 1 },
+        departments: [
+          {
+            id: finance,
+            name: "Finance",
+            managers: [],
+            memberCount: 0,
+            sections: [
+              { id: budgeting, name: "budgeting", managers: [], memberCount: 0 },
+              { id: procurement, name: "Procurement", managers: [], memberCount: 1 },
+            ],
+          },
+          { id: legal, name: "legal", managers: [], memberCount: 0, sections: [] },
+        ],
+      },
     });
   });
 
@@ -205,7 +207,7 @@ describe("the tree (R2.15)", () => {
 
   it("never shows another tenant's units", async () => {
     const res = await as(rashid).get("/org-units");
-    const names = res.body.departments.map((department: { name: string }) => department.name);
+    const names = res.body.data.departments.map((department: { name: string }) => department.name);
     expect(names).not.toContain("Finance");
   });
 });
@@ -215,7 +217,7 @@ describe("renaming and moving (R2.4)", () => {
     const hr = await unit("Human Resources");
     const res = await as(sara).patch(`/org-units/${hr}`, { name: "People" });
     expect(res.status).toBe(200);
-    expect(res.body.unit.name).toBe("People");
+    expect(res.body.data.name).toBe("People");
     const [, updated] = await auditRows(hr);
     expect(updated).toMatchObject({
       action: "org_unit.updated",
@@ -233,7 +235,7 @@ describe("renaming and moving (R2.4)", () => {
     await placeKhalid(field);
     const res = await as(sara).patch(`/org-units/${field}`, { parentId: marketing });
     expect(res.status).toBe(200);
-    expect(res.body.unit.parentId).toBe(marketing);
+    expect(res.body.data.parentId).toBe(marketing);
     const { rows } = await pool.query("select unit_id from tenant_members where user_id = $1", [
       khalidId,
     ]);
@@ -272,12 +274,12 @@ describe("renaming and moving (R2.4)", () => {
   });
 
   it("answers 404 for another tenant's unit, an unknown id, and a non-UUID (R2.19)", async () => {
-    const rashidUnit = (await as(rashid).post("/org-units", { name: "Rashid Only" })).body.unit.id;
+    const rashidUnit = (await as(rashid).post("/org-units", { name: "Rashid Only" })).body.data.id;
     for (const id of [rashidUnit, "00000000-0000-4000-8000-000000000000", "not-a-uuid"]) {
       expect((await as(sara).patch(`/org-units/${id}`, { name: "Taken Over" })).status).toBe(404);
       expect((await as(sara).delete(`/org-units/${id}`)).status).toBe(404);
     }
-    expect((await as(rashid).get("/org-units")).body.departments).toContainEqual(
+    expect((await as(rashid).get("/org-units")).body.data.departments).toContainEqual(
       expect.objectContaining({ id: rashidUnit, name: "Rashid Only" }),
     );
   });
@@ -357,7 +359,7 @@ describe("deleting (R2.5)", () => {
 describe("tenant isolation in the database (P2.2)", () => {
   it("refuses a member placed in another tenant's unit, even by a query that forgets the filter", async () => {
     const other = await seedTenant(pool, "ou-other", [{ email: "x@ou-other.test" }]);
-    const rashidUnit = (await as(rashid).post("/org-units", { name: "Rashid Unit" })).body.unit.id;
+    const rashidUnit = (await as(rashid).post("/org-units", { name: "Rashid Unit" })).body.data.id;
     await expect(
       pool.query("update tenant_members set unit_id = $2 where tenant_id = $1", [
         other.id,
@@ -367,7 +369,7 @@ describe("tenant isolation in the database (P2.2)", () => {
   });
 
   it("refuses a section under another tenant's department", async () => {
-    const rashidDept = (await as(rashid).post("/org-units", { name: "Rashid Dept" })).body.unit.id;
+    const rashidDept = (await as(rashid).post("/org-units", { name: "Rashid Dept" })).body.data.id;
     await expect(
       pool.query(
         "insert into org_units (tenant_id, kind, parent_id, name) values ($1, 'section', $2, 'Smuggled')",

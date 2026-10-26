@@ -566,7 +566,7 @@ describe("Grace and Read-only (R7.9)", () => {
       expect(await check("2026-11-08T10:01")).toEqual({ ...NONE, r2: 1 });
       const res = await as("faisal").get("/notifications");
       expect(res.status).toBe(200);
-      expect(res.body.notifications.map((entry: { kind: string }) => entry.kind)).toContain(
+      expect(res.body.data.map((entry: { kind: string }) => entry.kind)).toContain(
         "request.breached",
       );
     } finally {

@@ -98,7 +98,7 @@ const setSubscriptionEnd = (daysFromToday: number) =>
 async function pendingFile(person: PersonType, name = "budget.pdf"): Promise<string> {
   const res = await uploadAs(app, alNoor.tokens[person], name, fixture("contract.pdf"));
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body.file.id;
+  return res.body.data.id;
 }
 
 beforeAll(async () => {

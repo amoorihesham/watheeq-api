@@ -39,7 +39,7 @@ const createPlan = async (name: string, userLimit: number): Promise<string> =>
       priceHalalas: 100_000,
       paymentPeriod: "monthly",
     })
-  ).body.plan.id;
+  ).body.data.id;
 
 /** A tenant through the real API; its owner takes the first seat. */
 async function createTenant(slug: string, planId: string): Promise<string> {
@@ -50,7 +50,7 @@ async function createTenant(slug: string, planId: string): Promise<string> {
     subscription: { planId, startDate: today, endDate: today },
   });
   expect(res.status).toBe(201);
-  return res.body.tenant.id;
+  return res.body.data.tenant.id;
 }
 
 /** Phase 2's "add user": the seat check, then the insert, in the caller's transaction. */
@@ -238,7 +238,7 @@ describe("a downgrade below the user count (R1.13, D15)", () => {
       reason: "Downgraded to Small",
     });
     expect(downgrade.status).toBe(200);
-    expect(downgrade.body.usage).toEqual({
+    expect(downgrade.body.data.usage).toEqual({
       activeUsers: 4,
       userLimit: 2,
       overLimit: true,
@@ -291,7 +291,7 @@ describe("a downgrade below the user count (R1.13, D15)", () => {
 
     release();
     await addition;
-    expect((await downgrade).body.usage).toEqual({
+    expect((await downgrade).body.data.usage).toEqual({
       activeUsers: 2,
       userLimit: 1,
       overLimit: true,

@@ -60,10 +60,10 @@ describe("create a plan (R1.1, R1.14)", () => {
     const res = await as(omar).post("/operator/plans", basic);
     expect(res.status).toBe(201);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body.plan).toMatchObject(basic);
-    expect(res.body.plan.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(res.body.data).toMatchObject(basic);
+    expect(res.body.data.id).toMatch(/^[0-9a-f-]{36}$/);
 
-    const audit = await auditFor(res.body.plan.id);
+    const audit = await auditFor(res.body.data.id);
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({
       tenant_id: null,
@@ -80,7 +80,7 @@ describe("create a plan (R1.1, R1.14)", () => {
       name: "Plans No Discount",
       discountPercent: undefined,
     });
-    expect(free.body.plan.discountPercent).toBe(0);
+    expect(free.body.data.discountPercent).toBe(0);
     const half = await as(omar).post("/operator/plans", {
       ...basic,
       name: "Plans Yearly",
@@ -89,7 +89,7 @@ describe("create a plan (R1.1, R1.14)", () => {
       discountPercent: 12.5,
     });
     expect(half.status).toBe(201);
-    expect(half.body.plan).toMatchObject({ paymentPeriod: "yearly", discountPercent: 12.5 });
+    expect(half.body.data).toMatchObject({ paymentPeriod: "yearly", discountPercent: 12.5 });
   });
 
   it("refuses a duplicate name in any case with 409 TAKEN, leaving no audit row", async () => {
@@ -137,18 +137,69 @@ describe("list and view plans", () => {
     await as(omar).post("/operator/plans", { ...basic, name: "plans aaa lowercase" });
     const res = await as(omar).get("/operator/plans");
     expect(res.status).toBe(200);
-    const names: string[] = res.body.plans.map((p: { name: string }) => p.name);
+    const names: string[] = res.body.data.map((p: { name: string }) => p.name);
     const sorted = [...names].sort((a, b) =>
       new Intl.Collator("und").compare(a.toLowerCase(), b.toLowerCase()),
     );
     expect(names).toEqual(sorted);
   });
 
+  it("pages the plans by name with a cursor, the total on every page, and no cursor at the end", async () => {
+    for (const name of ["Plans Page A", "Plans Page B", "Plans Page C"]) {
+      await as(omar).post("/operator/plans", { ...basic, name });
+    }
+    // The database is shared with other test files, so walk to the end in big pages, then compare small ones.
+    const names: string[] = [];
+    let total = 0;
+    let cursor = "";
+    for (;;) {
+      const res = await as(omar).get(
+        `/operator/plans?limit=100${cursor ? `&cursor=${cursor}` : ""}`,
+      );
+      names.push(...res.body.data.map((p: { name: string }) => p.name));
+      total = res.body.page.total;
+      if (!res.body.page.nextCursor) {
+        break;
+      }
+      cursor = res.body.page.nextCursor;
+    }
+    expect(names).toHaveLength(total);
+
+    const seen: string[] = [];
+    cursor = "";
+    for (let page = 0; page < 3; page++) {
+      const res = await as(omar).get(`/operator/plans?limit=2${cursor ? `&cursor=${cursor}` : ""}`);
+      expect(res.status).toBe(200);
+      expect(res.body.page.total).toBe(total);
+      seen.push(...res.body.data.map((p: { name: string }) => p.name));
+      cursor = res.body.page.nextCursor;
+      expect(cursor).toEqual(expect.any(String));
+    }
+    expect(seen).toEqual(names.slice(0, 6));
+  });
+
+  it("refuses a bad limit and a cursor from another list or a broken one", async () => {
+    for (const [limit, code] of [
+      ["0", "too_small"],
+      ["101", "too_big"],
+      ["abc", "invalid_type"],
+    ]) {
+      const res = await as(omar).get(`/operator/plans?limit=${limit}`);
+      expect(res.body.error.details).toEqual([{ path: "limit", code }]);
+    }
+    const tenants = await as(omar).get("/operator/tenants?limit=1");
+    for (const cursor of [tenants.body.page.nextCursor, "broken"]) {
+      const res = await as(omar).get(`/operator/plans?cursor=${cursor}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error.details).toEqual([{ path: "cursor", code: "invalid_cursor" }]);
+    }
+  });
+
   it("returns one plan, and 404 for an unknown id or a non-UUID", async () => {
     const created = await as(omar).post("/operator/plans", { ...basic, name: "Plans View" });
-    const res = await as(omar).get(`/operator/plans/${created.body.plan.id}`);
+    const res = await as(omar).get(`/operator/plans/${created.body.data.id}`);
     expect(res.status).toBe(200);
-    expect(res.body.plan.name).toBe("Plans View");
+    expect(res.body.data.name).toBe("Plans View");
     expect(
       (await as(omar).get("/operator/plans/00000000-0000-4000-8000-000000000000")).status,
     ).toBe(404);
@@ -159,20 +210,20 @@ describe("list and view plans", () => {
 describe("edit a plan (R1.1, R1.14)", () => {
   it("changes price and discount and audits before and after", async () => {
     const created = await as(omar).post("/operator/plans", { ...basic, name: "Plans Edit" });
-    const id = created.body.plan.id;
+    const id = created.body.data.id;
     const res = await as(omar).patch(`/operator/plans/${id}`, {
       priceHalalas: 120_000,
       discountPercent: 10,
     });
     expect(res.status).toBe(200);
-    expect(res.body.plan).toMatchObject({
+    expect(res.body.data).toMatchObject({
       priceHalalas: 120_000,
       discountPercent: 10,
       userLimit: 10,
       storageLimitGb: 10,
     });
-    expect(new Date(res.body.plan.updatedAt).getTime()).toBeGreaterThanOrEqual(
-      new Date(created.body.plan.updatedAt).getTime(),
+    expect(new Date(res.body.data.updatedAt).getTime()).toBeGreaterThanOrEqual(
+      new Date(created.body.data.updatedAt).getTime(),
     );
 
     const audit = await auditFor(id);
@@ -189,7 +240,7 @@ describe("edit a plan (R1.1, R1.14)", () => {
 
   it("refuses renaming to an existing name, an empty change, invalid values, and unknown ids", async () => {
     const created = await as(omar).post("/operator/plans", { ...basic, name: "Plans Rename" });
-    const id = created.body.plan.id;
+    const id = created.body.data.id;
     const taken = await as(omar).patch(`/operator/plans/${id}`, { name: "PLANS BASIC" });
     expect(taken.status).toBe(409);
     expect(taken.body.error.code).toBe("TAKEN");
@@ -213,7 +264,7 @@ describe("edit a plan (R1.1, R1.14)", () => {
 describe("plan permissions (R1.15, R1.16)", () => {
   it("refuses a tenant user on every plan route with 403, and an anonymous caller with 401", async () => {
     const created = await as(omar).post("/operator/plans", { ...basic, name: "Plans Guarded" });
-    const id = created.body.plan.id;
+    const id = created.body.data.id;
     const responses = await Promise.all([
       as(sara).post("/operator/plans", { ...basic, name: "Plans Sara" }),
       as(sara).get("/operator/plans"),

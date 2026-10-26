@@ -11,6 +11,7 @@ import { accessCookie, hashPassword, login } from "./helpers/auth.js";
 import { TEST_APP_BASE_URL } from "./helpers/config.js";
 import { connectToTestDb, rejectionText, seedTenant, seedUser } from "./helpers/db.js";
 import { createFakeEmailSender } from "./helpers/email.js";
+import { listAll } from "./helpers/list-all.js";
 import { captureLogs } from "./helpers/log-capture.js";
 
 const PASSWORD = "correct horse battery staple";
@@ -78,7 +79,7 @@ beforeAll(async () => {
     paymentPeriod: "monthly",
     discountPercent: 15,
   });
-  basicId = plan.body.plan.id;
+  basicId = plan.body.data.id;
   const { rows } = await pool.query(
     "select (now() at time zone 'Asia/Riyadh')::date::text as today",
   );
@@ -94,13 +95,27 @@ describe("create a tenant (R1.3, R1.14)", () => {
     const res = await createTenant("tn-al-noor", "Sara@Tenants-AlNoor.test");
     expect(res.status).toBe(201);
     expect(res.headers["cache-control"]).toBe("no-store");
-    const { tenant, subscription, admin } = res.body;
+    const { tenant, subscription, usage } = res.body.data;
+    expect(Object.keys(res.body.data).sort()).toEqual(["subscription", "tenant", "usage"]);
     expect(tenant).toMatchObject({
       name: "Tenant tn-al-noor",
       slug: "tn-al-noor",
-      ownerId: admin.id,
+      ownerId: expect.any(String),
     });
-    expect(admin).toEqual({ id: expect.any(String), email: "sara@tenants-alnoor.test" });
+    expect(usage).toEqual({
+      activeUsers: 1,
+      userLimit: 10,
+      overLimit: false,
+      storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
+    });
+    const admin = (
+      await pool.query<{ id: string; email: string }>("select id, email from users where id = $1", [
+        tenant.ownerId,
+      ])
+    ).rows[0];
+    expect(admin?.email).toBe("sara@tenants-alnoor.test");
+    const view = await as(omar).get(`/operator/tenants/${tenant.id}`);
+    expect(res.body).toEqual(view.body);
     expect(subscription).toEqual({
       planId: basicId,
       planName: "Tenants Basic",
@@ -122,7 +137,7 @@ describe("create a tenant (R1.3, R1.14)", () => {
 
     const user = await pool.query(
       "select user_name, password_hash, email_verified_at, role from users where id = $1",
-      [admin.id],
+      [admin?.id],
     );
     expect(user.rows[0]).toEqual({
       user_name: "Sara Al-Qahtani",
@@ -137,7 +152,7 @@ describe("create a tenant (R1.3, R1.14)", () => {
     expect(roles.rows).toEqual([{ id: expect.any(String), name: "Tenant Admin", is_system: true }]);
     const member = await pool.query(
       "select tenant_id, role_id from tenant_members where user_id = $1",
-      [admin.id],
+      [tenant.ownerId],
     );
     expect(member.rows[0]).toEqual({ tenant_id: tenant.id, role_id: roles.rows[0].id });
 
@@ -273,7 +288,7 @@ describe("create a tenant (R1.3, R1.14)", () => {
       subscription: { planId: basicId, startDate: today, endDate: today },
     });
     expect(oneDay.status).toBe(201);
-    expect(oneDay.body.subscription.pricing.customerDiscountPercent).toBe(0);
+    expect(oneDay.body.data.subscription.pricing.customerDiscountPercent).toBe(0);
   });
 
   it("still creates the tenant when the email cannot be sent, and logs the failure", async () => {
@@ -283,7 +298,8 @@ describe("create a tenant (R1.3, R1.14)", () => {
     const warn = capture
       .lines()
       .find(
-        (line) => line.msg === "verification email failed" && line.tenantId === res.body.tenant.id,
+        (line) =>
+          line.msg === "verification email failed" && line.tenantId === res.body.data.tenant.id,
       );
     expect(warn?.level).toBe(40);
   });
@@ -316,20 +332,20 @@ describe("verify email and log in (R1.4)", () => {
 
     const session = await login(app, "sara@tenants-alnoor.test", SARA_PASSWORD);
     expect(session.res.status).toBe(200);
-    expect(session.res.body.user).toMatchObject({
+    expect(session.res.body.data.user).toMatchObject({
       userName: "Sara Al-Qahtani",
       tenant: { roleName: "Tenant Admin", permissions: TENANT_PERMISSIONS },
     });
 
     const audit = await pool.query(
       "select actor_type, actor_id, tenant_id from audit_log where action = 'user.email_verified' and actor_id = $1",
-      [session.res.body.user.id],
+      [session.res.body.data.user.id],
     );
     expect(audit.rows).toEqual([
       {
         actor_type: "user",
-        actor_id: session.res.body.user.id,
-        tenant_id: session.res.body.user.tenant.id,
+        actor_id: session.res.body.data.user.id,
+        tenant_id: session.res.body.data.user.tenant.id,
       },
     ]);
   });
@@ -364,7 +380,7 @@ describe("resend verification (R1.4, P1.16)", () => {
     const created = await createTenant("tn-al-resend", "resend@tenants-alnoor.test");
     const first = email.lastTokenFor("resend@tenants-alnoor.test");
     const res = await as(omar).post(
-      `/operator/tenants/${created.body.tenant.id}/admin/resend-verification`,
+      `/operator/tenants/${created.body.data.tenant.id}/admin/resend-verification`,
     );
     expect(res.status).toBe(204);
     const second = email.lastTokenFor("resend@tenants-alnoor.test");
@@ -374,7 +390,7 @@ describe("resend verification (R1.4, P1.16)", () => {
 
     const audit = await pool.query(
       "select actor_id from audit_log where action = 'user.verification_resent' and tenant_id = $1",
-      [created.body.tenant.id],
+      [created.body.data.tenant.id],
     );
     expect(audit.rows).toEqual([{ actor_id: omarId }]);
   });
@@ -402,7 +418,7 @@ describe("resend verification (R1.4, P1.16)", () => {
     const created = await createTenant("tn-al-resend-fail", "resendfail@tenants-alnoor.test");
     email.failNext();
     const res = await as(omar).post(
-      `/operator/tenants/${created.body.tenant.id}/admin/resend-verification`,
+      `/operator/tenants/${created.body.data.tenant.id}/admin/resend-verification`,
     );
     expect(res.status).toBe(500);
   });
@@ -426,33 +442,90 @@ describe("list and view tenants (R1.7)", () => {
         endDate: addDays(today, -15),
       },
     });
-    const res = await as(omar).get("/operator/tenants");
-    expect(res.status).toBe(200);
-    const bySlug = Object.fromEntries(
-      res.body.tenants.map((t: { tenant: { slug: string } }) => [t.tenant.slug, t]),
+    const all = await listAll<{ tenant: { slug: string; name: string } }>(
+      app,
+      omar,
+      "/operator/tenants",
     );
-    expect(bySlug["tn-al-noor"].subscription.state).toBe("active");
-    expect(bySlug["tn-al-grace"].subscription.state).toBe("grace");
-    expect(bySlug["tn-al-readonly"].subscription.state).toBe("read_only");
-    expect(bySlug["tn-al-noor"].usage).toEqual({
+    const bySlug = Object.fromEntries(all.items.map((t) => [t.tenant.slug, t])) as Record<
+      string,
+      (typeof all.items)[number] & { subscription: { state: string }; usage: unknown }
+    >;
+    expect(bySlug["tn-al-noor"]?.subscription.state).toBe("active");
+    expect(bySlug["tn-al-grace"]?.subscription.state).toBe("grace");
+    expect(bySlug["tn-al-readonly"]?.subscription.state).toBe("read_only");
+    expect(bySlug["tn-al-noor"]?.usage).toEqual({
       activeUsers: 1,
       userLimit: 10,
       overLimit: false,
       storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
     });
-    const names: string[] = res.body.tenants.map(
-      (t: { tenant: { name: string } }) => t.tenant.name,
-    );
+    const names = all.items.map((t) => t.tenant.name);
     expect(names).toEqual(
       [...names].sort((a, b) => new Intl.Collator("und").compare(a.toLowerCase(), b.toLowerCase())),
     );
+  });
+
+  it("pages the tenants by name, each item the full tenant detail, with the total on every page", async () => {
+    const slugs: string[] = [];
+    let total = 0;
+    let cursor = "";
+    for (;;) {
+      const res = await as(omar).get(
+        `/operator/tenants?limit=100${cursor ? `&cursor=${cursor}` : ""}`,
+      );
+      if (slugs.length === 0) {
+        expect(Object.keys(res.body.data[0]).sort()).toEqual(["subscription", "tenant", "usage"]);
+      }
+      slugs.push(...res.body.data.map((t: { tenant: { slug: string } }) => t.tenant.slug));
+      total = res.body.page.total;
+      if (!res.body.page.nextCursor) {
+        break;
+      }
+      cursor = res.body.page.nextCursor;
+    }
+    expect(slugs).toHaveLength(total);
+
+    const seen: string[] = [];
+    cursor = "";
+    for (let page = 0; page < 3; page++) {
+      const res = await as(omar).get(
+        `/operator/tenants?limit=2${cursor ? `&cursor=${cursor}` : ""}`,
+      );
+      expect(res.body.page.total).toBe(total);
+      seen.push(...res.body.data.map((t: { tenant: { slug: string } }) => t.tenant.slug));
+      cursor = res.body.page.nextCursor;
+      expect(cursor).toEqual(expect.any(String));
+    }
+    expect(seen).toEqual(slugs.slice(0, 6));
+  });
+
+  it("answers each list item as GET /operator/tenants/:id does", async () => {
+    const all = await listAll<{ tenant: { id: string; slug: string } }>(
+      app,
+      omar,
+      "/operator/tenants",
+    );
+    const item = all.items.find((t) => t.tenant.slug === "tn-al-noor");
+    expect((await as(omar).get(`/operator/tenants/${item?.tenant.id}`)).body.data).toEqual(item);
+  });
+
+  it("refuses a bad limit, and a cursor from another list or a broken one", async () => {
+    expect((await as(omar).get("/operator/tenants?limit=0")).body.error.details).toEqual([
+      { path: "limit", code: "too_small" },
+    ]);
+    const plans = await as(omar).get("/operator/plans?limit=1");
+    for (const cursor of [plans.body.page.nextCursor, "broken"]) {
+      const res = await as(omar).get(`/operator/tenants?cursor=${cursor}`);
+      expect(res.body.error.details).toEqual([{ path: "cursor", code: "invalid_cursor" }]);
+    }
   });
 
   it("shows one tenant, and 404 for an unknown id or a non-UUID", async () => {
     const alNoor = await pool.query("select id from tenants where slug = 'tn-al-noor'");
     const res = await as(omar).get(`/operator/tenants/${alNoor.rows[0].id}`);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
+    expect(res.body.data).toMatchObject({
       tenant: { slug: "tn-al-noor" },
       subscription: { pricing: { effectivePriceHalalas: 76_500 } },
       usage: { activeUsers: 1 },
@@ -467,7 +540,7 @@ describe("list and view tenants (R1.7)", () => {
     await as(omar).patch(`/operator/plans/${basicId}`, { priceHalalas: 120_000 });
     const alNoor = await pool.query("select id from tenants where slug = 'tn-al-noor'");
     const res = await as(omar).get(`/operator/tenants/${alNoor.rows[0].id}`);
-    expect(res.body.subscription.pricing.priceHalalas).toBe(100_000);
+    expect(res.body.data.subscription.pricing.priceHalalas).toBe(100_000);
     await as(omar).patch(`/operator/plans/${basicId}`, { priceHalalas: 100_000 });
   });
 });
@@ -483,12 +556,12 @@ describe("seat check (R1.12)", () => {
       paymentPeriod: "yearly",
     });
     const created = await createTenant("tn-al-solo", "solo@tenants-alnoor.test", {
-      subscription: { planId: plan.body.plan.id, startDate: today, endDate: today },
+      subscription: { planId: plan.body.data.id, startDate: today, endDate: today },
     });
     expect(created.status).toBe(201);
     const db = createDb(pool);
     const err = await rejectionText(
-      withTx(db, (tx) => assertSeatAvailable(tx, created.body.tenant.id)),
+      withTx(db, (tx) => assertSeatAvailable(tx, created.body.data.tenant.id)),
     );
     expect(err).toMatch(/USER_LIMIT_REACHED/);
   });

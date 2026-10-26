@@ -215,9 +215,9 @@ describe("GET /notifications (R7.15)", () => {
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
     const [first, second] = [tieA, tieB].sort().reverse();
-    expect(res.body.notifications.map((n: { id: string }) => n.id)).toEqual([first, second, older]);
-    expect(res.body.hasMore).toBe(false);
-    expect(res.body.notifications[2]).toEqual({
+    expect(res.body.data.map((n: { id: string }) => n.id)).toEqual([first, second, older]);
+    expect(res.body.page).toEqual({ nextCursor: null, total: 3 });
+    expect(res.body.data[2]).toEqual({
       id: older,
       kind: "request.breached",
       request: null,
@@ -238,10 +238,10 @@ describe("GET /notifications (R7.15)", () => {
       }),
     );
     const res = await as("faisal").get("/notifications");
-    expect(res.body.notifications[0].request).toEqual({ id: requestId });
+    expect(res.body.data[0].request).toEqual({ id: requestId });
   });
 
-  it("pages with before and hasMore, with no repeat or gap, even when times differ by microseconds", async () => {
+  it("pages with a cursor, with no repeat or gap, even when times differ by microseconds", async () => {
     const times = [
       "2026-11-02T09:00:00.000100Z",
       "2026-11-02T09:00:00.000200Z",
@@ -255,23 +255,23 @@ describe("GET /notifications (R7.15)", () => {
     const expected = await idsInListOrder("faisal");
 
     const seen: string[] = [];
-    const flags: boolean[] = [];
-    let before: string | undefined;
+    const cursors: (string | null)[] = [];
+    let cursor: string | undefined;
     for (let page = 0; page < 5; page++) {
       const res = await as("faisal").get(
-        `/notifications?limit=2${before ? `&before=${before}` : ""}`,
+        `/notifications?limit=2${cursor ? `&cursor=${cursor}` : ""}`,
       );
       expect(res.status).toBe(200);
-      const ids = res.body.notifications.map((n: { id: string }) => n.id);
-      seen.push(...ids);
-      flags.push(res.body.hasMore);
-      if (!res.body.hasMore) {
+      expect(res.body.page.total).toBe(5);
+      seen.push(...res.body.data.map((n: { id: string }) => n.id));
+      cursors.push(res.body.page.nextCursor);
+      if (!res.body.page.nextCursor) {
         break;
       }
-      before = ids.at(-1);
+      cursor = res.body.page.nextCursor;
     }
     expect(seen).toEqual(expected);
-    expect(flags).toEqual([true, true, false]);
+    expect(cursors.map((next) => next !== null)).toEqual([true, true, false]);
   });
 
   it("is not shifted by a notification that arrives while the user reads page one", async () => {
@@ -281,52 +281,73 @@ describe("GET /notifications (R7.15)", () => {
     const pageOne = await as("faisal").get("/notifications?limit=2");
     await seed("faisal", "2026-11-02T09:09:00Z");
     const pageTwo = await as("faisal").get(
-      `/notifications?limit=2&before=${pageOne.body.notifications[1].id}`,
+      `/notifications?limit=2&cursor=${pageOne.body.page.nextCursor}`,
     );
-    const first = pageOne.body.notifications.map((n: { id: string }) => n.id);
-    const second = pageTwo.body.notifications.map((n: { id: string }) => n.id);
+    const first = pageOne.body.data.map((n: { id: string }) => n.id);
+    const second = pageTwo.body.data.map((n: { id: string }) => n.id);
     expect(new Set([...first, ...second]).size).toBe(3);
   });
 
-  it("filters to unread, also with a cursor that is itself read", async () => {
-    await seed("faisal", "2026-11-02T09:01:00Z", { readAt: "2026-11-02T10:00:00Z" });
+  it("filters by unread: true is unread only, false is read only, all and the default are everything", async () => {
+    const readA = await seed("faisal", "2026-11-02T09:01:00Z", { readAt: "2026-11-02T10:00:00Z" });
     const unreadA = await seed("faisal", "2026-11-02T09:02:00Z");
-    const readCursor = await seed("faisal", "2026-11-02T09:03:00Z", {
-      readAt: "2026-11-02T10:00:00Z",
-    });
+    const readB = await seed("faisal", "2026-11-02T09:03:00Z", { readAt: "2026-11-02T10:00:00Z" });
     const unreadB = await seed("faisal", "2026-11-02T09:04:00Z");
+    const idsOf = async (query: string) => {
+      const res = await as("faisal").get(`/notifications${query}`);
+      expect(res.status, query).toBe(200);
+      return {
+        ids: res.body.data.map((n: { id: string }) => n.id),
+        total: res.body.page.total,
+      };
+    };
 
-    const unread = await as("faisal").get("/notifications?unread=true");
-    expect(unread.body.notifications.map((n: { id: string }) => n.id)).toEqual([unreadB, unreadA]);
-    const after = await as("faisal").get(`/notifications?unread=true&before=${readCursor}`);
-    expect(after.body.notifications.map((n: { id: string }) => n.id)).toEqual([unreadA]);
-    const all = await as("faisal").get("/notifications?unread=false");
-    expect(all.body.notifications).toHaveLength(4);
+    expect(await idsOf("?unread=true")).toEqual({ ids: [unreadB, unreadA], total: 2 });
+    expect(await idsOf("?unread=false")).toEqual({ ids: [readB, readA], total: 2 });
+    expect(await idsOf("?unread=all")).toEqual({ ids: [unreadB, readB, unreadA, readA], total: 4 });
+    expect(await idsOf("")).toEqual(await idsOf("?unread=all"));
+
+    const first = await as("faisal").get("/notifications?unread=false&limit=1");
+    const second = await as("faisal").get(
+      `/notifications?unread=false&limit=1&cursor=${first.body.page.nextCursor}`,
+    );
+    expect(second.body.data.map((n: { id: string }) => n.id)).toEqual([readA]);
+    expect(second.body.page).toEqual({ nextCursor: null, total: 2 });
   });
 
-  it("rejects a before that is not the caller's own, with the same answer for another user's and a made-up ID", async () => {
-    const hudas = await seed("huda", "2026-11-02T09:00:00Z");
-    const rashidsId = await seedForRashid();
-
-    for (const id of [hudas, rashidsId, "7f0c6a52-4d0e-4a43-9a52-4b1c9d2f6a11"]) {
-      const res = await as("faisal").get(`/notifications?before=${id}`);
-      expect(res.status).toBe(400);
+  it("refuses a cursor used with another filter, and one that is broken", async () => {
+    await seed("faisal", "2026-11-02T09:01:00Z");
+    await seed("faisal", "2026-11-02T09:02:00Z");
+    const first = await as("faisal").get("/notifications?limit=1");
+    for (const query of [
+      `unread=true&cursor=${first.body.page.nextCursor}`,
+      "cursor=not-a-cursor",
+    ]) {
+      const res = await as("faisal").get(`/notifications?${query}`);
+      expect(res.status, query).toBe(400);
       expect(failure(res)).toMatchObject({
         code: "VALIDATION_FAILED",
-        details: [{ path: "before", code: "unknown_notification" }],
+        details: [{ path: "cursor", code: "invalid_cursor" }],
       });
     }
   });
 
-  it("validates limit and before, and ignores unrelated query parameters", async () => {
+  it("validates limit and unread, and ignores unrelated query parameters", async () => {
     await seed("faisal", "2026-11-02T09:00:00Z");
-    for (const query of ["limit=0", "limit=101", "limit=abc", "before=nope", "unread=yes"]) {
+    const expected: [string, string, string][] = [
+      ["limit=0", "limit", "too_small"],
+      ["limit=101", "limit", "too_big"],
+      ["limit=abc", "limit", "invalid_type"],
+      ["unread=yes", "unread", "invalid_value"],
+    ];
+    for (const [query, path, code] of expected) {
       const res = await as("faisal").get(`/notifications?${query}`);
       expect(res.status, query).toBe(400);
+      expect(failure(res)).toMatchObject({ details: [{ path, code }] });
     }
-    const ok = await as("faisal").get("/notifications?limit=100&utm_source=mail");
+    const ok = await as("faisal").get("/notifications?limit=100&utm_source=mail&before=whatever");
     expect(ok.status).toBe(200);
-    expect(ok.body.notifications).toHaveLength(1);
+    expect(ok.body.data).toHaveLength(1);
   });
 
   it("defaults the page to 25", async () => {
@@ -334,8 +355,8 @@ describe("GET /notifications (R7.15)", () => {
       await seed("faisal", new Date(Date.UTC(2026, 10, 2, 9, i)).toISOString());
     }
     const res = await as("faisal").get("/notifications");
-    expect(res.body.notifications).toHaveLength(25);
-    expect(res.body.hasMore).toBe(true);
+    expect(res.body.data).toHaveLength(25);
+    expect(res.body.page).toEqual({ nextCursor: expect.any(String), total: 26 });
   });
 
   it("requires a signed-in user", async () => {
@@ -353,8 +374,10 @@ describe("GET /notifications/unread-count", () => {
 
     const faisal = await as("faisal").get("/notifications/unread-count");
     expect(faisal.status).toBe(200);
-    expect(faisal.body).toEqual({ count: 2 });
-    expect((await as("nora").get("/notifications/unread-count")).body).toEqual({ count: 0 });
+    expect(faisal.body).toEqual({ data: { count: 2 } });
+    expect((await as("nora").get("/notifications/unread-count")).body).toEqual({
+      data: { count: 0 },
+    });
   });
 });
 
@@ -467,8 +490,10 @@ describe("tenant isolation (R7.19)", () => {
     await seed("faisal", "2026-11-02T09:00:00Z");
     await seedForRashid();
     const hers = await asRashid().get("/notifications");
-    expect(hers.body.notifications).toHaveLength(1);
-    expect((await asRashid().get("/notifications/unread-count")).body).toEqual({ count: 1 });
+    expect(hers.body.data).toHaveLength(1);
+    expect((await asRashid().get("/notifications/unread-count")).body).toEqual({
+      data: { count: 1 },
+    });
   });
 });
 
@@ -490,14 +515,16 @@ describe("in every subscription state (R7.15, P7.7)", () => {
     try {
       const guarded = await as("sara").get("/subscription");
       expect(guarded.status).toBe(200);
-      expect(guarded.body.subscription.state).toBe("read_only");
+      expect(guarded.body.data.subscription.state).toBe("read_only");
       const refused = await as("khalid").post("/requests", {});
       expect(failure(refused).code).toBe("SUBSCRIPTION_READ_ONLY");
 
       const list = await as("faisal").get("/notifications");
       expect(list.status).toBe(200);
-      expect(list.body.notifications).toHaveLength(3);
-      expect((await as("faisal").get("/notifications/unread-count")).body).toEqual({ count: 3 });
+      expect(list.body.data).toHaveLength(3);
+      expect((await as("faisal").get("/notifications/unread-count")).body).toEqual({
+        data: { count: 3 },
+      });
       expect((await as("faisal").post(`/notifications/${one}/read`)).status).toBe(204);
       expect((await as("faisal").post("/notifications/read-all", { upTo: two })).status).toBe(204);
       expect(await unreadIds("faisal")).toEqual([three]);

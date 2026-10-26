@@ -81,7 +81,7 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
     const res = await uploadAs(app, khalid, "draft-contract.pdf", bytes);
     expect(res.status).toBe(201);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.body.file).toEqual({
+    expect(res.body.data).toEqual({
       id: expect.any(String),
       name: "draft-contract.pdf",
       contentType: "application/pdf",
@@ -89,11 +89,11 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
       sha256: sha256(bytes),
       expiresAt: expect.any(String),
     });
-    const expiresAt = Date.parse(res.body.file.expiresAt);
+    const expiresAt = Date.parse(res.body.data.expiresAt);
     expect(expiresAt - before).toBeGreaterThan(24 * 3_600_000 - 5000);
     expect(expiresAt - before).toBeLessThan(24 * 3_600_000 + 10_000);
 
-    const [row] = (await filesOf(pool, alNoor.id)).filter((f) => f.id === res.body.file.id);
+    const [row] = (await filesOf(pool, alNoor.id)).filter((f) => f.id === res.body.data.id);
     expect(row).toMatchObject({
       uploaded_by: khalidId,
       state: "pending",
@@ -103,8 +103,8 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
       attached_at: null,
     });
     // The bytes are under <tenant>/<file id>, and the key never holds the name.
-    const key = storageKeyOf(alNoor.id, res.body.file.id);
-    expect(key).toBe(`${alNoor.id}/${res.body.file.id}`);
+    const key = storageKeyOf(alNoor.id, res.body.data.id);
+    expect(key).toBe(`${alNoor.id}/${res.body.data.id}`);
     expect(await objectExists(store, key)).toBe(true);
     const stored: Buffer[] = [];
     for await (const chunk of await store.get(key)) {
@@ -121,7 +121,7 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
   it("lets only the uploader read, download, or discard a pending file; anyone else gets 404", async () => {
     const bytes = fixture("contract.pdf");
     const { body } = await uploadAs(app, khalid, "private.pdf", bytes);
-    const id = body.file.id;
+    const id = body.data.id;
 
     expect((await as(khalid).get(`/files/${id}`)).body).toEqual(body);
     for (const stranger of [faisal, majed, rashid]) {
@@ -139,7 +139,7 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
     const bytes = fixture("contract.pdf");
     const { body } = await uploadAs(app, khalid, "Vendor contract.pdf", bytes);
     const res = await as(khalid)
-      .get(`/files/${body.file.id}/content`)
+      .get(`/files/${body.data.id}/content`)
       .buffer(true)
       .parse((r, done) => {
         const parts: Buffer[] = [];
@@ -159,8 +159,8 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
   it("stores and returns an Arabic name as is, and downloads it with filename*=UTF-8''", async () => {
     const name = "عقد التوريد.pdf";
     const { body } = await uploadAs(app, khalid, name, fixture("contract.pdf"));
-    expect(body.file.name).toBe(name);
-    const res = await as(khalid).get(`/files/${body.file.id}/content`);
+    expect(body.data.name).toBe(name);
+    const res = await as(khalid).get(`/files/${body.data.id}/content`);
     expect(res.headers["content-disposition"]).toContain(
       `filename*=UTF-8''${encodeURIComponent(name)}`,
     );
@@ -168,7 +168,7 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
 
   it("discards at once: the file disappears for its uploader and the sweep deletes bytes and row later", async () => {
     const { body } = await uploadAs(app, khalid, "to-discard.pdf", fixture("contract.pdf"));
-    const id = body.file.id;
+    const id = body.data.id;
     expect((await as(khalid).delete(`/files/${id}`)).status).toBe(204);
     expect((await as(khalid).get(`/files/${id}`)).status).toBe(404);
     expect((await as(khalid).get(`/files/${id}/content`)).status).toBe(404);
@@ -180,11 +180,11 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
 
   it("answers an Al-Rashid user's request for an Al-Noor file ID with 404, and keys bytes under their own tenant", async () => {
     const { body } = await uploadAs(app, khalid, "noor-only.pdf", fixture("contract.pdf"));
-    expect((await as(rashid).get(`/files/${body.file.id}`)).status).toBe(404);
+    expect((await as(rashid).get(`/files/${body.data.id}`)).status).toBe(404);
     const theirs = await uploadAs(app, rashid, "rashid.pdf", fixture("contract.pdf"));
-    expect(await objectExists(store, storageKeyOf(alRashid.id, theirs.body.file.id))).toBe(true);
-    expect(await objectExists(store, storageKeyOf(alNoor.id, theirs.body.file.id))).toBe(false);
-    expect((await filesOf(pool, alNoor.id)).some((f) => f.id === theirs.body.file.id)).toBe(false);
+    expect(await objectExists(store, storageKeyOf(alRashid.id, theirs.body.data.id))).toBe(true);
+    expect(await objectExists(store, storageKeyOf(alNoor.id, theirs.body.data.id))).toBe(false);
+    expect((await filesOf(pool, alNoor.id)).some((f) => f.id === theirs.body.data.id)).toBe(false);
   });
 
   it("requires a session and a tenant user", async () => {
@@ -203,8 +203,8 @@ describe("upload, read, and discard (R5.5.9, R5.5.16)", () => {
     );
     const secret = "secret-merger-plan.pdf";
     const { body } = await uploadAs(app, khalid, secret, fixture("contract.pdf"));
-    expect((await as(khalid).get(`/files/${body.file.id}/content`)).status).toBe(200);
-    await as(khalid).delete(`/files/${body.file.id}`);
+    expect((await as(khalid).get(`/files/${body.data.id}/content`)).status).toBe(200);
+    await as(khalid).delete(`/files/${body.data.id}`);
     const { rows: after } = await pool.query(
       "select count(*)::int as n from audit_log where tenant_id = $1",
       [alNoor.id],
@@ -218,14 +218,14 @@ describe("names (R5.5.10)", () => {
   it("cleans path parts and control characters, and normalizes to NFC", async () => {
     const text = "plain text";
     const nested = await uploadAs(app, khalid, "../../etc/passwd.txt", text);
-    expect(nested.body.file.name).toBe("passwd.txt");
+    expect(nested.body.data.name).toBe("passwd.txt");
     const windows = await uploadAs(app, khalid, "C:\\Users\\khalid\\notes.txt", text);
-    expect(windows.body.file.name).toBe("notes.txt");
+    expect(windows.body.data.name).toBe("notes.txt");
     const control = await uploadAs(app, khalid, "no\u0000tes\u0007.txt", text);
-    expect(control.body.file.name).toBe("notes.txt");
+    expect(control.body.data.name).toBe("notes.txt");
     // "e" followed by a combining acute accent becomes the single composed character.
     const composed = await uploadAs(app, khalid, "cafe\u0301.txt", text);
-    expect(composed.body.file.name).toBe("caf\u00e9.txt");
+    expect(composed.body.data.name).toBe("caf\u00e9.txt");
   });
 
   it.each([
@@ -290,14 +290,14 @@ describe("types, detected from the content (R5.5.10)", () => {
     const bytes = fixture(fixtureName);
     const res = await uploadAs(app, khalid, name, bytes);
     expect(res.status).toBe(201);
-    expect(res.body.file).toMatchObject({ contentType, size: bytes.length, sha256: sha256(bytes) });
+    expect(res.body.data).toMatchObject({ contentType, size: bytes.length, sha256: sha256(bytes) });
   });
 
   it("accepts plain text, valid UTF-8 including Arabic, only as .txt, and downloads it as text/plain", async () => {
     const res = await uploadAs(app, khalid, "notes.txt", "ملاحظات العقد\nplain notes\n");
     expect(res.status).toBe(201);
-    expect(res.body.file.contentType).toBe("text/plain");
-    const download = await as(khalid).get(`/files/${res.body.file.id}/content`);
+    expect(res.body.data.contentType).toBe("text/plain");
+    const download = await as(khalid).get(`/files/${res.body.data.id}/content`);
     expect(download.headers["content-type"]).toBe("text/plain; charset=utf-8");
     expect(download.text).toBe("ملاحظات العقد\nplain notes\n");
   });
@@ -336,9 +336,9 @@ describe("size and headers (R5.5.10)", () => {
     const bytes = Buffer.alloc(25 * 1024 * 1024, "a");
     const res = await uploadAs(app, khalid, "limit.txt", bytes);
     expect(res.status).toBe(201);
-    expect(res.body.file.size).toBe(26_214_400);
-    expect(res.body.file.sha256).toBe(sha256(bytes));
-    await as(khalid).delete(`/files/${res.body.file.id}`);
+    expect(res.body.data.size).toBe(26_214_400);
+    expect(res.body.data.sha256).toBe(sha256(bytes));
+    await as(khalid).delete(`/files/${res.body.data.id}`);
   }, 60_000);
 
   it("refuses a Content-Length over 25 MB with 413 before reading the body", async () => {
@@ -475,7 +475,7 @@ describe("pending-upload quota (R5.5.11)", () => {
     expect(twentyFirst.status).toBe(409);
     expect(twentyFirst.body.error.code).toBe("UPLOAD_QUOTA_REACHED");
 
-    expect((await as(access).delete(`/files/${twentieth.body.file.id}`)).status).toBe(204);
+    expect((await as(access).delete(`/files/${twentieth.body.data.id}`)).status).toBe(204);
     expect((await uploadAs(app, access, "again.pdf", fixture("contract.pdf"))).status).toBe(201);
   });
 
@@ -633,7 +633,7 @@ describe("storage limit at upload (R5.5.18, R5.5.19)", () => {
     const { access } = await limitedTenant(GB - 100);
     const first = await uploadAs(app, access, "first.txt", Buffer.alloc(100, "a"));
     expect(first.status).toBe(201);
-    await as(access).delete(`/files/${first.body.file.id}`);
+    await as(access).delete(`/files/${first.body.data.id}`);
     expect((await uploadAs(app, access, "second.txt", "a")).status).toBe(409);
   });
 });
@@ -663,17 +663,17 @@ describe("subscription states and members (R5.5.14)", () => {
     await setState(tenant.id, "grace");
     const grace = await uploadAs(app, access, "grace.pdf", fixture("contract.pdf"));
     expect(grace.status).toBe(201);
-    expect((await as(access).delete(`/files/${grace.body.file.id}`)).status).toBe(204);
+    expect((await as(access).delete(`/files/${grace.body.data.id}`)).status).toBe(204);
 
     await setState(tenant.id, "read_only");
     const refused = await uploadAs(app, access, "late.pdf", fixture("contract.pdf"));
     expect(refused.status).toBe(403);
     expect(refused.body.error.code).toBe("SUBSCRIPTION_READ_ONLY");
-    const discard = await as(access).delete(`/files/${body.file.id}`);
+    const discard = await as(access).delete(`/files/${body.data.id}`);
     expect(discard.status).toBe(403);
     expect(discard.body.error.code).toBe("SUBSCRIPTION_READ_ONLY");
-    expect((await as(access).get(`/files/${body.file.id}`)).status).toBe(200);
-    expect((await as(access).get(`/files/${body.file.id}/content`)).status).toBe(200);
+    expect((await as(access).get(`/files/${body.data.id}`)).status).toBe(200);
+    expect((await as(access).get(`/files/${body.data.id}/content`)).status).toBe(200);
   });
 
   it("refuses a deactivated member whose token is still valid", async () => {

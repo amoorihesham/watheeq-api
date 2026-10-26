@@ -49,10 +49,10 @@ const setScope = (person: Person, scope: string) =>
   ]);
 
 const visibleTo = async (person: Person): Promise<string[]> => {
-  const res = await as(person).get("/users?status=all&limit=200");
+  const res = await as(person).get("/users?status=all&limit=100");
   expect(res.status).toBe(200);
-  expect(res.body.total).toBe(res.body.users.length);
-  return res.body.users.map((user: { userName: string }) => user.userName).sort();
+  expect(res.body.page.total).toBe(res.body.data.length);
+  return res.body.data.map((user: { userName: string }) => user.userName).sort();
 };
 
 const insertUnit = async (name: string, parent: string | null) => {
@@ -162,9 +162,9 @@ describe("the user directory follows the caller's user.view scope (R3.14, R3.15)
       expect((await as("Faisal").get(`/users/${ids.Khalid}`)).status).toBe(404);
       expect((await as("Faisal").get(`/users/${ids.Sara}`)).status).toBe(404);
       const inProcurement = await as("Faisal").get(`/users?unitId=${units.Procurement}`);
-      expect(inProcurement.body).toMatchObject({ users: [], total: 0 });
+      expect(inProcurement.body).toEqual({ data: [], page: { nextCursor: null, total: 0 } });
       const search = await as("Faisal").get("/users?q=a&status=all");
-      expect(search.body.users.map((user: { userName: string }) => user.userName)).not.toContain(
+      expect(search.body.data.map((user: { userName: string }) => user.userName)).not.toContain(
         "Majed",
       );
     } finally {
@@ -177,7 +177,7 @@ describe("the user directory follows the caller's user.view scope (R3.14, R3.15)
     try {
       const res = await as("Reem").get("/users?status=all");
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ users: [], total: 0 });
+      expect(res.body).toEqual({ data: [], page: { nextCursor: null, total: 0 } });
       expect((await as("Reem").get(`/users/${ids.Reem}`)).status).toBe(404);
     } finally {
       await setScope("Reem", "organization");
@@ -187,7 +187,7 @@ describe("the user directory follows the caller's user.view scope (R3.14, R3.15)
   it("gives a deactivated caller with a live token nothing", async () => {
     await pool.query("update users set is_active = false where id = $1", [ids.Majed]);
     try {
-      expect((await as("Majed").get("/users")).body.total).toBe(0);
+      expect((await as("Majed").get("/users")).body.page.total).toBe(0);
     } finally {
       await pool.query("update users set is_active = true where id = $1", [ids.Majed]);
     }
