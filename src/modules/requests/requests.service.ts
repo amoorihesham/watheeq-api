@@ -63,6 +63,7 @@ import type {
   RequestsRepositoryType,
   RequestType,
   ServiceRowType,
+  SlaType,
   StageAssigneeRowType,
   StageDefRowType,
   StageRunRowType,
@@ -70,6 +71,7 @@ import type {
   StageRunViewRowType,
   SubmitRequestType,
 } from "./requests.types.js";
+import { notifyAbout, notifyStageChanges, numberOf } from "./shared/notices.js";
 import { nextNumber } from "./shared/numbers.js";
 import { awaitingInfoDaysOf, closeRequest, frozenSlaOf, slaOf } from "./shared/sla.js";
 import { isLiveStageAssignee } from "./shared/stage-assignees.js";
@@ -181,7 +183,21 @@ function answersWithFiles(
   });
 }
 
-const numberOf = (row: Pick<RequestRowType, "number" | "year">) => `REQ-${row.number}-${row.year}`;
+/** A closure record from a stage action means the last stage ended and the request completed (R6.15). */
+async function notifyCompleted(
+  tx: Tx,
+  request: RequestRowType,
+  actorId: string,
+  closure: SlaType | null,
+): Promise<void> {
+  if (closure) {
+    await notifyAbout(tx, request, {
+      kind: "request.completed",
+      recipients: [request.requesterId],
+      actorId,
+    });
+  }
+}
 
 /** The live deadline of a request in progress, the frozen one of a closed request, otherwise none. */
 const deadlineOf = (
@@ -766,6 +782,12 @@ export function createRequestsService({
             reason: body.reason,
           },
         });
+        await notifyAbout(tx, request, {
+          kind: "request.priority_changed",
+          recipients: [request.requesterId],
+          actorId: callerId,
+          data: { before: request.priorityName, after: priority.name },
+        });
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -815,10 +837,11 @@ export function createRequestsService({
           throw new Error("the accept update returned no row");
         }
         const transitions: TransitionType[] = [];
+        const stages = await repo.stageDefs(tx, tenantId, workflow.currentVersionId);
         const closure = await startStage(
           tx,
           accepted,
-          await repo.stageDefs(tx, tenantId, workflow.currentVersionId),
+          stages,
           0,
           actorOf(callerId, context),
           transitions,
@@ -837,6 +860,18 @@ export function createRequestsService({
           },
         });
         await auditCompletion(tx, accepted, actorOf(callerId, context), closure);
+        await notifyAbout(tx, accepted, {
+          kind: "request.accepted",
+          recipients: [accepted.requesterId],
+          actorId: callerId,
+        });
+        await notifyAbout(tx, accepted, {
+          kind: "request.handler_assigned",
+          recipients: [body.handlerId],
+          actorId: callerId,
+        });
+        await notifyStageChanges(tx, accepted, callerId, stages, transitions);
+        await notifyCompleted(tx, accepted, callerId, closure);
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -868,6 +903,11 @@ export function createRequestsService({
           resourceId: id,
           reason: body.reason,
           details: { reason: body.reason },
+        });
+        await notifyAbout(tx, request, {
+          kind: "request.rejected",
+          recipients: [request.requesterId],
+          actorId: callerId,
         });
         return reload(tx, tenantId, id, callerId);
       });
@@ -951,6 +991,8 @@ export function createRequestsService({
           },
         });
         await auditCompletion(tx, request, actorOf(callerId, context), closure);
+        await notifyStageChanges(tx, request, callerId, live.stages, transitions);
+        await notifyCompleted(tx, request, callerId, closure);
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -999,6 +1041,8 @@ export function createRequestsService({
           },
         });
         await auditCompletion(tx, request, actorOf(callerId, context), closure);
+        await notifyStageChanges(tx, request, callerId, live.stages, transitions);
+        await notifyCompleted(tx, request, callerId, closure);
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -1087,6 +1131,22 @@ export function createRequestsService({
             reason: body.reason,
           },
         });
+        await notifyStageChanges(
+          tx,
+          request,
+          callerId,
+          live.stages,
+          [
+            {
+              run: live.run.id,
+              stage: live.run.workflowStageId,
+              state: "active",
+              assignees: after.userIds,
+              level: after.level,
+            },
+          ],
+          new Map([[live.run.id, before.assignees]]),
+        );
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -1129,6 +1189,15 @@ export function createRequestsService({
           details: { run: live.run.id, before, reason: body.reason ?? null, transitions },
         });
         await auditCompletion(tx, request, actorOf(callerId, context), closure);
+        await notifyStageChanges(
+          tx,
+          request,
+          callerId,
+          live.stages,
+          transitions,
+          new Map([[live.run.id, before.assignees]]),
+        );
+        await notifyCompleted(tx, request, callerId, closure);
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -1165,15 +1234,10 @@ export function createRequestsService({
         }
         const transitions: TransitionType[] = [];
         const [live] = await repo.liveRun(tx, tenantId, id);
+        const stages = live ? await repo.stageDefs(tx, tenantId, live.workflowVersionId) : [];
+        const assigneesBefore = live ? await assigneeIdsOf(tx, changed, live) : [];
         const closure = live
-          ? await refreshRun(
-              tx,
-              changed,
-              await repo.stageDefs(tx, tenantId, live.workflowVersionId),
-              live,
-              actorOf(callerId, context),
-              transitions,
-            )
+          ? await refreshRun(tx, changed, stages, live, actorOf(callerId, context), transitions)
           : null;
         await writeAuditEntry(tx, {
           tenantId,
@@ -1190,6 +1254,27 @@ export function createRequestsService({
           },
         });
         await auditCompletion(tx, changed, actorOf(callerId, context), closure);
+        await notifyAbout(tx, changed, {
+          kind: "request.handler_assigned",
+          recipients: [body.handlerId],
+          actorId: callerId,
+        });
+        if (request.handlerId) {
+          await notifyAbout(tx, changed, {
+            kind: "request.handler_removed",
+            recipients: [request.handlerId],
+            actorId: callerId,
+          });
+        }
+        await notifyStageChanges(
+          tx,
+          changed,
+          callerId,
+          stages,
+          transitions,
+          live ? new Map([[live.id, assigneesBefore]]) : undefined,
+        );
+        await notifyCompleted(tx, changed, callerId, closure);
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -1339,6 +1424,11 @@ export function createRequestsService({
             question: body.question,
           },
         });
+        await notifyAbout(tx, request, {
+          kind: "request.information_requested",
+          recipients: [request.requesterId],
+          actorId: callerId,
+        });
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -1404,6 +1494,11 @@ export function createRequestsService({
             fileIds: files.map((file) => file.id),
           },
         });
+        await notifyAbout(tx, request, {
+          kind: "request.information_answered",
+          recipients: [question.askedBy],
+          actorId: callerId,
+        });
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -1444,6 +1539,11 @@ export function createRequestsService({
           resourceId: id,
           details: { informationRequestId: question.id },
         });
+        await notifyAbout(tx, request, {
+          kind: "request.information_cancelled",
+          recipients: [request.requesterId],
+          actorId: callerId,
+        });
         return reload(tx, tenantId, id, callerId);
       });
     },
@@ -1482,6 +1582,11 @@ export function createRequestsService({
           resourceId: id,
           reason: body.reason,
           details: { reason: body.reason, informationRequestId: question.id, sla: record },
+        });
+        await notifyAbout(tx, request, {
+          kind: "request.closed_no_response",
+          recipients: [request.requesterId],
+          actorId: callerId,
         });
         return reload(tx, tenantId, id, callerId);
       });
