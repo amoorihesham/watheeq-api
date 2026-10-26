@@ -1,7 +1,12 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import express from "express";
 import request from "supertest";
 import { afterAll, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { setContractChecks } from "../src/http/checks.js";
+import { DETAIL_CODES } from "../src/http/errors.js";
+import { sendData, sendNoContent, sendPage } from "../src/http/respond.js";
 import { validate } from "../src/http/validate.js";
 import { testApp } from "./helpers/app.js";
 import { connectToTestDb } from "./helpers/db.js";
@@ -84,12 +89,43 @@ testRouter.post("/size-mismatch", () => {
   });
 });
 
+const itemSchema = z.strictObject({ id: z.number(), note: z.string().nullable() });
+testRouter.get("/data-ok", (_req, res) => {
+  sendData(res, 200, itemSchema, { id: 1, note: null });
+});
+testRouter.post("/data-created", (_req, res) => {
+  sendData(res, 201, itemSchema, { id: 2, note: "new" });
+});
+testRouter.get("/data-extra-key", (_req, res) => {
+  sendData(res, 200, itemSchema, { id: 1, note: null, passwordHash: "x" } as never);
+});
+testRouter.get("/page-ok", (_req, res) => {
+  sendPage(res, itemSchema, { items: [{ id: 1, note: null }], nextCursor: "abc", total: 7 });
+});
+testRouter.get("/page-bad-item", (_req, res) => {
+  sendPage(res, itemSchema, {
+    items: [{ id: "1", note: null } as never],
+    nextCursor: null,
+    total: 1,
+  });
+});
+testRouter.get("/no-content", (_req, res) => {
+  sendNoContent(res);
+});
+testRouter.post("/unregistered-refine", (req, res) => {
+  const schema = z
+    .object({ x: z.string() })
+    .refine(() => false, { params: { code: "made_up_code" } });
+  res.json(validate(schema, req.body));
+});
+
 const app = testApp(pool, capture.logger, { routers: [testRouter] });
 
 afterAll(async () => {
   await pool.end();
 });
 
+const SRC = join(import.meta.dirname, "..", "src");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("standard error shape", () => {
@@ -97,7 +133,7 @@ describe("standard error shape", () => {
     const res = await request(app).get("/no-such-route");
     expect(res.status).toBe(404);
     expect(res.body).toEqual({
-      error: { code: "NOT_FOUND", requestId: res.headers["x-request-id"] },
+      error: { code: "NOT_FOUND", requestId: res.headers["x-request-id"], details: [] },
     });
   });
 
@@ -106,7 +142,7 @@ describe("standard error shape", () => {
       const res = await request(app).get(path);
       expect(res.status).toBe(404);
       expect(res.body).toEqual({
-        error: { code: "NOT_FOUND", requestId: res.headers["x-request-id"] },
+        error: { code: "NOT_FOUND", requestId: res.headers["x-request-id"], details: [] },
       });
     }
   });
@@ -115,7 +151,7 @@ describe("standard error shape", () => {
     const res = await request(app).post("/size-mismatch");
     expect(res.status).toBe(400);
     expect(res.body).toEqual({
-      error: { code: "VALIDATION_FAILED", requestId: res.headers["x-request-id"] },
+      error: { code: "VALIDATION_FAILED", requestId: res.headers["x-request-id"], details: [] },
     });
   });
 
@@ -126,7 +162,11 @@ describe("standard error shape", () => {
       .send('{"a":');
     expect(res.status).toBe(400);
     expect(res.body).toEqual({
-      error: { code: "VALIDATION_FAILED", requestId: res.headers["x-request-id"] },
+      error: {
+        code: "VALIDATION_FAILED",
+        requestId: res.headers["x-request-id"],
+        details: [{ path: "", code: "invalid_json" }],
+      },
     });
   });
 
@@ -137,7 +177,7 @@ describe("standard error shape", () => {
       .send(JSON.stringify({ blob: "x".repeat(101 * 1024) }));
     expect(res.status).toBe(413);
     expect(res.body).toEqual({
-      error: { code: "PAYLOAD_TOO_LARGE", requestId: res.headers["x-request-id"] },
+      error: { code: "PAYLOAD_TOO_LARGE", requestId: res.headers["x-request-id"], details: [] },
     });
   });
 
@@ -153,7 +193,11 @@ describe("standard error shape", () => {
     const res = await request(app).post("/echo").set("Content-Type", "text/plain").send("hello");
     expect(res.status).toBe(415);
     expect(res.body).toEqual({
-      error: { code: "UNSUPPORTED_MEDIA_TYPE", requestId: res.headers["x-request-id"] },
+      error: {
+        code: "UNSUPPORTED_MEDIA_TYPE",
+        requestId: res.headers["x-request-id"],
+        details: [],
+      },
     });
   });
 
@@ -185,7 +229,7 @@ describe("standard error shape", () => {
     const res = await request(app).get("/boom");
     expect(res.status).toBe(500);
     expect(res.body).toEqual({
-      error: { code: "INTERNAL", requestId: res.headers["x-request-id"] },
+      error: { code: "INTERNAL", requestId: res.headers["x-request-id"], details: [] },
     });
     expect(JSON.stringify(res.body)).not.toMatch(/secret|TypeError|at /);
 
@@ -196,11 +240,15 @@ describe("standard error shape", () => {
     expect(err?.stack).toContain("secret internal detail");
   });
 
-  it("translates a mapped unique violation centrally (users_email_unique to 409 EMAIL_TAKEN)", async () => {
+  it("translates a mapped unique violation centrally (users_email_unique to 409 TAKEN at email)", async () => {
     const res = await request(app).post("/duplicate-email");
     expect(res.status).toBe(409);
     expect(res.body).toEqual({
-      error: { code: "EMAIL_TAKEN", requestId: res.headers["x-request-id"] },
+      error: {
+        code: "TAKEN",
+        requestId: res.headers["x-request-id"],
+        details: [{ path: "email", code: "taken" }],
+      },
     });
   });
 
@@ -219,6 +267,88 @@ describe("standard error shape", () => {
   it("does not turn health into an error", async () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
+  });
+});
+
+describe("response helpers (R8.1, R8.16)", () => {
+  it("wraps one item in data, with 200 or 201", async () => {
+    const ok = await request(app).get("/data-ok");
+    expect(ok.status).toBe(200);
+    expect(ok.body).toEqual({ data: { id: 1, note: null } });
+    const created = await request(app).post("/data-created");
+    expect(created.status).toBe(201);
+    expect(created.body).toEqual({ data: { id: 2, note: "new" } });
+  });
+
+  it("writes a list as data and page", async () => {
+    const res = await request(app).get("/page-ok");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      data: [{ id: 1, note: null }],
+      page: { nextCursor: "abc", total: 7 },
+    });
+  });
+
+  it("answers 204 with no body", async () => {
+    const res = await request(app).get("/no-content");
+    expect(res.status).toBe(204);
+    expect(res.text).toBe("");
+  });
+
+  it("answers 500 INTERNAL and logs the schema issues with their paths when a value has an extra key", async () => {
+    const res = await request(app).get("/data-extra-key").set("X-Request-Id", "extra-key-1");
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe("INTERNAL");
+    expect(JSON.stringify(res.body)).not.toContain("passwordHash");
+    const logged = capture.lines().find((line) => line.reqId === "extra-key-1" && line.err);
+    const err = logged?.err as { message?: string } | undefined;
+    expect(err?.message).toContain("passwordHash");
+  });
+
+  it("checks every item of a list", async () => {
+    const res = await request(app).get("/page-bad-item");
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe("INTERNAL");
+  });
+
+  it("sends the value as it is in production, where the check is off", async () => {
+    setContractChecks(false);
+    try {
+      const res = await request(app).get("/data-extra-key");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ data: { id: 1, note: null, passwordHash: "x" } });
+    } finally {
+      setContractChecks(true);
+    }
+  });
+});
+
+describe("the detail-code registry (R8.11)", () => {
+  it("makes validate() fail on a refine that names a code outside DETAIL_CODES", async () => {
+    const res = await request(app).post("/unregistered-refine").send({ x: "a" });
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe("INTERNAL");
+  });
+
+  it("lists every code a schema refine names in the source", () => {
+    const named = new Set<string>();
+    for (const file of readdirSync(SRC, { recursive: true, encoding: "utf8" })) {
+      if (!file.endsWith(".ts")) {
+        continue;
+      }
+      const source = readFileSync(join(SRC, file), "utf8");
+      for (const match of source.matchAll(/params:\s*\{\s*code:\s*"(\w+)"/g)) {
+        named.add(match[1] ?? "");
+      }
+    }
+    expect(named.size).toBeGreaterThan(10);
+    expect(
+      [...named].filter((code) => !(DETAIL_CODES as readonly string[]).includes(code)),
+    ).toEqual([]);
+  });
+
+  it("has no duplicates", () => {
+    expect(new Set(DETAIL_CODES).size).toBe(DETAIL_CODES.length);
   });
 });
 

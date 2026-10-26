@@ -18,14 +18,20 @@ describe("GET /health", () => {
   it("returns 200 with db up when PostgreSQL is reachable", async () => {
     const res = await request(testApp(upPool, logger)).get("/health");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "ok", db: "up" });
+    expect(res.body).toEqual({ data: { status: "ok", db: "up" } });
   });
 
   it("returns 503 with db down, within the timeout, when PostgreSQL is unreachable", async () => {
     const started = Date.now();
     const res = await request(testApp(downPool, logger)).get("/health");
     expect(res.status).toBe(503);
-    expect(res.body).toEqual({ status: "error", db: "down" });
+    expect(res.body).toEqual({
+      error: {
+        code: "SERVICE_UNAVAILABLE",
+        requestId: res.headers["x-request-id"],
+        details: [],
+      },
+    });
     expect(Date.now() - started).toBeLessThan(2500);
   });
 });
