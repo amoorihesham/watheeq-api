@@ -72,7 +72,7 @@ async function submit(title = "Gulf Supplies contract", person: PersonType = "kh
     answers: vendorAnswers(alNoor),
   });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return { id: res.body.request.id as string, number: res.body.request.number as string };
+  return { id: res.body.data.id as string, number: res.body.data.number as string };
 }
 
 async function accept(id: string, workflowId: string, handler: PersonType = "faisal") {
@@ -81,7 +81,7 @@ async function accept(id: string, workflowId: string, handler: PersonType = "fai
     workflowId,
   });
   expect(res.status, JSON.stringify(res.body)).toBe(200);
-  return res.body.request;
+  return res.body.data;
 }
 
 type RunType = { id: string; state: string; stage: { name: string } };
@@ -96,11 +96,11 @@ async function stageAction(
 ) {
   const current = await as(person).get(`/requests/${id}`);
   const res = await as(person).post(
-    `/requests/${id}/stages/${liveRun(current.body.request).id}/${action}`,
+    `/requests/${id}/stages/${liveRun(current.body.data).id}/${action}`,
     body,
   );
   expect(res.status, JSON.stringify(res.body)).toBe(200);
-  return res.body.request;
+  return res.body.data;
 }
 
 interface NoticeType {
@@ -441,12 +441,12 @@ describe("information requests and closures (R7.12)", () => {
   it("tells Khalid of a question and of its cancellation, and tells whoever asked of the answer", async () => {
     const { id } = await submit();
     const asked = await as("huda").post(base(id), { question: "Which entity signs?" });
-    expect(asked.status, JSON.stringify(asked.body)).toBe(201);
-    const first = asked.body.request.informationRequests[0].id;
+    expect(asked.status, JSON.stringify(asked.body)).toBe(200);
+    const first = asked.body.data.informationRequests[0].id;
     const answered = await as("khalid").post(`${base(id)}/${first}/answer`, { answer: "Gulf Ltd" });
     expect(answered.status, JSON.stringify(answered.body)).toBe(200);
     const again = await as("huda").post(base(id), { question: "And the address?" });
-    const second = again.body.request.informationRequests.find(
+    const second = again.body.data.informationRequests.find(
       (q: { state: string }) => q.state === "open",
     ).id;
     expect((await as("huda").post(`${base(id)}/${second}/cancel`)).status).toBe(200);
@@ -463,8 +463,8 @@ describe("information requests and closures (R7.12)", () => {
     const { id } = await submit();
     await accept(id, alNoor.workflows.vendor);
     const asked = await as("majed").post(base(id), { question: "Within the budget?" });
-    expect(asked.status, JSON.stringify(asked.body)).toBe(201);
-    const infoId = asked.body.request.informationRequests[0].id;
+    expect(asked.status, JSON.stringify(asked.body)).toBe(200);
+    const infoId = asked.body.data.informationRequests[0].id;
     await as("khalid").post(`${base(id)}/${infoId}/answer`, { answer: "Yes" });
     expect(only(await told(id), "request.information_answered")).toEqual([
       "majed:request.information_answered",

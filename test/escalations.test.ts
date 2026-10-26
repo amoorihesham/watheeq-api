@@ -84,7 +84,7 @@ async function submit(
     draft(tenant, priorityId, title),
   );
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body.request.id;
+  return res.body.data.id;
 }
 
 async function acceptRequest(
@@ -463,17 +463,17 @@ describe("firing at most once (R7.5)", () => {
 
     const res = await as("huda").get(`/requests/${requestId}`);
     expect(res.status).toBe(200);
-    expect(res.body.request.escalations).toEqual([
+    expect(res.body.data.escalations).toEqual([
       { rule: "r1", dueAt: at("2026-11-04T16:00").toISOString(), firedAt: expect.any(String) },
       { rule: "r2", dueAt: at("2026-11-08T10:00").toISOString(), firedAt: expect.any(String) },
     ]);
-    const [r1, r2] = res.body.request.escalations;
+    const [r1, r2] = res.body.data.escalations;
     expect(new Date(r1.firedAt) <= new Date(r2.firedAt)).toBe(true);
   });
 
   it("shows no firings on a request nothing fired on", async () => {
     const requestId = await open42();
-    expect((await as("huda").get(`/requests/${requestId}`)).body.request.escalations).toEqual([]);
+    expect((await as("huda").get(`/requests/${requestId}`)).body.data.escalations).toEqual([]);
   });
 
   it("keeps a firing when a holiday later moves the moment it was due, and R2 waits for the new deadline", async () => {

@@ -48,7 +48,7 @@ async function submit(person: PersonType = "khalid", overrides: object = {}) {
   const answers = { [draftField]: [await upload(person)] };
   const res = await as(person).post("/requests", draft({ answers, ...overrides }));
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body.request as { id: string; files: { id: string }[] };
+  return res.body.data as { id: string; files: { id: string }[] };
 }
 
 async function accept(id: string) {
@@ -133,7 +133,7 @@ describe("files at submission (R6.3)", () => {
       draft({ answers: { [draftField]: [first, second] }, fileIds: [extra] }),
     );
     expect(res.status, JSON.stringify(res.body)).toBe(201);
-    const created = res.body.request;
+    const created = res.body.data;
     expect(created.files.map((file: { id: string }) => file.id).sort()).toEqual(
       [first, second, extra].sort(),
     );
@@ -225,7 +225,7 @@ describe("files at submission (R6.3)", () => {
       draft({ answers: { [draftField]: [ids[0]] }, fileIds: ids.slice(1, 50) }),
     );
     expect(fifty.status, JSON.stringify(fifty.body)).toBe(201);
-    expect(fifty.body.request.files).toHaveLength(50);
+    expect(fifty.body.data.files).toHaveLength(50);
   });
 });
 
@@ -237,8 +237,8 @@ describe("attaching (R6.24)", () => {
       fileIds: [own],
     });
     expect(byRequester.status, JSON.stringify(byRequester.body)).toBe(200);
-    expect(byRequester.body.request.files).toHaveLength(2);
-    expect(byRequester.body.request.allowedActions).toContain("attach_files");
+    expect(byRequester.body.data.files).toHaveLength(2);
+    expect(byRequester.body.data.allowedActions).toContain("attach_files");
 
     const byReviewer = await as("huda").post(`/requests/${created.id}/files`, {
       fileIds: [await upload("huda", "review-note.pdf")],
@@ -250,7 +250,7 @@ describe("attaching (R6.24)", () => {
       fileIds: [await upload("faisal", "draft.pdf")],
     });
     expect(byHandler.status, JSON.stringify(byHandler.body)).toBe(200);
-    expect(byHandler.body.request.files).toHaveLength(4);
+    expect(byHandler.body.data.files).toHaveLength(4);
 
     const rows = await auditOf(created.id);
     expect(rows.filter((row) => row.action === "request.files_attached")).toHaveLength(3);
@@ -265,7 +265,7 @@ describe("attaching (R6.24)", () => {
     expect(viewer.status).toBe(403);
     expect(codeOf(viewer)).toBe("FORBIDDEN");
     expect(
-      (await as("majed").get(`/requests/${created.id}`)).body.request.allowedActions,
+      (await as("majed").get(`/requests/${created.id}`)).body.data.allowedActions,
     ).not.toContain("attach_files");
 
     await accept(created.id);
@@ -320,7 +320,7 @@ describe("attaching (R6.24)", () => {
       fileIds: ids.slice(0, 49),
     });
     expect(fill.status, JSON.stringify(fill.body)).toBe(200);
-    expect(fill.body.request.files).toHaveLength(50);
+    expect(fill.body.data.files).toHaveLength(50);
 
     const over = await as("khalid").post(`/requests/${created.id}/files`, {
       fileIds: ids.slice(49),
@@ -383,8 +383,10 @@ describe("removing (R6.25)", () => {
       reason: "wrong file",
     });
     expect(removed.status, JSON.stringify(removed.body)).toBe(200);
-    expect(removed.body.request.files).toEqual([]);
-    expect(removed.body.request.answers[0].files).toEqual([{ id: fileId, removed: true }]);
+    expect(removed.body.data.files).toEqual([]);
+    expect(removed.body.data.answers[0].files).toEqual([
+      { id: fileId, removed: true, name: null, contentType: null, sizeBytes: null },
+    ]);
     expect(await links(created.id)).toEqual([]);
     expect(await fileState(fileId)).toBe("discarded");
 
@@ -414,7 +416,7 @@ describe("removing (R6.25)", () => {
     const attached = await as("faisal").post(`/requests/${created.id}/files`, {
       fileIds: [await upload("faisal", "mine.pdf")],
     });
-    const faisalFile = attached.body.request.files.find(
+    const faisalFile = attached.body.data.files.find(
       (file: { name: string }) => file.name === "mine.pdf",
     ).id;
     const khalidFile = created.files[0]?.id ?? "";

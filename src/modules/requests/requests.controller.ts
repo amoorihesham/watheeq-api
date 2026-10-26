@@ -1,13 +1,14 @@
 import type { Request, RequestHandler } from "express";
+import { sendData, sendPage } from "@/http/respond.js";
 import { auditContextOf, principalOf } from "@/modules/auth/index.js";
 import { sendDownload } from "@/modules/files/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import type {
-  CatalogType,
-  ListRequestsResponseType,
-  RequestResponseType,
-  RequestsServiceType,
-} from "./requests.types.js";
+import {
+  catalogResponseSchema,
+  requestResponseSchema,
+  requestSummaryResponseSchema,
+} from "./requests.responses.js";
+import type { RequestsServiceType } from "./requests.types.js";
 
 const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
 const callerOf = (req: Request) => principalOf(req).id;
@@ -18,7 +19,7 @@ const informationIdOf = (req: Request) => String(req.params.infoId);
 export function createRequestsController({ service }: { service: RequestsServiceType }) {
   return {
     catalog: (async (req, res) => {
-      res.status(200).json((await service.catalog(tenantOf(req))) satisfies CatalogType);
+      sendData(res, 200, catalogResponseSchema, await service.catalog(tenantOf(req)));
     }) satisfies RequestHandler,
 
     submit: (async (req, res) => {
@@ -28,17 +29,17 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(201).json({ request } satisfies RequestResponseType);
+      sendData(res, 201, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     list: (async (req, res) => {
       const page = await service.list(tenantOf(req), callerOf(req), req.query);
-      res.status(200).json(page satisfies ListRequestsResponseType);
+      sendPage(res, requestSummaryResponseSchema, page);
     }) satisfies RequestHandler,
 
     get: (async (req, res) => {
       const request = await service.get(tenantOf(req), callerOf(req), requestIdOf(req));
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     changePriority: (async (req, res) => {
@@ -49,7 +50,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     accept: (async (req, res) => {
@@ -60,7 +61,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     reject: (async (req, res) => {
@@ -71,7 +72,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     withdraw: (async (req, res) => {
@@ -82,7 +83,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     stageAction: (
@@ -97,7 +98,7 @@ export function createRequestsController({ service }: { service: RequestsService
           req.body,
           auditContextOf(req),
         );
-        res.status(200).json({ request } satisfies RequestResponseType);
+        sendData(res, 200, requestResponseSchema, request);
       }) satisfies RequestHandler,
 
     changeHandler: (async (req, res) => {
@@ -108,7 +109,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     attachFiles: (async (req, res) => {
@@ -119,7 +120,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     removeFile: (async (req, res) => {
@@ -131,7 +132,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     fileContent: (async (req, res) => {
@@ -152,7 +153,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(201).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     answerInformation: (async (req, res) => {
@@ -164,7 +165,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     cancelInformation: (async (req, res) => {
@@ -175,7 +176,7 @@ export function createRequestsController({ service }: { service: RequestsService
         informationIdOf(req),
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
 
     closeNoResponse: (async (req, res) => {
@@ -186,7 +187,7 @@ export function createRequestsController({ service }: { service: RequestsService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ request } satisfies RequestResponseType);
+      sendData(res, 200, requestResponseSchema, request);
     }) satisfies RequestHandler,
   };
 }

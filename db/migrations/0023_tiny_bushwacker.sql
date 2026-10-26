@@ -1,0 +1,1 @@
+CREATE INDEX "requests_submitted_idx" ON "requests" USING btree ("tenant_id","submitted_at" DESC NULLS LAST,"id" DESC NULLS LAST);

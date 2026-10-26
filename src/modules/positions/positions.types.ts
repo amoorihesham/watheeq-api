@@ -5,13 +5,16 @@ import type { ASSIGNEE_BUILTINS } from "./positions.config.js";
 import type { createPositionsController } from "./positions.controller.js";
 import type { createPositionsRepository } from "./positions.repository.js";
 import type {
+  assigneeTargetResponseSchema,
+  positionResponseSchema,
+} from "./positions.responses.js";
+import type {
   assigneeTargetSchema,
   createPositionRequestSchema,
   listPositionsQuerySchema,
   renamePositionRequestSchema,
   setHoldersRequestSchema,
 } from "./positions.schemas.js";
-import type { assigneeTargetResponseSchema, positionResponseSchema } from "./positions.responses.js";
 import type { createPositionsService } from "./positions.service.js";
 
 export type AssigneeBuiltinType = (typeof ASSIGNEE_BUILTINS)[number];

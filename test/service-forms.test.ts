@@ -129,8 +129,8 @@ beforeAll(async () => {
     },
   ];
   workflow = (await as(huda).post("/workflows", { name: "Form flow", stages })).body.data.id;
-  rashidWorkflow = (await as(rashid).post("/workflows", { name: "Their flow", stages })).body
-    .data.id;
+  rashidWorkflow = (await as(rashid).post("/workflows", { name: "Their flow", stages })).body.data
+    .id;
 });
 
 afterAll(async () => {
@@ -171,9 +171,7 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
     ]);
     expect(fields[2].options.every((option: { id: string }) => option.id.length === 36)).toBe(true);
     expect(fields[5]).toMatchObject({ type: "file", maxFiles: 3 });
-    expect((await as(huda).get(`/services/${id}`)).body.data.form).toEqual(
-      res.body.data.form,
-    );
+    expect((await as(huda).get(`/services/${id}`)).body.data.form).toEqual(res.body.data.form);
 
     const audit = (await auditOf(id)).filter((row) => row.action === "service.form_updated");
     expect(audit).toHaveLength(1);

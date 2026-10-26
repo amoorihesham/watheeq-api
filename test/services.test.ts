@@ -198,9 +198,7 @@ describe("creating services (R5.11)", () => {
         ],
       },
     });
-    expect((await as(huda).get(`/services/${res.body.data.id}`)).body.data).toEqual(
-      res.body.data,
-    );
+    expect((await as(huda).get(`/services/${res.body.data.id}`)).body.data).toEqual(res.body.data);
   });
 
   it("allows a single workflow, which is then the default, and no description", async () => {

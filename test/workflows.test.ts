@@ -285,7 +285,11 @@ describe("creating workflows (R5.8)", () => {
           {
             id: expect.any(String),
             ...stages[2],
-            assignee: { position: positionIds.reviewer, name: "Procurement Reviewer", builtin: null },
+            assignee: {
+              position: positionIds.reviewer,
+              name: "Procurement Reviewer",
+              builtin: null,
+            },
           },
           {
             id: expect.any(String),
@@ -963,9 +967,7 @@ describe("a position in use cannot be retired (R5.16)", () => {
     ]);
     expect((await as(huda).post(`/positions/${positionIds.intake}/retire`)).status).toBe(409);
     const read = await as(huda).get(`/positions/${positionIds.intake}`);
-    expect(read.body.data.holders.map((h: { userId: string }) => h.userId)).toEqual([
-      ids.ahmed,
-    ]);
+    expect(read.body.data.holders.map((h: { userId: string }) => h.userId)).toEqual([ids.ahmed]);
   });
 
   it("allows it when only an older version names the position", async () => {
@@ -1012,9 +1014,7 @@ describe("a position in use cannot be retired (R5.16)", () => {
       stages: [stage("A", { position: theirs.body.data.id })],
     });
     expect((await as(huda).post(`/positions/${position}/retire`)).status).toBe(200);
-    expect((await as(rashid).post(`/positions/${theirs.body.data.id}/retire`)).status).toBe(
-      409,
-    );
+    expect((await as(rashid).post(`/positions/${theirs.body.data.id}/retire`)).status).toBe(409);
   });
 });
 

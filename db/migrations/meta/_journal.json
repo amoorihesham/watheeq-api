@@ -162,6 +162,13 @@
       "when": 1793013384609,
       "tag": "0022_tenant_notices",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793033889066,
+      "tag": "0023_tiny_bushwacker",
+      "breakpoints": true
     }
   ]
 }

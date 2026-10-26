@@ -4,8 +4,8 @@ import type { Db } from "@/db/pool.js";
 import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { createEscalationController } from "./escalation.controller.js";
 import type { createEscalationRepository } from "./escalation.repository.js";
-import type { putEscalationRequestSchema } from "./escalation.schemas.js";
 import type { escalationResponseSchema } from "./escalation.responses.js";
+import type { putEscalationRequestSchema } from "./escalation.schemas.js";
 import type { createEscalationService } from "./escalation.service.js";
 
 export type PutEscalationRequestType = z.input<typeof putEscalationRequestSchema>;

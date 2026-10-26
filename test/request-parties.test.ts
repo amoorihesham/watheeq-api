@@ -33,13 +33,13 @@ async function inBusinessApproval(): Promise<{ id: string; runId: string }> {
     answers: vendorAnswers(alNoor),
   });
   expect(submitted.status, JSON.stringify(submitted.body)).toBe(201);
-  const id = submitted.body.request.id as string;
+  const id = submitted.body.data.id as string;
   const accepted = await as("huda").post(`/requests/${id}/accept`, {
     handlerId: alNoor.ids.faisal,
     workflowId: alNoor.workflows.vendor,
   });
   expect(accepted.status, JSON.stringify(accepted.body)).toBe(200);
-  const run = (accepted.body.request.stages as RunType[]).find((r) => r.state === "active");
+  const run = (accepted.body.data.stages as RunType[]).find((r) => r.state === "active");
   expect(run?.stage.name).toBe("Business approval");
   return { id, runId: run?.id ?? "" };
 }
@@ -62,19 +62,19 @@ describe("a current stage assignee as a party (R6.20, R6.24)", () => {
   it("lets Majed ask Khalid a question and attach a file while Business approval waits on him", async () => {
     const { id } = await inBusinessApproval();
     const page = await as("majed").get(`/requests/${id}`);
-    expect(page.body.request.allowedActions).toEqual(
+    expect(page.body.data.allowedActions).toEqual(
       expect.arrayContaining(["attach_files", "ask_information", "complete"]),
     );
 
     const asked = await as("majed").post(`/requests/${id}/information-requests`, {
       question: "Is this within the Q4 budget?",
     });
-    expect(asked.status, JSON.stringify(asked.body)).toBe(201);
+    expect(asked.status, JSON.stringify(asked.body)).toBe(200);
 
     const fileId = await pendingUpload("majed", "budget-approval.pdf");
     const attached = await as("majed").post(`/requests/${id}/files`, { fileIds: [fileId] });
     expect(attached.status, JSON.stringify(attached.body)).toBe(200);
-    expect(attached.body.request.files.map((f: { id: string }) => f.id)).toContain(fileId);
+    expect(attached.body.data.files.map((f: { id: string }) => f.id)).toContain(fileId);
   });
 
   it("refuses Nora, who sees the request but is not an assignee", async () => {
@@ -111,12 +111,12 @@ describe("closing as no response with a live stage (R6.21)", () => {
     const asked = await as("majed").post(`/requests/${id}/information-requests`, {
       question: "Is this within the Q4 budget?",
     });
-    expect(asked.status).toBe(201);
+    expect(asked.status).toBe(200);
     const closed = await as("faisal").post(`/requests/${id}/close-no-response`, {
       reason: "No answer from Procurement",
     });
     expect(closed.status, JSON.stringify(closed.body)).toBe(200);
-    const request = closed.body.request;
+    const request = closed.body.data;
     expect(request.state).toBe("rejected_no_response");
     expect((request.stages as RunType[]).map((r) => r.state)).toEqual(["cancelled"]);
     expect(request.informationRequests.map((q: { state: string }) => q.state)).toEqual(["closed"]);
@@ -144,7 +144,7 @@ describe("a deactivated member whose token is still valid (D31)", () => {
       title: "Gulf Supplies contract",
       answers: vendorAnswers(alNoor),
     });
-    const id = submitted.body.request.id as string;
+    const id = submitted.body.data.id as string;
     await whileInactive("khalid", async () => {
       expect((await as("khalid").post(`/requests/${id}/withdraw`, { reason: "r" })).status).toBe(
         403,
@@ -156,7 +156,7 @@ describe("a deactivated member whose token is still valid (D31)", () => {
     const asked = await as("majed").post(`/requests/${open}/information-requests`, {
       question: "Is this within the Q4 budget?",
     });
-    const infoId = asked.body.request.informationRequests[0].id as string;
+    const infoId = asked.body.data.informationRequests[0].id as string;
     await whileInactive("khalid", async () => {
       const answered = await as("khalid").post(
         `/requests/${open}/information-requests/${infoId}/answer`,

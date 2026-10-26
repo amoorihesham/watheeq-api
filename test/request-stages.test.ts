@@ -94,7 +94,7 @@ async function submitAs(access: string): Promise<string> {
     answers: vendorAnswers(alNoor),
   });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body.request.id;
+  return res.body.data.id;
 }
 
 async function acceptWith(
@@ -107,7 +107,7 @@ async function acceptWith(
     workflowId,
   });
   expect(res.status, JSON.stringify(res.body)).toBe(200);
-  return res.body.request;
+  return res.body.data;
 }
 
 /** A request from Khalid, accepted into the given workflow. */
@@ -117,7 +117,7 @@ async function open(workflowId = alNoor.workflows.vendor, handler: PersonType = 
 }
 
 const detail = async (id: string, viewer: PersonType = "huda"): Promise<RequestBodyType> =>
-  (await as(viewer).get(`/requests/${id}`)).body.request;
+  (await as(viewer).get(`/requests/${id}`)).body.data;
 
 const live = (request: RequestBodyType) =>
   request.stages.find((run) => run.state === "active" || run.state === "held");
@@ -138,7 +138,7 @@ async function complete(person: PersonType, id: string, body: object = {}) {
   expect(run, "a live run").toBeDefined();
   const res = await act(person, id, run?.id ?? "", "complete", body);
   expect(res.status, JSON.stringify(res.body)).toBe(200);
-  return res.body.request as RequestBodyType;
+  return res.body.data as RequestBodyType;
 }
 
 const rowOf = (id: string) =>
@@ -208,11 +208,11 @@ describe("the worked example on #42 (R6.10, R6.13-R6.16, R6.23)", () => {
     });
     expect(names(accepted)).toEqual(["Business approval:active"]);
     expect(
-      (await as("majed").get("/requests?view=waiting_on_me")).body.requests.map(
+      (await as("majed").get("/requests?view=waiting_on_me")).body.data.map(
         (r: { id: string }) => r.id,
       ),
     ).toContain(id);
-    expect((await as("khalid").get("/requests?view=waiting_on_me")).body.requests).toEqual([]);
+    expect((await as("khalid").get("/requests?view=waiting_on_me")).body.data).toEqual([]);
 
     const afterApproval = await complete("majed", id, { comment: "Within the Q4 budget" });
     expect(names(afterApproval)).toEqual(["Business approval:completed", "Drafting:active"]);
@@ -245,14 +245,14 @@ describe("the worked example on #42 (R6.10, R6.13-R6.16, R6.23)", () => {
       reason: "needs a change",
     });
     expect(returned.status).toBe(200);
-    expect(names(returned.body.request)).toEqual([
+    expect(names(returned.body.data)).toEqual([
       "Business approval:completed",
       "Drafting:completed",
       "Procurement check:skipped",
       "Supervisor sign-off:returned",
       "Drafting:active",
     ]);
-    expect(returned.body.request.stages[3].comment).toBe("needs a change");
+    expect(returned.body.data.stages[3].comment).toBe("needs a change");
 
     await complete("faisal", id);
     const completed = await complete("huda", id);
@@ -296,7 +296,7 @@ describe("starting and refreshing stages (R6.13, R6.18)", () => {
     expect((await act("nora", id, run?.id ?? "", "refresh")).status).toBe(403);
     const refreshed = await act("faisal", id, run?.id ?? "", "refresh", { reason: "boss added" });
     expect(refreshed.status).toBe(200);
-    expect(live(refreshed.body.request)).toMatchObject({
+    expect(live(refreshed.body.data)).toMatchObject({
       id: run?.id,
       state: "active",
       assignees: [{ id: boss.id, name: expect.any(String) }],
@@ -322,7 +322,7 @@ describe("starting and refreshing stages (R6.13, R6.18)", () => {
     expect(live(accepted)?.assignees).toHaveLength(1);
     await pool.query("update tenant_members set is_manager = false where user_id = $1", [boss.id]);
     const refreshed = await act("faisal", id, live(accepted)?.id ?? "", "refresh");
-    expect(names(refreshed.body.request)).toEqual(["Treasury review:skipped", "Drafting:active"]);
+    expect(names(refreshed.body.data)).toEqual(["Treasury review:skipped", "Drafting:active"]);
   });
 
   it("completes the request at acceptance when every stage skips (R6.13)", async () => {
@@ -434,7 +434,7 @@ describe("completing and returning (R6.14-R6.16)", () => {
       expect((await act("nora", id, run, "complete")).status).toBe(403);
       expect((await act("faisal", id, run, "complete")).status).toBe(403);
       const refreshed = await act("huda", id, run, "refresh");
-      expect(live(refreshed.body.request)?.assignees.map((a) => a.name)).toEqual(["Nora"]);
+      expect(live(refreshed.body.data)?.assignees.map((a) => a.name)).toEqual(["Nora"]);
       expect((await act("nora", id, run, "complete")).status).toBe(200);
     } finally {
       await pool.query("update tenant_members set position_id = null where user_id = $1", [
@@ -460,7 +460,7 @@ describe("completing and returning (R6.14-R6.16)", () => {
     const drafting = live(await detail(id))?.id ?? "";
     const back = await act("faisal", id, drafting, "return", { reason: "approval needs a note" });
     expect(back.status).toBe(200);
-    expect(names(back.body.request)).toEqual([
+    expect(names(back.body.data)).toEqual([
       "Business approval:completed",
       "Drafting:returned",
       "Business approval:active",
@@ -473,7 +473,7 @@ describe("completing and returning (R6.14-R6.16)", () => {
     await complete("faisal", id); // Procurement check skipped, Supervisor sign-off active
     const run = live(await detail(id))?.id ?? "";
     const res = await act("ahmed", id, run, "return", { reason: "redo" });
-    expect(live(res.body.request)?.stage.name).toBe("Drafting");
+    expect(live(res.body.data)?.stage.name).toBe("Drafting");
   });
 
   it("starts a returned-to stage from its position, without earlier narrowing (R6.16)", async () => {
@@ -487,13 +487,13 @@ describe("completing and returning (R6.14-R6.16)", () => {
       userIds: [alNoor.ids.huda],
       reason: "Huda knows this vendor",
     });
-    expect(live(narrowed.body.request)).toMatchObject({ narrowed: true });
+    expect(live(narrowed.body.data)).toMatchObject({ narrowed: true });
     await complete("huda", id);
     const drafting = live(await detail(id))?.id ?? "";
     const back = await act("faisal", id, drafting, "return", {
       reason: "needs legal review again",
     });
-    const rerun = live(back.body.request);
+    const rerun = live(back.body.data);
     expect(rerun).toMatchObject({ narrowed: false, escalated: false });
     expect(rerun?.assignees.map((a) => a.name)).toEqual(["Ahmed", "Huda"]);
   });
@@ -522,7 +522,7 @@ describe("handler actions (R6.17)", () => {
       reason: "Ahmed leads",
     });
     expect(ok.status).toBe(200);
-    expect(live(ok.body.request)?.assignees.map((a) => a.name)).toEqual(["Ahmed"]);
+    expect(live(ok.body.data)?.assignees.map((a) => a.name)).toEqual(["Ahmed"]);
     // Huda is no longer an assignee.
     expect((await act("huda", id, run, "complete")).status).toBe(403);
     const entry = (await auditActions(id)).find((e) => e.action === "request.stage_narrowed");
@@ -543,8 +543,8 @@ describe("handler actions (R6.17)", () => {
     expect((await act("huda", id, run, "escalate", { reason: "r" })).status).toBe(403);
     const up = await act("faisal", id, run, "escalate", { reason: "Ahmed is away" });
     expect(up.status).toBe(200);
-    expect(live(up.body.request)).toMatchObject({ escalated: true });
-    expect(live(up.body.request)?.assignees.map((a) => a.name)).toEqual(["Ahmed", "Huda"]);
+    expect(live(up.body.data)).toMatchObject({ escalated: true });
+    expect(live(up.body.data)?.assignees.map((a) => a.name)).toEqual(["Ahmed", "Huda"]);
     const end = await act("faisal", id, run, "escalate", { reason: "again" });
     expect(codeOf(end)).toBe("NO_HIGHER_LEVEL");
 
@@ -590,9 +590,9 @@ describe("reassigning the handler (R6.19)", () => {
         reason: "Faisal was deactivated",
       });
       expect(res.status, JSON.stringify(res.body)).toBe(200);
-      expect(res.body.request.handler.name).toBe("Nora");
-      expect(live(res.body.request)).toMatchObject({ id: drafting?.id, state: "active" });
-      expect(live(res.body.request)?.assignees.map((a) => a.name)).toEqual(["Nora"]);
+      expect(res.body.data.handler.name).toBe("Nora");
+      expect(live(res.body.data)).toMatchObject({ id: drafting?.id, state: "active" });
+      expect(live(res.body.data)?.assignees.map((a) => a.name)).toEqual(["Nora"]);
       expect((await rowOf(id)).handler_unit_id).toBe(alNoor.units.contracts);
       expect((await act("nora", id, drafting?.id ?? "", "complete")).status).toBe(200);
       const entry = (await auditActions(id)).find((e) => e.action === "request.handler_changed");
@@ -641,7 +641,7 @@ describe("reassigning the handler (R6.19)", () => {
       handlerId: alNoor.ids.ahmed,
       reason: "Ahmed takes over",
     });
-    expect(live(res.body.request)).toMatchObject({ state: "held", assignees: [] });
+    expect(live(res.body.data)).toMatchObject({ state: "held", assignees: [] });
   });
 });
 
@@ -654,7 +654,7 @@ describe("who sees a request through its stage (R6.7)", () => {
     const status = async (person: PersonType) => (await as(person).get(`/requests/${id}`)).status;
     expect(await status("reem")).toBe(200);
     expect(
-      (await as("reem").get("/requests?view=waiting_on_me")).body.requests.map(
+      (await as("reem").get("/requests?view=waiting_on_me")).body.data.map(
         (r: { id: string }) => r.id,
       ),
     ).toEqual([id]);

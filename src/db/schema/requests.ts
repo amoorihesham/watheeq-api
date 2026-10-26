@@ -144,6 +144,7 @@ export const requests = pgTable(
       foreignColumns: [tenantMembers.tenantId, tenantMembers.userId],
     }),
     index("requests_state_idx").on(t.tenantId, t.state),
+    index("requests_submitted_idx").on(t.tenantId, t.submittedAt.desc(), t.id.desc()),
     index("requests_requester_idx").on(t.tenantId, t.requesterId),
     index("requests_handler_idx").on(t.tenantId, t.handlerId),
     index("requests_requester_unit_idx").on(t.tenantId, t.requesterUnitId),

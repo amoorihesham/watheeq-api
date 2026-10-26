@@ -45,7 +45,7 @@ async function submit(person: PersonType = "khalid") {
     answers: vendorAnswers(alNoor),
   });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body.request.id as string;
+  return res.body.data.id as string;
 }
 
 async function accept(id: string) {
@@ -62,8 +62,8 @@ async function ask(
   question = "Is this within the Q4 budget?",
 ) {
   const res = await as(person).post(`/requests/${id}/information-requests`, { question });
-  expect(res.status, JSON.stringify(res.body)).toBe(201);
-  const questions = res.body.request.informationRequests as QuestionType[];
+  expect(res.status, JSON.stringify(res.body)).toBe(200);
+  const questions = res.body.data.informationRequests as QuestionType[];
   return questions[questions.length - 1] as QuestionType;
 }
 
@@ -125,12 +125,12 @@ describe("asking (R6.20)", () => {
       answer: null,
       files: [],
     });
-    const seen = (await as("khalid").get(`/requests/${id}`)).body.request;
+    const seen = (await as("khalid").get(`/requests/${id}`)).body.data;
     expect(seen.informationRequests).toHaveLength(1);
     expect(seen.informationRequests[0].askedBy).toEqual({ id: alNoor.ids.huda, name: "Huda" });
     expect(seen.allowedActions).toContain("answer_information");
     expect(seen.allowedActions).not.toContain("ask_information");
-    const reviewer = (await as("huda").get(`/requests/${id}`)).body.request;
+    const reviewer = (await as("huda").get(`/requests/${id}`)).body.data;
     expect(reviewer.allowedActions).toEqual(
       expect.arrayContaining(["cancel_information", "attach_files"]),
     );
@@ -139,13 +139,13 @@ describe("asking (R6.20)", () => {
 
   it("offers asking in allowedActions only to someone who may ask, while none is open", async () => {
     const id = await submit();
-    expect((await as("huda").get(`/requests/${id}`)).body.request.allowedActions).toContain(
+    expect((await as("huda").get(`/requests/${id}`)).body.data.allowedActions).toContain(
       "ask_information",
     );
-    expect((await as("khalid").get(`/requests/${id}`)).body.request.allowedActions).not.toContain(
+    expect((await as("khalid").get(`/requests/${id}`)).body.data.allowedActions).not.toContain(
       "ask_information",
     );
-    expect((await as("majed").get(`/requests/${id}`)).body.request.allowedActions).not.toContain(
+    expect((await as("majed").get(`/requests/${id}`)).body.data.allowedActions).not.toContain(
       "ask_information",
     );
   });
@@ -234,7 +234,7 @@ describe("answering (R6.20)", () => {
       fileIds: [fileId],
     });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    const [question] = res.body.request.informationRequests as (QuestionType & {
+    const [question] = res.body.data.informationRequests as (QuestionType & {
       endedBy: { name: string };
     })[];
     expect(question).toMatchObject({
@@ -251,7 +251,7 @@ describe("answering (R6.20)", () => {
     expect(
       (await pool.query("select state from files where id = $1", [fileId])).rows[0].state,
     ).toBe("attached");
-    expect(res.body.request.allowedActions).not.toContain("answer_information");
+    expect(res.body.data.allowedActions).not.toContain("answer_information");
 
     const entry = (await auditOf(id)).find((e) => e.action === "request.information_answered");
     expect(entry.details).toEqual({
@@ -350,8 +350,8 @@ describe("cancelling (Q25)", () => {
 
     const res = await as("huda").post(cancelPath(id, asked.id));
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body.request.informationRequests[0].state).toBe("cancelled");
-    expect(res.body.request.informationRequests[0].endedBy).toEqual({
+    expect(res.body.data.informationRequests[0].state).toBe("cancelled");
+    expect(res.body.data.informationRequests[0].endedBy).toEqual({
       id: alNoor.ids.huda,
       name: "Huda",
     });
@@ -385,7 +385,7 @@ describe("closing as Rejected - no response (R6.21)", () => {
       reason: "Khalid never answered",
     });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    const closed = res.body.request;
+    const closed = res.body.data;
     expect(closed.state).toBe("rejected_no_response");
     expect(closed.closedAt).toBeTruthy();
     expect(closed.sla).toMatchObject({ met: true, breachDays: 0 });
@@ -528,7 +528,7 @@ describe("working time awaiting information (R6.23, Q27)", () => {
       id,
       at10(plusDays(start, 1)),
     ]);
-    const live = (await as("faisal").get(`/requests/${id}`)).body.request.sla;
+    const live = (await as("faisal").get(`/requests/${id}`)).body.data.sla;
     expect(live.elapsedDays - live.awaitingInfoDays).toBeCloseTo(1, 5);
 
     const res = await as("faisal").post(`/requests/${id}/close-no-response`, { reason: "silent" });
@@ -536,7 +536,7 @@ describe("working time awaiting information (R6.23, Q27)", () => {
     const row = await rowOf(id);
     expect(Number(row.elapsed_days) - Number(row.awaiting_info_days)).toBeCloseTo(1, 5);
     expect(row.sla_met).toBe(false);
-    expect(res.body.request.sla.awaitingInfoDays).toBeCloseTo(Number(row.awaiting_info_days), 5);
+    expect(res.body.data.sla.awaitingInfoDays).toBeCloseTo(Number(row.awaiting_info_days), 5);
   });
 
   it("counts a question answered before acceptance as zero", async () => {
@@ -559,7 +559,7 @@ describe("waiting on me (R6.8)", () => {
     const id = await submit();
     const waiting = async (person: PersonType) =>
       (
-        (await as(person).get("/requests?view=waiting_on_me&limit=100")).body.requests as {
+        (await as(person).get("/requests?view=waiting_on_me&limit=100")).body.data as {
           id: string;
         }[]
       ).some((r) => r.id === id);
@@ -588,8 +588,8 @@ describe("subscription states and isolation (R6.26, R6.27)", () => {
       const graceAsk = await as("huda").post(`/requests/${id}/information-requests`, {
         question: "Grace question",
       });
-      expect(graceAsk.status, JSON.stringify(graceAsk.body)).toBe(201);
-      const open = graceAsk.body.request.informationRequests.at(-1).id;
+      expect(graceAsk.status, JSON.stringify(graceAsk.body)).toBe(200);
+      const open = graceAsk.body.data.informationRequests.at(-1).id;
       await setSubscriptionEnd(-30);
       for (const [person, path, body] of [
         ["huda", `/requests/${id}/information-requests`, { question: "q" }],

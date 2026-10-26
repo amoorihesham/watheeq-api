@@ -101,7 +101,7 @@ beforeAll(async () => {
     answers: vendorAnswers(alNoor),
   });
   expect(submitted.status, JSON.stringify(submitted.body)).toBe(201);
-  requestId = submitted.body.request.id;
+  requestId = submitted.body.data.id;
 });
 
 beforeEach(async () => {

@@ -3,6 +3,8 @@ import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor, Tx } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError, type DetailCode, type ErrorDetail } from "@/http/errors.js";
+import { listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { validate } from "@/http/validate.js";
 import { loadCalendar } from "@/modules/calendar/index.js";
 import { isEscalationConfigured } from "@/modules/escalation/index.js";
@@ -20,6 +22,7 @@ import {
 } from "@/modules/tenant-access/index.js";
 import type { FileStoreType } from "@/storage/index.js";
 import { MAX_REQUEST_FILES, NUMBER_PREFIX } from "./requests.config.js";
+import { REQUEST_SORT_KEYS } from "./requests.repository.js";
 import {
   acceptRequestSchema,
   answerInformationRequestSchema,
@@ -48,7 +51,6 @@ import type {
   CompleteStageRequestType,
   InformationRequestListRowType,
   InformationRequestType,
-  ListRequestsResponseType,
   NarrowStageRequestType,
   NewRequestFileType,
   ReasonRequestType,
@@ -164,11 +166,16 @@ function answersWithFiles(
 ): RequestAnswerType[] {
   const byId = new Map(files.map((file) => [file.id, file]));
   return answers.map((answer) => {
+    const base = {
+      field: answer.field,
+      value: answer.value as RequestAnswerType["value"],
+      chosen: answer.chosen ?? null,
+    };
     if (answer.field.type !== "file" || !Array.isArray(answer.value)) {
-      return answer;
+      return { ...base, files: null };
     }
     return {
-      ...answer,
+      ...base,
       files: (answer.value as string[]).map((id): AnswerFileType => {
         const file = byId.get(id);
         return file
@@ -179,7 +186,7 @@ function answersWithFiles(
               contentType: file.contentType,
               sizeBytes: file.sizeBytes,
             }
-          : { id, removed: true };
+          : { id, removed: true, name: null, contentType: null, sizeBytes: null };
       }),
     };
   });
@@ -699,24 +706,31 @@ export function createRequestsService({
       tenantId: string,
       callerId: string,
       input: unknown,
-    ): Promise<ListRequestsResponseType> {
+    ): Promise<PageType<RequestSummaryType>> {
       const query = validate(listRequestsQuerySchema, input);
       const visible = visibleRequests(tenantId, callerId);
-      const [rows, [counted]] = await Promise.all([
-        repo.list(db, tenantId, callerId, query, visible),
-        repo.count(db, tenantId, callerId, query, visible),
-      ]);
-      const calendar = rows.some((row) => row.state === "in_progress")
+      const page = await listPage({
+        db,
+        list: "requests",
+        query,
+        keys: REQUEST_SORT_KEYS,
+        direction: "desc",
+        where: (filters) => repo.listWhere(tenantId, callerId, filters, visible),
+        selectPage: (tx, request) => repo.selectPage(tx, request),
+        count: (tx, where) => repo.count(tx, where),
+      });
+      const calendar = page.items.some((row) => row.state === "in_progress")
         ? await loadCalendar(db, tenantId)
         : null;
       const { runs, assignees } = await runsWithAssignees(
         db,
         tenantId,
-        rows.map((row) => row.id),
+        page.items.map((row) => row.id),
         true,
       );
       return {
-        requests: rows.map((row) =>
+        ...page,
+        items: page.items.map((row) =>
           toSummary(
             row,
             calendar,
@@ -726,7 +740,6 @@ export function createRequestsService({
             ),
           ),
         ),
-        total: counted?.total ?? 0,
       };
     },
 
@@ -976,7 +989,7 @@ export function createRequestsService({
           request,
           live.stages,
           live.run,
-          body.comment,
+          body.comment ?? undefined,
           actorOf(callerId, context),
           transitions,
         );

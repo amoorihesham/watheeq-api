@@ -46,7 +46,7 @@ const draft = (overrides: object = {}) => ({
 async function submit(person: PersonType, overrides: object = {}) {
   const res = await as(person).post("/requests", draft(overrides));
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body.request as { id: string; number: string; state: string };
+  return res.body.data as { id: string; number: string; state: string };
 }
 
 async function accept(id: string, handler: PersonType = "faisal", reviewer: PersonType = "huda") {
@@ -55,7 +55,7 @@ async function accept(id: string, handler: PersonType = "faisal", reviewer: Pers
     workflowId: alNoor.workflows.vendor,
   });
   expect(res.status, JSON.stringify(res.body)).toBe(200);
-  return res.body.request;
+  return res.body.data;
 }
 
 const rowOf = (id: string) =>
@@ -168,19 +168,19 @@ describe("the catalog (R6.2)", () => {
   it("shows the active services with their forms and the active priorities in order", async () => {
     const res = await as("khalid").get("/requests/catalog");
     expect(res.status).toBe(200);
-    expect(res.body.services).toHaveLength(1);
-    expect(res.body.services[0]).toMatchObject({
+    expect(res.body.data.services).toHaveLength(1);
+    expect(res.body.data.services[0]).toMatchObject({
       id: alNoor.serviceId,
       name: "Vendor contract review",
       form: { revision: 1 },
     });
-    expect(res.body.services[0].form.fields.map((f: { label: string }) => f.label)).toEqual([
+    expect(res.body.data.services[0].form.fields.map((f: { label: string }) => f.label)).toEqual([
       "Vendor name",
       "Contract value",
       "Contract type",
       "Start date",
     ]);
-    expect(res.body.priorities).toEqual([
+    expect(res.body.data.priorities).toEqual([
       { id: alNoor.priorities.urgent, name: "Urgent", days: 2 },
       { id: alNoor.priorities.high, name: "High", days: 5 },
       { id: alNoor.priorities.normal, name: "Normal", days: 10 },
@@ -207,7 +207,7 @@ describe("submitting (R6.3-R6.6)", () => {
   it("stores the request in review with its copies, the answers snapshot, and the requester's unit", async () => {
     const res = await as("khalid").post("/requests", draft());
     expect(res.status).toBe(201);
-    const { request } = res.body;
+    const request = res.body.data;
     expect(request).toMatchObject({
       state: "in_review",
       title: "Gulf Supplies contract",
@@ -260,6 +260,22 @@ describe("submitting (R6.3-R6.6)", () => {
     ]);
   });
 
+  it("gives every answer all its keys: chosen only for choices, files only for file fields (R8.4)", async () => {
+    const res = await as("khalid").post("/requests", draft());
+    const answers = res.body.data.answers as {
+      field: { type: string };
+      chosen: unknown[] | null;
+      files: unknown[] | null;
+    }[];
+    expect(answers.length).toBeGreaterThan(0);
+    for (const answer of answers) {
+      expect(Object.keys(answer).sort()).toEqual(["chosen", "field", "files", "value"]);
+      expect(answer.files).toBeNull();
+      const choice = answer.field.type.endsWith("_choice");
+      expect(Array.isArray(answer.chosen)).toBe(choice);
+    }
+  });
+
   it("refuses an unknown or retired service and priority, and bad bodies", async () => {
     const unknown = await as("khalid").post(
       "/requests",
@@ -269,7 +285,7 @@ describe("submitting (R6.3-R6.6)", () => {
       { path: "serviceId", code: "unknown_service" },
       { path: "priorityId", code: "unknown_priority" },
     ]);
-    const spare = (await as("khalid").get("/requests/catalog")).body.priorities[2].id;
+    const spare = (await as("khalid").get("/requests/catalog")).body.data.priorities[2].id;
     await pool.query("update priorities set retired_at = now(), sort_order = null where id = $1", [
       spare,
     ]);
@@ -325,7 +341,7 @@ describe("submitting (R6.3-R6.6)", () => {
       draft({ priorityId: alNoor.priorities.normal }),
     );
     expect(res.status).toBe(201);
-    const id = res.body.request.id;
+    const id = res.body.data.id;
     try {
       await pool.query("update priorities set days = 3 where id = $1", [alNoor.priorities.normal]);
       await pool.query("update services set name = 'Renamed service' where id = $1", [
@@ -335,7 +351,7 @@ describe("submitting (R6.3-R6.6)", () => {
         mover.id,
         alNoor.units.litigation,
       ]);
-      const read = (await asUser(app, mover.access).get(`/requests/${id}`)).body.request;
+      const read = (await asUser(app, mover.access).get(`/requests/${id}`)).body.data;
       expect(read.service.name).toBe("Vendor contract review");
       expect(read.priority).toEqual({ name: "Normal", days: 10 });
       expect((await rowOf(id)).requester_unit_id).toBe(alNoor.units.procurement);
@@ -481,7 +497,7 @@ describe("a deleted unit (R6.5)", () => {
     );
     const res = await asUser(app, temp.access).post("/requests", draft());
     expect(res.status).toBe(201);
-    const id = res.body.request.id;
+    const id = res.body.data.id;
     expect((await rowOf(id)).requester_unit_id).toBe(unitId);
 
     await pool.query("update tenant_members set unit_id = null where user_id = $1", [temp.id]);
@@ -496,14 +512,40 @@ describe("a deleted unit (R6.5)", () => {
   });
 });
 
+describe("a write answers as its read does (R8.2)", () => {
+  it("returns the request of accept, priority, and withdraw exactly as GET does", async () => {
+    const { id } = await submit("khalid");
+    const read = async (person: PersonType) => (await as(person).get(`/requests/${id}`)).body;
+    const priority = await as("huda").put(`/requests/${id}/priority`, {
+      priorityId: alNoor.priorities.urgent,
+      reason: "Board deadline",
+    });
+    expect(priority.status).toBe(200);
+    expect(priority.body).toEqual(await read("huda"));
+    const accepted = await as("huda").post(`/requests/${id}/accept`, {
+      handlerId: alNoor.ids.faisal,
+      workflowId: alNoor.workflows.vendor,
+    });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body).toEqual(await read("huda"));
+
+    const other = await submit("khalid");
+    const withdrawn = await as("khalid").post(`/requests/${other.id}/withdraw`, {
+      reason: "Duplicate",
+    });
+    expect(withdrawn.status).toBe(200);
+    expect(withdrawn.body).toEqual((await as("khalid").get(`/requests/${other.id}`)).body);
+  });
+});
+
 describe("listing requests (R6.8)", () => {
   it("lists what the caller requested, handles, and may review, by view", async () => {
     const mine = await submit("khalid");
     const hers = await submit("lina");
     const idsOf = async (person: PersonType, query: string) =>
-      (
-        (await as(person).get(`/requests?${query}&limit=100`)).body.requests as { id: string }[]
-      ).map((r) => r.id);
+      ((await as(person).get(`/requests?${query}&limit=100`)).body.data as { id: string }[]).map(
+        (r) => r.id,
+      );
 
     const requested = await idsOf("khalid", "view=requested");
     expect(requested).toContain(mine.id);
@@ -532,26 +574,45 @@ describe("listing requests (R6.8)", () => {
       expect(res.status).toBe(201);
     }
     const list = (query: string) => asUser(app, paula.access).get(`/requests?${query}`);
-    const titles = (res: { body: { requests: { title: string }[] } }) =>
-      res.body.requests.map((r) => r.title);
+    const titles = (res: { body: { data: { title: string }[] } }) =>
+      res.body.data.map((r) => r.title);
 
     const firstPage = await list("limit=2");
-    expect(firstPage.body.total).toBe(3);
+    expect(firstPage.body.page.total).toBe(3);
     expect(titles(firstPage)).toEqual(["three", "two"]);
-    expect(titles(await list("limit=2&offset=2"))).toEqual(["one"]);
+    expect(firstPage.body.page.nextCursor).toEqual(expect.any(String));
+    const secondPage = await list(`limit=2&cursor=${firstPage.body.page.nextCursor}`);
+    expect(titles(secondPage)).toEqual(["one"]);
+    expect(secondPage.body.page).toEqual({ nextCursor: null, total: 3 });
     expect((await list("limit=0")).status).toBe(400);
 
-    expect((await list("state=in_progress")).body).toEqual({ requests: [], total: 0 });
-    expect((await list("state=in_review")).body.total).toBe(3);
-    expect((await list(`serviceId=${alNoor.serviceId}`)).body.total).toBe(3);
-    expect((await list(`serviceId=${randomUUID()}`)).body.total).toBe(0);
+    expect((await list("state=in_progress")).body).toEqual({
+      data: [],
+      page: { nextCursor: null, total: 0 },
+    });
+    expect((await list("state=all")).body.page.total).toBe(3);
+    expect((await list("state=lost")).body.error.details).toEqual([
+      { path: "state", code: "invalid_value" },
+    ]);
+    expect((await list("serviceId=nope")).body.error.details).toEqual([
+      { path: "serviceId", code: "invalid_value" },
+    ]);
+    const replay = await list(`limit=2&state=in_review&cursor=${firstPage.body.page.nextCursor}`);
+    expect(replay.body.error.details).toEqual([{ path: "cursor", code: "invalid_cursor" }]);
+    const spelled = await list(
+      `limit=2&state=all&serviceId=all&cursor=${firstPage.body.page.nextCursor}`,
+    );
+    expect(titles(spelled)).toEqual(["one"]);
+    expect((await list("state=in_review")).body.page.total).toBe(3);
+    expect((await list(`serviceId=${alNoor.serviceId}`)).body.page.total).toBe(3);
+    expect((await list(`serviceId=${randomUUID()}`)).body.page.total).toBe(0);
   });
 
   it("summarizes a request with its people, priority, and times", async () => {
     const { id } = await submit("khalid");
-    const summary = (
-      await as("huda").get("/requests?view=review_queue&limit=100")
-    ).body.requests.find((r: { id: string }) => r.id === id);
+    const summary = (await as("huda").get("/requests?view=review_queue&limit=100")).body.data.find(
+      (r: { id: string }) => r.id === id,
+    );
     expect(summary).toEqual({
       id,
       number: expect.stringMatching(/^REQ-\d+-\d{4}$/),
@@ -578,7 +639,7 @@ describe("changing the priority in review (R6.9)", () => {
       reason: "board meeting on Thursday",
     });
     expect(res.status).toBe(200);
-    expect(res.body.request.priority).toEqual({ name: "Urgent", days: 2 });
+    expect(res.body.data.priority).toEqual({ name: "Urgent", days: 2 });
     expect(await auditOf(id)).toContainEqual(
       expect.objectContaining({
         action: "request.priority_changed",
@@ -630,7 +691,7 @@ describe("accepting (R6.10, R6.11)", () => {
       workflowId: alNoor.workflows.vendor,
     });
     expect(res.status).toBe(200);
-    expect(res.body.request).toMatchObject({
+    expect(res.body.data).toMatchObject({
       state: "in_progress",
       handler: { id: alNoor.ids.faisal, name: "Faisal" },
       acceptedAt: expect.any(String),
@@ -764,7 +825,7 @@ describe("rejecting and withdrawing (R6.12)", () => {
     const { id } = await submit("khalid");
     const res = await as("huda").post(`/requests/${id}/reject`, { reason: "Not a legal matter" });
     expect(res.status).toBe(200);
-    expect(res.body.request).toMatchObject({
+    expect(res.body.data).toMatchObject({
       state: "rejected",
       closedAt: expect.any(String),
       sla: null,
@@ -792,7 +853,7 @@ describe("rejecting and withdrawing (R6.12)", () => {
     expect((await as("huda").post(`/requests/${id}/withdraw`, body)).status).toBe(403);
     const res = await as("khalid").post(`/requests/${id}/withdraw`, body);
     expect(res.status).toBe(200);
-    expect(res.body.request.state).toBe("withdrawn");
+    expect(res.body.data.state).toBe("withdrawn");
     expect((await rowOf(id)).close_reason).toBe("Found another way");
   });
 
@@ -862,7 +923,7 @@ describe("the SLA deadline (R6.22)", () => {
     await pool.query("update requests set accepted_at = $2 where id = $1", [id, at10(sunday)]);
 
     const deadline = async () =>
-      new Date((await as("huda").get(`/requests/${id}`)).body.request.deadline).toISOString();
+      new Date((await as("huda").get(`/requests/${id}`)).body.data.deadline).toISOString();
     // Sunday 10:00 plus five working days (Friday and Saturday are off) is the next Sunday 10:00.
     expect(await deadline()).toBe(at10(plusDays(sunday, 7)));
 
@@ -875,9 +936,9 @@ describe("the SLA deadline (R6.22)", () => {
     });
     expect(holiday.status).toBe(201);
     expect(await deadline()).toBe(at10(plusDays(sunday, 8)));
-    const listed = (
-      await as("huda").get("/requests?state=in_progress&limit=100")
-    ).body.requests.find((r: { id: string }) => r.id === id);
+    const listed = (await as("huda").get("/requests?state=in_progress&limit=100")).body.data.find(
+      (r: { id: string }) => r.id === id,
+    );
     expect(new Date(listed.deadline).toISOString()).toBe(at10(plusDays(sunday, 8)));
   });
 });
@@ -933,7 +994,7 @@ describe("subscription states and isolation (R6.26, R6.27)", () => {
   it("never reaches another tenant's rows", async () => {
     const mine = await submit("khalid");
     const theirs = await asUser(app, rashid.admin).get("/requests");
-    expect(theirs.body).toEqual({ requests: [], total: 0 });
+    expect(theirs.body).toEqual({ data: [], page: { nextCursor: null, total: 0 } });
     const attempt = await asUser(app, rashid.admin).post(`/requests/${mine.id}/accept`, {
       handlerId: rashid.userId,
       workflowId: alNoor.workflows.vendor,

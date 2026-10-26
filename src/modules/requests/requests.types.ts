@@ -8,7 +8,6 @@ import type {
   requestStates,
   requests,
 } from "@/db/schema/index.js";
-import type { EscalationRuleType } from "@/modules/escalation/index.js";
 import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { AnswerSnapshotType } from "@/modules/services/shared/answers.js";
 import type { FormFieldType } from "@/modules/services/shared/form.js";
@@ -16,6 +15,14 @@ import type { FileStoreType } from "@/storage/index.js";
 import type { REQUEST_VIEWS } from "./requests.config.js";
 import type { createRequestsController } from "./requests.controller.js";
 import type { createRequestsRepository } from "./requests.repository.js";
+import type {
+  activeStageResponseSchema,
+  catalogResponseSchema,
+  requestFileResponseSchema,
+  requestResponseSchema,
+  requestSummaryResponseSchema,
+  slaResponseSchema,
+} from "./requests.responses.js";
 import type {
   acceptRequestSchema,
   answerInformationRequestSchema,
@@ -151,121 +158,17 @@ export type AnswerInformationRequestType = z.input<typeof answerInformationReque
 export type AttachFilesRequestType = z.input<typeof attachFilesRequestSchema>;
 export type ListRequestsQueryType = z.output<typeof listRequestsQuerySchema>;
 
-/** The SLA as the API returns it: live while in progress, the frozen record once closed (R6.22, R6.23). */
-export interface SlaType {
-  deadline: Date;
-  elapsedDays: number;
-  met: boolean;
-  breachDays: number;
-  awaitingInfoDays: number;
-}
-
-/** The stage a request in progress is at, and who it waits on; nobody while held. */
-export interface ActiveStageType {
-  name: string;
-  waitingOn: { id: string; name: string }[];
-}
-
-/** One run of one workflow stage, as the request page lists them in the order they started. */
-export interface StageRunType {
-  id: string;
-  stage: { id: string; name: string; ordinal: number };
-  state: StageRunRowType["state"];
-  narrowed: boolean;
-  escalated: boolean;
-  startedAt: Date;
-  endedAt: Date | null;
-  endedBy: { id: string; name: string } | null;
-  comment: string | null;
-  assignees: { id: string; name: string }[];
-}
-
-export interface RequestSummaryType {
-  id: string;
-  number: string;
-  title: string;
-  state: RequestStateType;
-  service: { id: string; name: string };
-  priority: { name: string; days: number };
-  requester: { id: string; name: string };
-  handler: { id: string; name: string } | null;
-  submittedAt: Date;
-  acceptedAt: Date | null;
-  closedAt: Date | null;
-  deadline: Date | null;
-  activeStage: ActiveStageType | null;
-}
-
-export interface RequestFileType {
-  id: string;
-  name: string;
-  contentType: string;
-  sizeBytes: number;
-  sha256: string;
-  fieldId: string | null;
-  informationRequestId: string | null;
-  attachedBy: { id: string; name: string };
-  attachedAt: Date;
-}
-
-/** A file named in a form answer: its details while attached, only its ID once removed (R6.25). */
-export type AnswerFileType =
-  | { id: string; removed: false; name: string; contentType: string; sizeBytes: number }
-  | { id: string; removed: true };
-
-/** A snapshot entry as the page returns it: a file field also lists its files. */
-export interface RequestAnswerType extends AnswerSnapshotType {
-  files?: AnswerFileType[];
-}
-
-/** A question to the requester, with its answer and the files sent with it (R6.20). */
-export interface InformationRequestType {
-  id: string;
-  askedBy: { id: string; name: string };
-  askedIn: InformationRequestRowType["askedIn"];
-  question: string;
-  askedAt: Date;
-  state: InformationRequestRowType["state"];
-  answer: string | null;
-  endedAt: Date | null;
-  endedBy: { id: string; name: string } | null;
-  files: RequestFileType[];
-}
-
-/** A rule that fired on the request (D9), and the moment it was due. */
-export interface EscalationFiringType {
-  rule: EscalationRuleType;
-  dueAt: Date;
-  firedAt: Date;
-}
-
-export interface RequestType extends RequestSummaryType {
-  answers: RequestAnswerType[];
-  files: RequestFileType[];
-  informationRequests: InformationRequestType[];
-  stages: StageRunType[];
-  sla: SlaType | null;
-  escalations: EscalationFiringType[];
-  allowedActions: string[];
-}
-
-export interface CatalogType {
-  services: {
-    id: string;
-    name: string;
-    description: string | null;
-    form: { revision: number; fields: FormFieldType[] };
-  }[];
-  priorities: { id: string; name: string; days: number }[];
-}
-
-export interface RequestResponseType {
-  request: RequestType;
-}
-export interface ListRequestsResponseType {
-  requests: RequestSummaryType[];
-  total: number;
-}
+export type SlaType = z.output<typeof slaResponseSchema>;
+export type ActiveStageType = z.output<typeof activeStageResponseSchema>;
+export type RequestSummaryType = z.output<typeof requestSummaryResponseSchema>;
+export type RequestFileType = z.output<typeof requestFileResponseSchema>;
+export type RequestType = z.output<typeof requestResponseSchema>;
+export type RequestAnswerType = RequestType["answers"][number];
+export type AnswerFileType = NonNullable<RequestAnswerType["files"]>[number];
+export type InformationRequestType = RequestType["informationRequests"][number];
+export type StageRunType = RequestType["stages"][number];
+export type EscalationFiringType = RequestType["escalations"][number];
+export type CatalogType = z.output<typeof catalogResponseSchema>;
 
 export interface RequestsRouterDepsType {
   db: Db;

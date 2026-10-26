@@ -1,5 +1,4 @@
-import type { PeriodViewType } from "../calendar.types.js";
-import type { PeriodResponseType } from "../calendar.types.js";
+import type { PeriodResponseType, PeriodViewType } from "../calendar.types.js";
 
 /** A period view in its response shape: every key present, `null` where the variant has none (R8.4). */
 export function toPeriodResponse(view: PeriodViewType): PeriodResponseType {

@@ -359,9 +359,7 @@ describe("listing (Phase 8 spec 4.2.3, R8.5-R8.9)", () => {
     expect(first.body.data.map((p: PriorityBody) => p.name)).toEqual(["Urgent", "High"]);
     expect(first.body.page.total).toBe(3);
     expect(first.body.page.nextCursor).toEqual(expect.any(String));
-    const second = await as(huda).get(
-      `/priorities?limit=2&cursor=${first.body.page.nextCursor}`,
-    );
+    const second = await as(huda).get(`/priorities?limit=2&cursor=${first.body.page.nextCursor}`);
     expect(second.body.data.map((p: PriorityBody) => p.name)).toEqual(["Normal"]);
     expect(second.body.page).toEqual({ nextCursor: null, total: 3 });
   });

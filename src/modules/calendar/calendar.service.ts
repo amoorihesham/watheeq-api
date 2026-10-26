@@ -29,8 +29,8 @@ import type {
 } from "./calendar.types.js";
 import { toHijri } from "./shared/hijri.js";
 import { loadCalendar } from "./shared/load.js";
-import { toPeriodResponse } from "./shared/period-response.js";
 import { nextOccurrence } from "./shared/occurrences.js";
+import { toPeriodResponse } from "./shared/period-response.js";
 import {
   computedOccurrence,
   definitionOf,

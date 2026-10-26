@@ -7,10 +7,10 @@ import { putEscalationRequestSchema, targetKey } from "./escalation.schemas.js";
 import type {
   EscalationInputType,
   EscalationRepositoryType,
+  EscalationResponseType,
   EscalationRuleType,
   EscalationType,
   PutEscalationRequestType,
-  EscalationResponseType,
   RecipientType,
 } from "./escalation.types.js";
 import { readEscalation } from "./shared/settings.js";

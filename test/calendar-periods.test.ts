@@ -603,7 +603,9 @@ describe("listing (R4.11)", () => {
        values ($1, 'holiday', 'Last week', 'once', $2, $2) returning id`,
       [alNoor, addDays(today, -7)],
     );
-    const ids = (await as(sara).get("/calendar")).body.data.periods.map((p: { id: string }) => p.id);
+    const ids = (await as(sara).get("/calendar")).body.data.periods.map(
+      (p: { id: string }) => p.id,
+    );
     expect(ids).not.toContain(rows[0].id);
     expect((await periodsWithEnded()).map((p) => p.id)).toContain(rows[0].id);
   });

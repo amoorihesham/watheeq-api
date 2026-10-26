@@ -3,13 +3,13 @@ import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { createPrioritiesController } from "./priorities.controller.js";
 import type { createPrioritiesRepository } from "./priorities.repository.js";
+import type { priorityResponseSchema } from "./priorities.responses.js";
 import type {
   createPriorityRequestSchema,
   listPrioritiesQuerySchema,
   reorderPrioritiesRequestSchema,
   updatePriorityRequestSchema,
 } from "./priorities.schemas.js";
-import type { priorityResponseSchema } from "./priorities.responses.js";
 import type { createPrioritiesService } from "./priorities.service.js";
 
 export interface PriorityRowType {

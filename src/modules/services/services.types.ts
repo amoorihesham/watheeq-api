@@ -3,13 +3,13 @@ import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { createServicesController } from "./services.controller.js";
 import type { createServicesRepository } from "./services.repository.js";
+import type { serviceResponseSchema } from "./services.responses.js";
 import type {
   createServiceRequestSchema,
   listServicesQuerySchema,
   updateServiceFormRequestSchema,
   updateServiceRequestSchema,
 } from "./services.schemas.js";
-import type { serviceResponseSchema } from "./services.responses.js";
 import type { createServicesService } from "./services.service.js";
 import type { FormFieldType } from "./shared/form.js";
 

@@ -30,6 +30,7 @@ import {
   workflowStages,
   workflows,
 } from "@/db/schema/index.js";
+import type { PageRequestType, SortKeyType } from "@/http/list.js";
 import type {
   InformationRequestListRowType,
   InformationRequestRowType,
@@ -41,7 +42,6 @@ import type {
   RequestDetailRowType,
   RequestFileRowType,
   RequestRowType,
-  RequestSummaryRowType,
   RequestViewType,
   ServiceRowType,
   StageAssigneeRowType,
@@ -79,6 +79,12 @@ const fileColumns = {
   attachedAt: requestFiles.attachedAt,
 };
 
+/** Newest submission first, the ID descending so a row comparison can continue from the last item. */
+export const REQUEST_SORT_KEYS: SortKeyType[] = [
+  { expr: sql`${requests.submittedAt}`, type: "timestamptz" },
+  { expr: sql`${requests.id}`, type: "uuid" },
+];
+
 const ofTenant = (tenantId: string, requestId: string) =>
   and(eq(requests.tenantId, tenantId), eq(requests.id, requestId));
 
@@ -99,13 +105,6 @@ export interface ClosureType {
 
 /** Tenant code: every query is filtered by the caller's tenant (T2). */
 export function createRequestsRepository() {
-  const selectSummaries = (db: Executor) =>
-    db
-      .select(summaryColumns)
-      .from(requests)
-      .innerJoin(users, eq(users.id, requests.requesterId))
-      .leftJoin(handlerUser, eq(handlerUser.id, requests.handlerId));
-
   function viewFilter(view: RequestViewType, tenantId: string, callerId: string): SQL {
     switch (view) {
       case "waiting_on_me":
@@ -122,15 +121,15 @@ export function createRequestsRepository() {
   function listFilter(
     tenantId: string,
     callerId: string,
-    query: ListRequestsQueryType,
+    filters: Omit<ListRequestsQueryType, "cursor" | "limit">,
     visible: SQL,
   ): SQL | undefined {
     return and(
       eq(requests.tenantId, tenantId),
       visible,
-      query.view ? viewFilter(query.view, tenantId, callerId) : undefined,
-      query.state ? eq(requests.state, query.state) : undefined,
-      query.serviceId ? eq(requests.serviceId, query.serviceId) : undefined,
+      filters.view ? viewFilter(filters.view, tenantId, callerId) : undefined,
+      filters.state === "all" ? undefined : eq(requests.state, filters.state),
+      filters.serviceId === "all" ? undefined : eq(requests.serviceId, filters.serviceId),
     );
   }
 
@@ -143,31 +142,31 @@ export function createRequestsRepository() {
       return dateFromEpochMs(rows[0]?.ms ?? 0);
     },
 
-    list(
-      db: Executor,
+    /** The requests the caller sees that match the filters (R6.7, R6.8). */
+    listWhere(
       tenantId: string,
       callerId: string,
-      query: ListRequestsQueryType,
+      filters: Omit<ListRequestsQueryType, "cursor" | "limit">,
       visible: SQL,
-    ): Promise<RequestSummaryRowType[]> {
-      return selectSummaries(db)
-        .where(listFilter(tenantId, callerId, query, visible))
-        .orderBy(desc(requests.submittedAt), requests.id)
-        .limit(query.limit)
-        .offset(query.offset);
+    ): SQL | undefined {
+      return listFilter(tenantId, callerId, filters, visible);
     },
 
-    count(
-      db: Executor,
-      tenantId: string,
-      callerId: string,
-      query: ListRequestsQueryType,
-      visible: SQL,
-    ): Promise<{ total: number }[]> {
+    /** One page, newest submission first, the ID descending to break ties (`REQUEST_SORT_KEYS`). */
+    selectPage(db: Executor, page: PageRequestType) {
       return db
-        .select({ total: count() })
+        .select({ ...summaryColumns, sortValues: page.sortValues })
         .from(requests)
-        .where(listFilter(tenantId, callerId, query, visible));
+        .innerJoin(users, eq(users.id, requests.requesterId))
+        .leftJoin(handlerUser, eq(handlerUser.id, requests.handlerId))
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db.select({ total: count() }).from(requests).where(where);
+      return Number(row?.total ?? 0);
     },
 
     /** `visible` limits the lookup to requests the caller may see (R6.7). */
