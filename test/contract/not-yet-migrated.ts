@@ -3,7 +3,6 @@
  * The response contract tests skip them; steps 8.3 and 8.4 remove entries until the list is empty.
  */
 export const NOT_YET_MIGRATED: string[] = [
-  "calendar",
   "requests",
   "services",
   "workflows",

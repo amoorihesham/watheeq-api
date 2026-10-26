@@ -1,13 +1,15 @@
 import type { Request, RequestHandler } from "express";
+import { sendData, sendNoContent } from "@/http/respond.js";
 import { auditContextOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import type {
-  CalendarDaysResponseType,
-  CalendarResponseType,
-  CalendarServiceType,
-  HoursVersionResponseType,
-  PeriodResponseType,
-} from "./calendar.types.js";
+import {
+  calendarDaysResponseSchema,
+  calendarResponseSchema,
+  hoursVersionResponseSchema,
+  periodResponseSchema,
+} from "./calendar.responses.js";
+import type { CalendarServiceType } from "./calendar.types.js";
+import { toPeriodResponse } from "./shared/period-response.js";
 
 const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
 const effectiveFromOf = (req: Request) => String(req.params.effectiveFrom);
@@ -17,13 +19,11 @@ const yearOf = (req: Request) => String(req.params.year);
 export function createCalendarController({ service }: { service: CalendarServiceType }) {
   return {
     get: (async (req, res) => {
-      const calendar = await service.get(tenantOf(req), req.query);
-      res.status(200).json(calendar satisfies CalendarResponseType);
+      sendData(res, 200, calendarResponseSchema, await service.get(tenantOf(req), req.query));
     }) satisfies RequestHandler,
 
     days: (async (req, res) => {
-      const days = await service.days(tenantOf(req), req.query);
-      res.status(200).json(days satisfies CalendarDaysResponseType);
+      sendData(res, 200, calendarDaysResponseSchema, await service.days(tenantOf(req), req.query));
     }) satisfies RequestHandler,
 
     setHours: (async (req, res) => {
@@ -33,17 +33,17 @@ export function createCalendarController({ service }: { service: CalendarService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ version } satisfies HoursVersionResponseType);
+      sendData(res, 200, hoursVersionResponseSchema, version);
     }) satisfies RequestHandler,
 
     deleteHours: (async (req, res) => {
       await service.deleteHours(tenantOf(req), effectiveFromOf(req), auditContextOf(req));
-      res.status(204).end();
+      sendNoContent(res);
     }) satisfies RequestHandler,
 
     createPeriod: (async (req, res) => {
       const period = await service.create(tenantOf(req), req.body, auditContextOf(req));
-      res.status(201).json({ period } satisfies PeriodResponseType);
+      sendData(res, 201, periodResponseSchema, toPeriodResponse(period));
     }) satisfies RequestHandler,
 
     updatePeriod: (async (req, res) => {
@@ -53,12 +53,12 @@ export function createCalendarController({ service }: { service: CalendarService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ period } satisfies PeriodResponseType);
+      sendData(res, 200, periodResponseSchema, toPeriodResponse(period));
     }) satisfies RequestHandler,
 
     deletePeriod: (async (req, res) => {
       await service.delete(tenantOf(req), periodIdOf(req), auditContextOf(req));
-      res.status(204).end();
+      sendNoContent(res);
     }) satisfies RequestHandler,
 
     setOverride: (async (req, res) => {
@@ -69,7 +69,7 @@ export function createCalendarController({ service }: { service: CalendarService
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ period } satisfies PeriodResponseType);
+      sendData(res, 200, periodResponseSchema, toPeriodResponse(period));
     }) satisfies RequestHandler,
 
     deleteOverride: (async (req, res) => {
@@ -79,7 +79,7 @@ export function createCalendarController({ service }: { service: CalendarService
         yearOf(req),
         auditContextOf(req),
       );
-      res.status(204).end();
+      sendNoContent(res);
     }) satisfies RequestHandler,
   };
 }

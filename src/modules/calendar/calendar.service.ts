@@ -19,7 +19,6 @@ import {
 } from "./calendar.schemas.js";
 import type {
   CalendarDaysResponseType,
-  CalendarDayType,
   CalendarPeriodType,
   CalendarRepositoryType,
   CalendarResponseType,
@@ -30,6 +29,7 @@ import type {
 } from "./calendar.types.js";
 import { toHijri } from "./shared/hijri.js";
 import { loadCalendar } from "./shared/load.js";
+import { toPeriodResponse } from "./shared/period-response.js";
 import { nextOccurrence } from "./shared/occurrences.js";
 import {
   computedOccurrence,
@@ -195,7 +195,7 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
       return {
         today,
         hours: hours.map((version) => ({ ...version, week: canonicalWeek(version.week) })),
-        periods,
+        periods: periods.map(toPeriodResponse),
       };
     },
 
@@ -203,7 +203,7 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
     async days(tenantId: string, input: unknown): Promise<CalendarDaysResponseType> {
       const { from, to } = validate(dayViewQuerySchema, input);
       const calendar = await loadCalendar(db, tenantId);
-      const days: CalendarDayType[] = [];
+      const days: CalendarDaysResponseType["days"] = [];
       for (let date = from; date <= to; date = addDays(date, 1)) {
         const hours = dayHours(calendar, date);
         const season = seasonOn(calendar, date);
@@ -211,12 +211,13 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
           date,
           hijriDate: toHijri(date),
           working: hours !== null,
-          ...(hours ? { start: msToTime(hours.start), end: msToTime(hours.end) } : {}),
+          start: hours ? msToTime(hours.start) : null,
+          end: hours ? msToTime(hours.end) : null,
           holidays: holidaysOn(calendar, date).map(({ id, name }) => ({ id, name })),
-          ...(season ? { season: { id: season.id, name: season.name } } : {}),
+          season: season ? { id: season.id, name: season.name } : null,
         });
       }
-      return { days };
+      return { from, to, days };
     },
 
     /** Creates or replaces the hours version starting after today (R4.3). */

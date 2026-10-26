@@ -1,6 +1,12 @@
+import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { WEEKDAYS } from "./calendar.config.js";
+import type {
+  calendarDaysResponseSchema,
+  calendarResponseSchema,
+  periodResponseSchema,
+} from "./calendar.responses.js";
 import type { createCalendarController } from "./calendar.controller.js";
 import type { createCalendarRepository } from "./calendar.repository.js";
 import type { createCalendarService } from "./calendar.service.js";
@@ -90,34 +96,9 @@ export type PeriodViewType = CalendarPeriodType & {
   next: DateRangeType | null;
 };
 
-export interface CalendarResponseType {
-  today: string;
-  hours: HoursVersionType[];
-  periods: PeriodViewType[];
-}
-
-export interface PeriodResponseType {
-  period: PeriodViewType;
-}
-
-export interface HoursVersionResponseType {
-  version: HoursVersionType;
-}
-
-/** One date of the day view (R4.11). */
-export interface CalendarDayType {
-  date: string;
-  hijriDate: HijriDateType;
-  working: boolean;
-  start?: string;
-  end?: string;
-  holidays: { id: string; name: string }[];
-  season?: { id: string; name: string };
-}
-
-export interface CalendarDaysResponseType {
-  days: CalendarDayType[];
-}
+export type CalendarResponseType = z.output<typeof calendarResponseSchema>;
+export type PeriodResponseType = z.output<typeof periodResponseSchema>;
+export type CalendarDaysResponseType = z.output<typeof calendarDaysResponseSchema>;
 
 export interface CalendarRouterDepsType {
   db: Db;

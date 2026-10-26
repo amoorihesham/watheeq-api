@@ -65,10 +65,10 @@ const periodAudit = (resourceId: string) =>
     .then((result) => result.rows);
 
 const dayOf = async (date: string) =>
-  (await as(sara).get(`/calendar/days?from=${date}&to=${date}`)).body.days[0];
+  (await as(sara).get(`/calendar/days?from=${date}&to=${date}`)).body.data.days[0];
 
 async function periodsWithEnded() {
-  return (await as(sara).get("/calendar?includeEnded=true")).body.periods as {
+  return (await as(sara).get("/calendar?includeEnded=true")).body.data.periods as {
     id: string;
     name: string;
     validUntil: string | null;
@@ -120,13 +120,20 @@ describe("creating periods (R4.4, R4.5)", () => {
       endDate,
     });
     expect(res.status).toBe(201);
-    expect(res.body.period).toEqual({
+    expect(res.body.data).toEqual({
       id: expect.any(String),
       kind: "holiday",
       name: "Office move",
       recurrence: "once",
       startDate,
       endDate,
+      start: null,
+      end: null,
+      validFrom: null,
+      validUntil: null,
+      overrides: [],
+      week: null,
+      rank: null,
       replacesId: null,
       next: { startDate, endDate },
     });
@@ -134,7 +141,7 @@ describe("creating periods (R4.4, R4.5)", () => {
       working: false,
       holidays: [{ name: "Office move" }],
     });
-    expect((await periodAudit(res.body.period.id))[0]).toEqual({
+    expect((await periodAudit(res.body.data.id))[0]).toEqual({
       action: "calendar.period_created",
       details: expect.objectContaining({
         name: "Office move",
@@ -157,14 +164,14 @@ describe("creating periods (R4.4, R4.5)", () => {
     const year = toHijri(today).year;
     const thisYear = hijriToGregorian(year, 10, 1) ?? "";
     const firstDay = thisYear > today ? thisYear : (hijriToGregorian(year + 1, 10, 1) ?? "");
-    expect(res.body.period).toMatchObject({
+    expect(res.body.data).toMatchObject({
       validFrom: addDays(today, 1),
       validUntil: null,
       overrides: [],
       next: { startDate: firstDay, endDate: addDays(firstDay, 3) },
     });
     expect((await dayOf(firstDay)).holidays).toEqual([
-      { id: res.body.period.id, name: "Eid al-Fitr" },
+      { id: res.body.data.id, name: "Eid al-Fitr" },
     ]);
   });
 
@@ -180,7 +187,7 @@ describe("creating periods (R4.4, R4.5)", () => {
     };
     const res = await as(sara).post("/calendar/periods", ramadan);
     expect(res.status).toBe(201);
-    expect(res.body.period).toMatchObject({ kind: "season", rank: 10, week: ramadanHours });
+    expect(res.body.data).toMatchObject({ kind: "season", rank: 10, week: ramadanHours });
     const clash = await as(sara).post("/calendar/periods", { ...ramadan, name: "Exam season" });
     expect(clash.status).toBe(400);
     expect(clash.body.error.details).toEqual([{ path: "rank", code: "rank_taken" }]);
@@ -291,7 +298,7 @@ describe("editing and deleting periods (R4.8, P4.8)", () => {
       startDate: addDays(today, offset),
       endDate: addDays(today, offset),
     });
-    return res.body.period.id as string;
+    return res.body.data.id as string;
   }
 
   it("edits a future one-off holiday in place, and audits only real changes", async () => {
@@ -301,7 +308,7 @@ describe("editing and deleting periods (R4.8, P4.8)", () => {
       endDate: addDays(today, 11),
     });
     expect(res.status).toBe(200);
-    expect(res.body.period).toMatchObject({
+    expect(res.body.data).toMatchObject({
       id,
       name: "Moved office move",
       endDate: addDays(today, 11),
@@ -343,10 +350,10 @@ describe("editing and deleting periods (R4.8, P4.8)", () => {
       start: { month: 9, day: 23 },
       end: { month: 9, day: 23 },
     });
-    const id = created.body.period.id;
+    const id = created.body.data.id;
     const res = await as(sara).patch(`/calendar/periods/${id}`, { end: { month: 9, day: 24 } });
     expect(res.status).toBe(200);
-    expect(res.body.period).toMatchObject({ id, validFrom: addDays(today, 1), replacesId: null });
+    expect(res.body.data).toMatchObject({ id, validFrom: addDays(today, 1), replacesId: null });
   });
 
   it("never lets an in-place edit reach back before tomorrow", async () => {
@@ -363,7 +370,7 @@ describe("editing and deleting periods (R4.8, P4.8)", () => {
       start: monthDay(addDays(today, -5)),
     });
     expect(res.status).toBe(200);
-    expect(res.body.period).toMatchObject({ id, validFrom: addDays(today, 1) });
+    expect(res.body.data).toMatchObject({ id, validFrom: addDays(today, 1) });
     for (const date of [addDays(today, -5), today, addDays(today, 1)]) {
       const ids = (await dayOf(date)).holidays.map((h: { id: string }) => h.id);
       expect(ids, date).not.toContain(id);
@@ -381,7 +388,7 @@ describe("editing and deleting periods (R4.8, P4.8)", () => {
     const end = monthDay(addDays(today, 3));
     const res = await as(sara).patch(`/calendar/periods/${id}`, { end });
     expect(res.status).toBe(200);
-    const replacement = res.body.period;
+    const replacement = res.body.data;
     expect(replacement.id).not.toBe(id);
     expect(replacement).toMatchObject({
       replacesId: id,
@@ -409,7 +416,7 @@ describe("editing and deleting periods (R4.8, P4.8)", () => {
     expect(await holidayIds(inTwoYears(addDays(today, 3)))).toContain(replacement.id);
     expect(await holidayIds(inTwoYears(today))).toContain(replacement.id);
     expect(
-      (await as(sara).get("/calendar")).body.periods.map((p: { id: string }) => p.id),
+      (await as(sara).get("/calendar")).body.data.periods.map((p: { id: string }) => p.id),
     ).not.toContain(id);
 
     expect(await periodAudit(replacement.id)).toEqual([
@@ -476,8 +483,8 @@ describe("one-year adjustments (R4.7)", () => {
       start: { month: 12, day: 10 },
       end: { month: 12, day: 13 },
     });
-    eid = res.body.period.id;
-    firstDay = res.body.period.next.startDate;
+    eid = res.body.data.id;
+    firstDay = res.body.data.next.startDate;
     year = toHijri(firstDay).year;
   });
 
@@ -489,7 +496,7 @@ describe("one-year adjustments (R4.7)", () => {
     };
     const res = await as(sara).put(`/calendar/periods/${eid}/overrides/${year}`, moved);
     expect(res.status).toBe(200);
-    expect(res.body.period).toMatchObject({
+    expect(res.body.data).toMatchObject({
       overrides: [{ year, ...moved }],
       next: { startDate: moved.startDate, endDate: moved.endDate },
     });
@@ -513,7 +520,9 @@ describe("one-year adjustments (R4.7)", () => {
     const res = await as(sara).put(`/calendar/periods/${eid}/overrides/${year}`, {
       action: "skip",
     });
-    expect(res.body.period.overrides).toEqual([{ year, action: "skip" }]);
+    expect(res.body.data.overrides).toEqual([
+      { year, action: "skip", startDate: null, endDate: null },
+    ]);
     expect((await dayOf(firstDay)).holidays).toEqual([]);
     await as(sara).delete(`/calendar/periods/${eid}/overrides/${year}`);
   });
@@ -528,7 +537,7 @@ describe("one-year adjustments (R4.7)", () => {
     });
     const cases: [string, object, number, object][] = [
       [
-        `${once.body.period.id}/overrides/2027`,
+        `${once.body.data.id}/overrides/2027`,
         { action: "skip" },
         400,
         [{ path: "periodId", code: "not_recurring" }],
@@ -594,7 +603,7 @@ describe("listing (R4.11)", () => {
        values ($1, 'holiday', 'Last week', 'once', $2, $2) returning id`,
       [alNoor, addDays(today, -7)],
     );
-    const ids = (await as(sara).get("/calendar")).body.periods.map((p: { id: string }) => p.id);
+    const ids = (await as(sara).get("/calendar")).body.data.periods.map((p: { id: string }) => p.id);
     expect(ids).not.toContain(rows[0].id);
     expect((await periodsWithEnded()).map((p) => p.id)).toContain(rows[0].id);
   });
@@ -652,7 +661,7 @@ describe("access (R4.12-R4.14)", () => {
     expect(
       (await as(rashid).put(`/calendar/periods/${id}/overrides/2030`, { action: "skip" })).status,
     ).toBe(404);
-    expect((await as(rashid).get("/calendar")).body.periods).toEqual([]);
+    expect((await as(rashid).get("/calendar")).body.data.periods).toEqual([]);
     expect((await as(sara).patch("/calendar/periods/not-a-uuid", { name: "x" })).status).toBe(404);
   });
 

@@ -110,9 +110,7 @@ describe("a tenant's calendar (R4.1)", () => {
     const res = await as(sara).get("/calendar");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
-      today,
-      hours: [{ effectiveFrom: today, week: DEFAULT_WEEK }],
-      periods: [],
+      data: { today, hours: [{ effectiveFrom: today, week: DEFAULT_WEEK }], periods: [] },
     });
   });
 
@@ -141,16 +139,16 @@ describe("normal hours (R4.2, R4.3, R4.8)", () => {
     const from = addDays(today, 10);
     const res = await as(sara).put(`/calendar/hours/${from}`, shortThursdays);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ version: { effectiveFrom: from, week: shortThursdays } });
+    expect(res.body).toEqual({ data: { effectiveFrom: from, week: shortThursdays } });
 
-    const calendar = (await as(sara).get("/calendar")).body;
+    const calendar = (await as(sara).get("/calendar")).body.data;
     expect(calendar.hours).toEqual([
       { effectiveFrom: today, week: DEFAULT_WEEK },
       { effectiveFrom: from, week: shortThursdays },
     ]);
     const before = nextWeekday(today, 4);
     const after = nextWeekday(from, 4);
-    const days = (await as(sara).get(`/calendar/days?from=${today}&to=${after}`)).body.days;
+    const days = (await as(sara).get(`/calendar/days?from=${today}&to=${after}`)).body.data.days;
     const thursday = (date: string) => days.find((d: { date: string }) => d.date === date);
     if (before < from) {
       expect(thursday(before)).toMatchObject({ working: true, start: "08:00", end: "16:00" });
@@ -182,7 +180,7 @@ describe("normal hours (R4.2, R4.3, R4.8)", () => {
     const from = addDays(today, 30);
     await as(sara).put(`/calendar/hours/${from}`, shortThursdays);
     expect((await as(sara).delete(`/calendar/hours/${from}`)).status).toBe(204);
-    const hours = (await as(sara).get("/calendar")).body.hours;
+    const hours = (await as(sara).get("/calendar")).body.data.hours;
     expect(hours.map((v: { effectiveFrom: string }) => v.effectiveFrom)).not.toContain(from);
     expect((await hoursAudit(alNoor, from)).at(-1)).toMatchObject({
       action: "calendar.hours_deleted",
@@ -286,8 +284,8 @@ describe("day view (R4.11)", () => {
   it("shows Ramadan hours, Founding Day inside Ramadan, Eid, and the return to normal hours", async () => {
     const res = await as(rashid).get("/calendar/days?from=2027-02-20&to=2027-03-14");
     expect(res.status).toBe(200);
-    const byDate = new Map(res.body.days.map((d: { date: string }) => [d.date, d]));
-    expect(res.body.days).toHaveLength(23);
+    const byDate = new Map(res.body.data.days.map((d: { date: string }) => [d.date, d]));
+    expect(res.body.data.days).toHaveLength(23);
     expect(byDate.get("2027-02-21")).toEqual({
       date: "2027-02-21",
       hijriDate: { year: 1448, month: 9, day: 14 },
@@ -316,12 +314,20 @@ describe("day view (R4.11)", () => {
       start: "08:00",
       end: "16:00",
       holidays: [],
+      season: null,
     });
+  });
+
+  it("answers the range with a day off as nulls and the view's from and to", async () => {
+    const res = await as(rashid).get("/calendar/days?from=2027-02-22&to=2027-02-22");
+    expect(res.body.data.from).toBe("2027-02-22");
+    expect(res.body.data.to).toBe("2027-02-22");
+    expect(res.body.data.days[0]).toMatchObject({ working: false, start: null, end: null });
   });
 
   it("lists the periods with their next occurrence", async () => {
     const year = Number(today.slice(0, 4)) + (today.slice(5) > "02-22" ? 1 : 0);
-    const periods = (await as(rashid).get("/calendar")).body.periods;
+    const periods = (await as(rashid).get("/calendar")).body.data.periods;
     const next = Object.fromEntries(
       periods.map((p: { name: string; next: object }) => [p.name, p.next]),
     );
@@ -353,7 +359,7 @@ describe("day view (R4.11)", () => {
     }
     // 366 days is the most (2028 is a leap year).
     const res = await as(sara).get("/calendar/days?from=2028-01-01&to=2028-12-31");
-    expect(res.body.days).toHaveLength(366);
+    expect(res.body.data.days).toHaveLength(366);
   });
 });
 
@@ -386,9 +392,9 @@ describe("access (R4.12-R4.14)", () => {
   it("keeps each tenant's calendar to itself", async () => {
     const from = addDays(today, 50);
     await as(sara).put(`/calendar/hours/${from}`, shortThursdays);
-    const rashidHours = (await as(rashid).get("/calendar")).body.hours;
+    const rashidHours = (await as(rashid).get("/calendar")).body.data.hours;
     expect(rashidHours).toEqual([{ effectiveFrom: today, week: DEFAULT_WEEK }]);
     expect((await as(rashid).delete(`/calendar/hours/${from}`)).status).toBe(404);
-    expect((await as(sara).get("/calendar")).body.periods).toEqual([]);
+    expect((await as(sara).get("/calendar")).body.data.periods).toEqual([]);
   });
 });
