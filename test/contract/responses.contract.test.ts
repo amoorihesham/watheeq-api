@@ -1,26 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { NOT_YET_MIGRATED } from "./not-yet-migrated.js";
-import { moduleFiles, moduleFolders } from "./source-files.js";
+import { moduleFiles } from "./source-files.js";
 
 const lineOf = (text: string, index: number) => text.slice(0, index).split("\n").length;
 
-/** Every match of the pattern in files with the suffix, as `path:line`, skipping modules not yet migrated. */
+/** Every match of the pattern in files with the suffix, as `path:line`. */
 function offences(suffix: string, pattern: RegExp): string[] {
-  return moduleFiles(suffix)
-    .filter((file) => !NOT_YET_MIGRATED.includes(file.module))
-    .flatMap((file) =>
-      [...file.text.matchAll(pattern)].map(
-        (match) => `${file.path}:${lineOf(file.text, match.index)}`,
-      ),
-    );
+  return moduleFiles(suffix).flatMap((file) =>
+    [...file.text.matchAll(pattern)].map(
+      (match) => `${file.path}:${lineOf(file.text, match.index)}`,
+    ),
+  );
 }
-
-describe("the migration list", () => {
-  it("names only module folders that exist", () => {
-    const folders = moduleFolders();
-    expect(NOT_YET_MIGRATED.filter((name) => !folders.includes(name))).toEqual([]);
-  });
-});
 
 describe("controllers (C1)", () => {
   // Responses are written only through sendData, sendPage, and sendNoContent (R8.15); sendDownload stays allowed.
