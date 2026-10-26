@@ -5,17 +5,29 @@ interface ErrorBody {
   error: { code: string; requestId: string; details?: ErrorDetail[] };
 }
 
-/** Maps errors raised by Express's body parser (http-errors with a `type`) to our codes. */
-function fromBodyParserError(err: unknown): AppError | undefined {
-  const type =
-    typeof err === "object" && err !== null ? (err as { type?: unknown }).type : undefined;
-  switch (type) {
-    case "entity.parse.failed":
+/**
+ * Maps the client errors Express raises itself to our codes.
+ * A path parameter that cannot be decoded is answered like any unknown ID. The body parser's errors are http-errors
+ * (`expose` is set on client errors), mapped by status whatever their `type`; requiring `expose` keeps a library
+ * error that merely has a `status` field a 500.
+ */
+function fromExpressError(err: unknown): AppError | undefined {
+  if (typeof err !== "object" || err === null) {
+    return undefined;
+  }
+  const { status, expose } = err as { status?: unknown; expose?: unknown };
+  if (err instanceof URIError && status === 400) {
+    return new AppError("NOT_FOUND");
+  }
+  if (expose !== true) {
+    return undefined;
+  }
+  switch (status) {
+    case 400:
       return new AppError("VALIDATION_FAILED");
-    case "entity.too.large":
+    case 413:
       return new AppError("PAYLOAD_TOO_LARGE");
-    case "charset.unsupported":
-    case "encoding.unsupported":
+    case 415:
       return new AppError("UNSUPPORTED_MEDIA_TYPE");
     default:
       return undefined;
@@ -31,8 +43,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     next(err);
     return;
   }
-  const known =
-    err instanceof AppError ? err : (fromBodyParserError(err) ?? fromDatabaseError(err));
+  const known = err instanceof AppError ? err : (fromExpressError(err) ?? fromDatabaseError(err));
   const resolved = known ?? new AppError("INTERNAL");
   if (!known) {
     // pino-http logs the response line at error level and serializes `res.err` with its stack.

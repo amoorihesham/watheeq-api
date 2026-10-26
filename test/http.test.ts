@@ -71,6 +71,18 @@ testRouter.get("/async-boom", async () => {
   await Promise.resolve();
   throw new Error("async secret detail");
 });
+testRouter.get("/things/:thingId", (req, res) => {
+  res.json({ thingId: req.params.thingId });
+});
+// The shape raw-body gives a body shorter or longer than its Content-Length, which a test client cannot send.
+testRouter.post("/size-mismatch", () => {
+  throw Object.assign(new Error("request size did not match content length"), {
+    status: 400,
+    statusCode: 400,
+    expose: true,
+    type: "request.size.invalid",
+  });
+});
 
 const app = testApp(pool, capture.logger, { routers: [testRouter] });
 
@@ -86,6 +98,24 @@ describe("standard error shape", () => {
     expect(res.status).toBe(404);
     expect(res.body).toEqual({
       error: { code: "NOT_FOUND", requestId: res.headers["x-request-id"] },
+    });
+  });
+
+  it("returns 404 NOT_FOUND for a path parameter that cannot be decoded, as for any unknown ID", async () => {
+    for (const path of ["/things/%E0%A4%A", "/things/%zz"]) {
+      const res = await request(app).get(path);
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({
+        error: { code: "NOT_FOUND", requestId: res.headers["x-request-id"] },
+      });
+    }
+  });
+
+  it("returns 400 VALIDATION_FAILED for a body the parser refuses with a 400 of its own", async () => {
+    const res = await request(app).post("/size-mismatch");
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: { code: "VALIDATION_FAILED", requestId: res.headers["x-request-id"] },
     });
   });
 

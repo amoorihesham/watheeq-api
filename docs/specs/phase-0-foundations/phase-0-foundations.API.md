@@ -28,11 +28,11 @@ Section numbers and requirement IDs below refer to that spec.
 
 | HTTP | Code                     | When                                                                             |
 | ---- | ------------------------ | -------------------------------------------------------------------------------- |
-| 400  | `VALIDATION_FAILED`      | zod validation failed, or malformed JSON body.                                   |
+| 400  | `VALIDATION_FAILED`      | zod validation failed, or the body parser refused the body (malformed JSON, a size that does not match `Content-Length`). |
 | 401  | `UNAUTHENTICATED`        | Missing, invalid, or expired token.                                              |
 | 401  | `INVALID_CREDENTIALS`    | Login failed.                                                                    |
 | 403  | `FORBIDDEN`              | Authenticated, but not allowed (for example a tenant user on an operator route). |
-| 404  | `NOT_FOUND`              | Unknown route or resource.                                                       |
+| 404  | `NOT_FOUND`              | Unknown route or resource, or a path parameter that cannot be decoded (`/users/%zz`), answered like any unknown ID. |
 | 409  | `EMAIL_TAKEN`            | The email belongs to an existing account (translated centrally from `users_email_unique`, P0.14). |
 | 413  | `PAYLOAD_TOO_LARGE`      | Body over 100 KB.                                                                |
 | 415  | `UNSUPPORTED_MEDIA_TYPE` | Body sent without `Content-Type: application/json`.                              |
