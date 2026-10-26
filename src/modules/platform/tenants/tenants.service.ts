@@ -1,8 +1,13 @@
+import { sql } from "drizzle-orm";
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
-import type { Db } from "@/db/pool.js";
+import { byName } from "@/db/order.js";
+import type { Db, Executor } from "@/db/pool.js";
+import { tenants } from "@/db/schema/index.js";
 import { withTx } from "@/db/tx.js";
 import type { EmailSenderType } from "@/email/index.js";
 import { AppError, fromDatabaseError } from "@/http/errors.js";
+import { listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
 import { insertPendingUser, issuePasswordToken, verificationEmail } from "@/modules/auth/index.js";
@@ -18,13 +23,12 @@ import { createPlansRepository } from "../plans/plans.repository.js";
 import {
   changeSubscriptionRequestSchema,
   createTenantRequestSchema,
+  listTenantsQuerySchema,
   tenantIdSchema,
 } from "./tenants.schemas.js";
 import type {
   ChangeSubscriptionRequestType,
-  ChangeSubscriptionResponseType,
   CreateTenantRequestType,
-  CreateTenantResponseType,
   TenantDetailType,
   TenantsRepositoryType,
   TenantsSettingsType,
@@ -74,6 +78,15 @@ export function createTenantsService({
   emailSender: EmailSenderType;
   settings: TenantsSettingsType;
 }) {
+  /** The tenant as `GET /operator/tenants/:tenantId` answers it, read inside the writing transaction. */
+  async function detailOf(executor: Executor, tenantId: string): Promise<TenantDetailType> {
+    const [row] = await repo.findById(executor, tenantId);
+    if (!row) {
+      throw new Error("tenant disappeared inside its own transaction");
+    }
+    return toDetail(row);
+  }
+
   return {
     /**
      * Creates the tenant, its subscription with the plan's terms copied, the first Tenant Admin, and their
@@ -84,7 +97,7 @@ export function createTenantsService({
       input: CreateTenantRequestType,
       context: AuditContextType,
       log: Logger,
-    ): Promise<CreateTenantResponseType> {
+    ): Promise<TenantDetailType> {
       const body = validate(createTenantRequestSchema, input);
       const { admin, token, response } = await withTx(db, async (tx) => {
         const today = (await subscriptionsRepo.today(tx)).rows[0]?.today ?? "";
@@ -173,11 +186,7 @@ export function createTenantsService({
         return {
           admin,
           token,
-          response: {
-            tenant,
-            subscription: toSubscriptionView(subscription, today),
-            admin: { id: admin.id, email: admin.email },
-          },
+          response: await detailOf(tx, tenant.id),
         };
       }).catch(adminEmailPath);
 
@@ -190,8 +199,22 @@ export function createTenantsService({
       return response;
     },
 
-    async list(): Promise<TenantDetailType[]> {
-      return (await repo.list(db)).map(toDetail);
+    async list(input: unknown): Promise<PageType<TenantDetailType>> {
+      const query = validate(listTenantsQuerySchema, input);
+      const page = await listPage({
+        db,
+        list: "tenants",
+        query,
+        keys: [
+          { expr: byName(tenants.name), type: "text" },
+          { expr: sql`${tenants.id}`, type: "uuid" },
+        ],
+        direction: "asc",
+        where: () => undefined,
+        selectPage: repo.page,
+        count: repo.count,
+      });
+      return { ...page, items: page.items.map(toDetail) };
     },
 
     async get(tenantId: string): Promise<TenantDetailType> {
@@ -211,7 +234,7 @@ export function createTenantsService({
       tenantId: string,
       input: ChangeSubscriptionRequestType,
       context: AuditContextType,
-    ): Promise<ChangeSubscriptionResponseType> {
+    ): Promise<TenantDetailType> {
       const id = existingTenantId(tenantId);
       const body = validate(changeSubscriptionRequestSchema, input);
       return withTx(db, async (tx) => {
@@ -244,8 +267,6 @@ export function createTenantsService({
         if (!after) {
           throw new Error("update returned no row");
         }
-        const [usage] = await subscriptionsRepo.countActiveMembers(tx, id);
-        const [stored] = await subscriptionsRepo.sumStoredBytes(tx, id);
         await writeAuditEntry(tx, {
           tenantId: id,
           ...context,
@@ -255,10 +276,7 @@ export function createTenantsService({
           ...(body.reason ? { reason: body.reason } : {}),
           details: { before, after },
         });
-        return {
-          subscription: toSubscriptionView(after, today),
-          usage: toUsage(usage?.activeUsers ?? 0, stored?.storedBytes ?? 0, after),
-        };
+        return detailOf(tx, id);
       });
     },
 

@@ -1,7 +1,8 @@
-import { and, count, desc, eq, inArray, isNull, lt, type SQL, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, isNull, lt, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import { notifications, tenantMembers, users } from "@/db/schema/index.js";
-import type { NewNotificationType, NotificationRowType } from "./notifications.types.js";
+import type { PageRequestType } from "@/http/list.js";
+import type { NewNotificationType } from "./notifications.types.js";
 
 const own = (tenantId: string, userId: string) =>
   and(eq(notifications.tenantId, tenantId), eq(notifications.userId, userId));
@@ -34,21 +35,7 @@ export function createNotificationsRepository() {
       await db.insert(notifications).values(rows);
     },
 
-    list(
-      db: Executor,
-      tenantId: string,
-      userId: string,
-      query: { unread: boolean; before: string | undefined; limit: number },
-    ): Promise<NotificationRowType[]> {
-      const filters: (SQL | undefined)[] = [own(tenantId, userId)];
-      if (query.unread) {
-        filters.push(isNull(notifications.readAt));
-      }
-      if (query.before) {
-        filters.push(
-          sql`(${notifications.createdAt}, ${notifications.id}) < ${positionOf(tenantId, userId, query.before)}`,
-        );
-      }
+    page(db: Executor, page: PageRequestType) {
       return db
         .select({
           id: notifications.id,
@@ -57,11 +44,26 @@ export function createNotificationsRepository() {
           data: notifications.data,
           createdAt: notifications.createdAt,
           readAt: notifications.readAt,
+          sortValues: page.sortValues,
         })
         .from(notifications)
-        .where(and(...filters))
-        .orderBy(desc(notifications.createdAt), desc(notifications.id))
-        .limit(query.limit);
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
+    },
+
+    /** The caller's own notifications, narrowed by the `unread` filter (`true` unread, `false` read only). */
+    listWhere(tenantId: string, userId: string, unread: string): SQL | undefined {
+      return and(
+        own(tenantId, userId),
+        unread === "true" ? isNull(notifications.readAt) : undefined,
+        unread === "false" ? isNotNull(notifications.readAt) : undefined,
+      );
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db.select({ total: count() }).from(notifications).where(where);
+      return row?.total ?? 0;
     },
 
     /** Whether the notification exists and is the user's own. */

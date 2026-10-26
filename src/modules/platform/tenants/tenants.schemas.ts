@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pageQuery } from "@/http/filters.js";
 import { idSchema } from "@/http/validate.js";
 import { emailSchema, userNameSchema } from "@/modules/auth/index.js";
 import { discountPercentSchema } from "../plans/plans.schemas.js";
@@ -38,3 +39,5 @@ export const changeSubscriptionRequestSchema = z
   });
 
 export const tenantIdSchema = idSchema;
+
+export const listTenantsQuerySchema = z.object({ ...pageQuery });

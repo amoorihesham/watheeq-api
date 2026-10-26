@@ -1,13 +1,9 @@
 import type { RequestHandler } from "express";
 import { AppError } from "@/http/errors.js";
+import { sendData, sendNoContent } from "@/http/respond.js";
 import { REFRESH_COOKIE } from "./auth.config.js";
-import type {
-  AuthServiceType,
-  AuthSettingsType,
-  LoginResponseType,
-  MeResponseType,
-  RefreshResponseType,
-} from "./auth.types.js";
+import { sessionResponseSchema } from "./auth.responses.js";
+import type { AuthServiceType, AuthSettingsType } from "./auth.types.js";
 import { clearAuthCookies, setAuthCookies } from "./shared/cookies.js";
 import { principalOf } from "./shared/middlewares.js";
 
@@ -28,7 +24,10 @@ export function createAuthController({
       const session = await service.login(req.body);
       setAuthCookies(res, session.tokens, settings);
       req.log.info({ userId: session.user.id }, "user logged in");
-      res.status(200).json({ user: session.user } satisfies LoginResponseType);
+      sendData(res, 200, sessionResponseSchema, {
+        user: session.user,
+        subscription: session.subscription,
+      });
     }) satisfies RequestHandler,
 
     refresh: (async (req, res) => {
@@ -38,20 +37,23 @@ export function createAuthController({
         throw new AppError("UNAUTHENTICATED");
       }
       setAuthCookies(res, session.tokens, settings);
-      res.status(200).json({ user: session.user } satisfies RefreshResponseType);
+      sendData(res, 200, sessionResponseSchema, {
+        user: session.user,
+        subscription: session.subscription,
+      });
     }) satisfies RequestHandler,
 
     logout: (async (req, res) => {
       await service.logout(refreshCookieOf(req.cookies));
       clearAuthCookies(res);
       req.log.info("user logged out");
-      res.status(204).end();
+      sendNoContent(res);
     }) satisfies RequestHandler,
 
     verifyEmail: (async (req, res) => {
       await service.verifyEmail(req.body, String(req.id));
       req.log.info("email verified");
-      res.status(204).end();
+      sendNoContent(res);
     }) satisfies RequestHandler,
 
     changePassword: (async (req, res) => {
@@ -62,23 +64,23 @@ export function createAuthController({
         String(req.id),
       );
       req.log.info("password changed");
-      res.status(204).end();
+      sendNoContent(res);
     }) satisfies RequestHandler,
 
     requestPasswordReset: (async (req, res) => {
       const sendLink = service.requestPasswordReset(req.body, req.log);
-      res.status(204).end();
+      sendNoContent(res);
       await sendLink();
     }) satisfies RequestHandler,
 
     resetPassword: (async (req, res) => {
       await service.resetPassword(req.body, String(req.id));
       req.log.info("password reset");
-      res.status(204).end();
+      sendNoContent(res);
     }) satisfies RequestHandler,
 
     me: (async (req, res) => {
-      res.status(200).json((await service.me(principalOf(req))) satisfies MeResponseType);
+      sendData(res, 200, sessionResponseSchema, await service.me(principalOf(req)));
     }) satisfies RequestHandler,
   };
 }

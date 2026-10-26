@@ -1,5 +1,6 @@
-export const DEFAULT_NOTIFICATION_PAGE_SIZE = 25;
-export const MAX_NOTIFICATION_PAGE_SIZE = 100;
+import { notificationKinds } from "@/db/schema/index.js";
+
+export const NOTIFICATION_KINDS = notificationKinds.enumValues;
 
 export const RETENTION_DAYS = 90;
 export const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pageQuery } from "@/http/filters.js";
 import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import { PERMISSION_SCOPES } from "@/modules/tenant-access/index.js";
 import { MAX_ROLE_NAME_LENGTH, MAX_ROLE_PERMISSIONS } from "./roles.config.js";
@@ -11,6 +12,9 @@ const grants = z
   .max(MAX_ROLE_PERMISSIONS);
 
 export const roleIdSchema = idSchema;
+
+export const listRolesQuerySchema = z.object({ ...pageQuery });
+export const listPermissionsQuerySchema = z.object({ ...pageQuery });
 
 export const createRoleRequestSchema = z.strictObject({ name: roleName, permissions: grants });
 

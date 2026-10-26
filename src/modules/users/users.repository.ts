@@ -1,7 +1,7 @@
 import { and, count, eq, ilike, isNotNull, isNull, or, type SQL, sql } from "drizzle-orm";
-import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import { orgUnits, roles, tenantMembers, tenants, users } from "@/db/schema/index.js";
+import type { PageRequestType } from "@/http/list.js";
 import { withinScope } from "@/modules/tenant-access/index.js";
 import type {
   ListUsersQueryType,
@@ -31,7 +31,9 @@ const userColumns = {
 /** `%`, `_`, and `\` in a search are matched literally. */
 const containing = (text: string) => `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 
-function listFilter(tenantId: string, query: ListUsersQueryType): SQL | undefined {
+type UserFiltersType = Omit<ListUsersQueryType, "cursor" | "limit">;
+
+function listFilter(tenantId: string, query: UserFiltersType): SQL | undefined {
   const verified = isNotNull(users.emailVerifiedAt);
   const byStatus = {
     active: and(eq(users.isActive, true), verified),
@@ -43,9 +45,11 @@ function listFilter(tenantId: string, query: ListUsersQueryType): SQL | undefine
     eq(tenantMembers.tenantId, tenantId),
     byStatus,
     query.unitId === "none" ? isNull(tenantMembers.unitId) : undefined,
-    query.unitId && query.unitId !== "none" ? eq(tenantMembers.unitId, query.unitId) : undefined,
-    query.managers ? eq(tenantMembers.isManager, query.managers === "true") : undefined,
-    query.roleId ? eq(tenantMembers.roleId, query.roleId) : undefined,
+    query.unitId !== "all" && query.unitId !== "none"
+      ? eq(tenantMembers.unitId, query.unitId)
+      : undefined,
+    query.managers === "all" ? undefined : eq(tenantMembers.isManager, query.managers === "true"),
+    query.roleId === "all" ? undefined : eq(tenantMembers.roleId, query.roleId),
     query.q
       ? or(ilike(users.userName, containing(query.q)), ilike(users.email, containing(query.q)))
       : undefined,
@@ -78,30 +82,34 @@ export function createUsersRepository() {
       });
     },
 
-    list(
-      db: Executor,
-      tenantId: string,
-      query: ListUsersQueryType,
-      visible: SQL,
-    ): Promise<UserRowType[]> {
-      return selectUsers(db)
-        .where(and(listFilter(tenantId, query), visible))
-        .orderBy(byName(users.userName), users.id)
-        .limit(query.limit)
-        .offset(query.offset);
+    page(db: Executor, page: PageRequestType) {
+      return db
+        .select({ ...userColumns, sortValues: page.sortValues })
+        .from(tenantMembers)
+        .innerJoin(users, eq(users.id, tenantMembers.userId))
+        .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+        .innerJoin(
+          roles,
+          and(eq(roles.tenantId, tenantMembers.tenantId), eq(roles.id, tenantMembers.roleId)),
+        )
+        .leftJoin(orgUnits, eq(orgUnits.id, tenantMembers.unitId))
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
     },
 
-    count(
-      db: Executor,
-      tenantId: string,
-      query: ListUsersQueryType,
-      visible: SQL,
-    ): Promise<{ total: number }[]> {
-      return db
+    /** The conditions of a list: the caller's tenant, the filters, and the caller's directory scope (T2, R3.15). */
+    listWhere(tenantId: string, filters: UserFiltersType, visible: SQL): SQL | undefined {
+      return and(listFilter(tenantId, filters), visible);
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db
         .select({ total: count() })
         .from(tenantMembers)
         .innerJoin(users, eq(users.id, tenantMembers.userId))
-        .where(and(listFilter(tenantId, query), visible));
+        .where(where);
+      return row?.total ?? 0;
     },
 
     /** `visible` limits the lookup to users within the caller's scope (R3.15). */

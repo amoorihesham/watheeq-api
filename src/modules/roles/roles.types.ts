@@ -1,14 +1,16 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type {
-  GrantType,
-  PermissionScopeType,
-  TenantPermissionType,
-} from "@/modules/tenant-access/index.js";
+import type { PermissionScopeType } from "@/modules/tenant-access/index.js";
 import type { createRolesController } from "./roles.controller.js";
 import type { createRolesRepository } from "./roles.repository.js";
-import type { createRoleRequestSchema, updateRoleRequestSchema } from "./roles.schemas.js";
+import type { permissionResponseSchema, roleResponseSchema } from "./roles.responses.js";
+import type {
+  createRoleRequestSchema,
+  listPermissionsQuerySchema,
+  listRolesQuerySchema,
+  updateRoleRequestSchema,
+} from "./roles.schemas.js";
 import type { createRolesService } from "./roles.service.js";
 
 /** A role row, without its grants. */
@@ -28,24 +30,14 @@ export interface GrantRowType {
 }
 
 /** A role as the API returns it; the system role lists its computed grants (P3.8). */
-export interface RoleType extends RoleRowType {
-  permissions: GrantType[];
-  /** Users holding the role, active or not: the role can be deleted only at zero (R3.7). */
-  memberCount: number;
-}
+export type RoleType = z.output<typeof roleResponseSchema>;
 
 export type CreateRoleRequestType = z.input<typeof createRoleRequestSchema>;
 export type UpdateRoleRequestType = z.input<typeof updateRoleRequestSchema>;
 
-export interface ListPermissionsResponseType {
-  permissions: { key: TenantPermissionType; scopes: readonly PermissionScopeType[] }[];
-}
-export interface ListRolesResponseType {
-  roles: RoleType[];
-}
-export interface RoleResponseType {
-  role: RoleType;
-}
+export type PermissionType = z.output<typeof permissionResponseSchema>;
+export type ListRolesQueryType = z.output<typeof listRolesQuerySchema>;
+export type ListPermissionsQueryType = z.output<typeof listPermissionsQuerySchema>;
 
 export interface RolesRouterDepsType {
   db: Db;

@@ -4,20 +4,14 @@ import type { Db } from "@/db/pool.js";
 import type { ORG_UNIT_KINDS } from "./org.config.js";
 import type { createOrgController } from "./org.controller.js";
 import type { createOrgRepository } from "./org.repository.js";
+import type { orgTreeResponseSchema, orgUnitResponseSchema } from "./org.responses.js";
 import type { createUnitRequestSchema, updateUnitRequestSchema } from "./org.schemas.js";
 import type { createOrgService } from "./org.service.js";
 
 export type OrgUnitKindType = (typeof ORG_UNIT_KINDS)[number];
 
 /** A unit as the repository reads it and the API returns it. */
-export interface OrgUnitType {
-  id: string;
-  kind: OrgUnitKindType;
-  parentId: string | null;
-  name: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+export type OrgUnitType = z.output<typeof orgUnitResponseSchema>;
 
 export interface NewOrgUnitType {
   tenantId: string;
@@ -30,27 +24,7 @@ export type CreateUnitRequestType = z.input<typeof createUnitRequestSchema>;
 export type UpdateUnitRequestType = z.input<typeof updateUnitRequestSchema>;
 export type UnitChangesType = z.output<typeof updateUnitRequestSchema>;
 
-export interface SectionNodeType {
-  id: string;
-  name: string;
-  /** Active members with the manager flag; zero or more, all equal (P2.12). */
-  managers: { id: string; userName: string }[];
-  memberCount: number;
-}
-
-export interface DepartmentNodeType extends SectionNodeType {
-  sections: SectionNodeType[];
-}
-
-export interface GetOrgTreeResponseType {
-  /** Members with no unit sit directly under the organization (P2.13). */
-  organization: { memberCount: number };
-  departments: DepartmentNodeType[];
-}
-
-export interface UnitResponseType {
-  unit: OrgUnitType;
-}
+export type OrgTreeResponseType = z.output<typeof orgTreeResponseSchema>;
 
 export interface OrgRouterDepsType {
   db: Db;

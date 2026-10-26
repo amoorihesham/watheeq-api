@@ -6,8 +6,8 @@ import { validate } from "@/http/validate.js";
 import { createUnitRequestSchema, unitIdSchema, updateUnitRequestSchema } from "./org.schemas.js";
 import type {
   CreateUnitRequestType,
-  GetOrgTreeResponseType,
   OrgRepositoryType,
+  OrgTreeResponseType,
   OrgUnitType,
   UpdateUnitRequestType,
 } from "./org.types.js";
@@ -42,7 +42,7 @@ export function createOrgService({ db, repo }: { db: Db; repo: OrgRepositoryType
   }
 
   return {
-    async tree(tenantId: string): Promise<GetOrgTreeResponseType> {
+    async tree(tenantId: string): Promise<OrgTreeResponseType> {
       const [units, counts, managers] = await Promise.all([
         repo.listUnits(db, tenantId),
         repo.countMembersByUnit(db, tenantId),

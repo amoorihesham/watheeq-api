@@ -4,38 +4,25 @@ import type { Db } from "@/db/pool.js";
 import type { PAYMENT_PERIODS } from "./plans.config.js";
 import type { createPlansController } from "./plans.controller.js";
 import type { createPlansRepository } from "./plans.repository.js";
-import type { createPlanRequestSchema, updatePlanRequestSchema } from "./plans.schemas.js";
+import type { planResponseSchema } from "./plans.responses.js";
+import type {
+  createPlanRequestSchema,
+  listPlansQuerySchema,
+  updatePlanRequestSchema,
+} from "./plans.schemas.js";
 import type { createPlansService } from "./plans.service.js";
 
 export type PaymentPeriodType = (typeof PAYMENT_PERIODS)[number];
 
 /** A plan as the repository reads it and the API returns it. */
-export interface PlanType {
-  id: string;
-  name: string;
-  userLimit: number;
-  storageLimitGb: number;
-  graceDays: number;
-  priceHalalas: number;
-  paymentPeriod: PaymentPeriodType;
-  discountPercent: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
+export type PlanType = z.output<typeof planResponseSchema>;
 
 export type CreatePlanRequestType = z.input<typeof createPlanRequestSchema>;
 export type UpdatePlanRequestType = z.input<typeof updatePlanRequestSchema>;
 export type NewPlanType = z.output<typeof createPlanRequestSchema>;
 export type PlanChangesType = z.output<typeof updatePlanRequestSchema>;
 
-export interface CreatePlanResponseType {
-  plan: PlanType;
-}
-export type GetPlanResponseType = CreatePlanResponseType;
-export type UpdatePlanResponseType = CreatePlanResponseType;
-export interface ListPlansResponseType {
-  plans: PlanType[];
-}
+export type ListPlansQueryType = z.output<typeof listPlansQuerySchema>;
 
 export interface PlansRouterDepsType {
   db: Db;

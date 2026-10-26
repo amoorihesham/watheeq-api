@@ -1,7 +1,7 @@
-import { and, count, eq, sql } from "drizzle-orm";
-import { byName } from "@/db/order.js";
+import { and, count, eq, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import { rolePermissions, roles, tenantMembers } from "@/db/schema/index.js";
+import type { PageRequestType } from "@/http/list.js";
 import type { GrantType } from "@/modules/tenant-access/index.js";
 import type { GrantRowType, RoleRowType } from "./roles.types.js";
 
@@ -25,12 +25,18 @@ const ofTenant = (tenantId: string, roleId: string) =>
 /** Tenant code: every query is filtered by the caller's tenant (T2). */
 export function createRolesRepository() {
   return {
-    list(db: Executor, tenantId: string): Promise<RoleRowType[]> {
+    page(db: Executor, page: PageRequestType) {
       return db
-        .select(roleColumns)
+        .select({ ...roleColumns, sortValues: page.sortValues })
         .from(roles)
-        .where(eq(roles.tenantId, tenantId))
-        .orderBy(byName(roles.name), roles.id);
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db.select({ total: count() }).from(roles).where(where);
+      return row?.total ?? 0;
     },
 
     findById(db: Executor, tenantId: string, roleId: string): Promise<RoleRowType[]> {

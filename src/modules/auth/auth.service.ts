@@ -26,9 +26,9 @@ import type {
   ChangePasswordRequestType,
   CreateOperatorRequestType,
   LoginRequestType,
-  MeResponseType,
   PasswordResetRequestType,
   ResetPasswordRequestType,
+  SessionResponseType,
   UserSummaryType,
   VerifyEmailRequestType,
 } from "./auth.types.js";
@@ -66,6 +66,14 @@ export function createAuthService({
   settings: AuthSettingsType;
   emailSender: EmailSenderType;
 }) {
+  /** Null for an operator, who has no tenant. */
+  async function subscriptionStatusOf(executor: Executor, account: AccountType) {
+    const [status] = account.tenantId
+      ? await repo.findSubscriptionStatus(executor, account.tenantId)
+      : [];
+    return status ? toSubscriptionStatus(status, status.today) : null;
+  }
+
   async function issueSession(executor: Executor, account: AccountType): Promise<AuthSessionType> {
     const user = toAuthUser(account);
     const accessToken = await signAccessToken(
@@ -79,7 +87,11 @@ export function createAuthService({
       tokenHash: hashToken(refreshToken),
       expiresAt: new Date(Date.now() + settings.refreshTokenTtlSeconds * 1000),
     });
-    return { user, tokens: { accessToken, refreshToken } };
+    return {
+      user,
+      subscription: await subscriptionStatusOf(executor, account),
+      tokens: { accessToken, refreshToken },
+    };
   }
 
   return {
@@ -235,17 +247,14 @@ export function createAuthService({
       });
     },
 
-    async me(user: AuthUserType): Promise<MeResponseType> {
+    async me(user: AuthUserType): Promise<SessionResponseType> {
       const [account] = await repo.findAccountById(db, user.id);
       if (!account) {
         throw new AppError("UNAUTHENTICATED");
       }
-      const [status] = account.tenantId
-        ? await repo.findSubscriptionStatus(db, account.tenantId)
-        : [];
       return {
         user: toAuthUser(account),
-        subscription: status ? toSubscriptionStatus(status, status.today) : null,
+        subscription: await subscriptionStatusOf(db, account),
       };
     },
   };

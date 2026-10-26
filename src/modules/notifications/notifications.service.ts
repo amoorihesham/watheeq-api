@@ -1,20 +1,29 @@
+import { sql } from "drizzle-orm";
 import type { Db } from "@/db/pool.js";
+import { notifications } from "@/db/schema/index.js";
 import { AppError } from "@/http/errors.js";
+import { listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { idSchema, validate } from "@/http/validate.js";
 import { listNotificationsQuerySchema, readAllRequestSchema } from "./notifications.schemas.js";
 import type {
-  ListNotificationsResponseType,
-  NotificationRowType,
   NotificationsRepositoryType,
   NotificationType,
   UnreadCountResponseType,
 } from "./notifications.types.js";
 
-const toNotification = (row: NotificationRowType): NotificationType => ({
+const toNotification = (row: {
+  id: string;
+  kind: NotificationType["kind"];
+  requestId: string | null;
+  data: unknown;
+  createdAt: Date;
+  readAt: Date | null;
+}): NotificationType => ({
   id: row.id,
   kind: row.kind,
   request: row.requestId ? { id: row.requestId } : null,
-  data: row.data,
+  data: row.data as NotificationType["data"],
   createdAt: row.createdAt,
   readAt: row.readAt,
 });
@@ -34,21 +43,22 @@ export function createNotificationsService({
       tenantId: string,
       userId: string,
       input: unknown,
-    ): Promise<ListNotificationsResponseType> {
+    ): Promise<PageType<NotificationType>> {
       const query = validate(listNotificationsQuerySchema, input);
-      if (query.before && !(await repo.exists(db, tenantId, userId, query.before))) {
-        throw unknownNotification("before");
-      }
-      // One extra row tells whether another page follows.
-      const rows = await repo.list(db, tenantId, userId, {
-        unread: query.unread,
-        before: query.before,
-        limit: query.limit + 1,
+      const page = await listPage({
+        db,
+        list: "notifications",
+        query,
+        keys: [
+          { expr: sql`${notifications.createdAt}`, type: "timestamptz" },
+          { expr: sql`${notifications.id}`, type: "uuid" },
+        ],
+        direction: "desc",
+        where: (filters) => repo.listWhere(tenantId, userId, filters.unread),
+        selectPage: repo.page,
+        count: repo.count,
       });
-      return {
-        notifications: rows.slice(0, query.limit).map(toNotification),
-        hasMore: rows.length > query.limit,
-      };
+      return { ...page, items: page.items.map(toNotification) };
     },
 
     async unreadCount(tenantId: string, userId: string): Promise<UnreadCountResponseType> {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pageQuery } from "@/http/filters.js";
 import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import {
   MAX_DISCOUNT_PERCENT,
@@ -40,3 +41,5 @@ export const updatePlanRequestSchema = z
   .refine((body) => Object.keys(body).length > 0, NO_FIELDS);
 
 export const planIdSchema = idSchema;
+
+export const listPlansQuerySchema = z.object({ ...pageQuery });

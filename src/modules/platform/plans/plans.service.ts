@@ -1,9 +1,19 @@
+import { sql } from "drizzle-orm";
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
+import { byName } from "@/db/order.js";
 import type { Db } from "@/db/pool.js";
+import { plans } from "@/db/schema/index.js";
 import { withTx } from "@/db/tx.js";
 import { AppError } from "@/http/errors.js";
+import { listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { validate } from "@/http/validate.js";
-import { createPlanRequestSchema, planIdSchema, updatePlanRequestSchema } from "./plans.schemas.js";
+import {
+  createPlanRequestSchema,
+  listPlansQuerySchema,
+  planIdSchema,
+  updatePlanRequestSchema,
+} from "./plans.schemas.js";
 import type {
   CreatePlanRequestType,
   PlansRepositoryType,
@@ -41,8 +51,21 @@ export function createPlansService({ db, repo }: { db: Db; repo: PlansRepository
       });
     },
 
-    list(): Promise<PlanType[]> {
-      return repo.list(db);
+    list(input: unknown): Promise<PageType<PlanType>> {
+      const query = validate(listPlansQuerySchema, input);
+      return listPage({
+        db,
+        list: "plans",
+        query,
+        keys: [
+          { expr: byName(plans.name), type: "text" },
+          { expr: sql`${plans.id}`, type: "uuid" },
+        ],
+        direction: "asc",
+        where: () => undefined,
+        selectPage: repo.page,
+        count: repo.count,
+      });
     },
 
     async get(planId: string): Promise<PlanType> {

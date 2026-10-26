@@ -4,9 +4,9 @@ import type { Db } from "@/db/pool.js";
 import type { passwordTokenPurposes } from "@/db/schema/password-tokens.js";
 import type { userRoles } from "@/db/schema/users.js";
 import type { EmailSenderType } from "@/email/index.js";
-import type { SubscriptionStatusType } from "@/modules/subscriptions/index.js";
 import type { createAuthController } from "./auth.controller.js";
 import type { createAuthRepository } from "./auth.repository.js";
+import type { authUserResponseSchema, sessionResponseSchema } from "./auth.responses.js";
 import type {
   accessTokenPayloadSchema,
   changePasswordRequestSchema,
@@ -59,13 +59,7 @@ export type TenantClaimType = z.infer<typeof tenantClaimSchema>;
 export type AccessTokenPayloadType = z.infer<typeof accessTokenPayloadSchema>;
 
 /** The signed-in user: returned by the auth endpoints and attached to the request by `authenticate()`. */
-export interface AuthUserType {
-  id: string;
-  email: string;
-  userName: string;
-  role: UserRoleType;
-  tenant: TenantClaimType | null;
-}
+export type AuthUserType = z.output<typeof authUserResponseSchema>;
 
 export type CreateOperatorRequestType = z.infer<typeof createOperatorRequestSchema>;
 export type VerifyEmailRequestType = z.infer<typeof verifyEmailRequestSchema>;
@@ -74,15 +68,7 @@ export type ChangePasswordRequestType = z.infer<typeof changePasswordRequestSche
 export type PasswordResetRequestType = z.infer<typeof passwordResetRequestSchema>;
 export type ResetPasswordRequestType = z.infer<typeof resetPasswordRequestSchema>;
 
-export interface LoginResponseType {
-  user: AuthUserType;
-}
-export type RefreshResponseType = LoginResponseType;
-export interface MeResponseType {
-  user: AuthUserType;
-  /** Null for an operator. Lets the client explain why actions are disabled in Grace or Read-only (R1.11). */
-  subscription: SubscriptionStatusType | null;
-}
+export type SessionResponseType = z.output<typeof sessionResponseSchema>;
 
 export type PasswordTokenPurposeType = (typeof passwordTokenPurposes.enumValues)[number];
 
@@ -109,8 +95,7 @@ export interface AuthTokensType {
   refreshToken: string;
 }
 
-export interface AuthSessionType {
-  user: AuthUserType;
+export interface AuthSessionType extends SessionResponseType {
   tokens: AuthTokensType;
 }
 

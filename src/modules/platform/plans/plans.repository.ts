@@ -1,7 +1,7 @@
-import { eq, sql } from "drizzle-orm";
-import { byName } from "@/db/order.js";
+import { count, eq, getTableColumns, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import { plans } from "@/db/schema/index.js";
+import type { PageRequestType } from "@/http/list.js";
 import type { NewPlanType, PlanChangesType, PlanType } from "./plans.types.js";
 
 export function createPlansRepository() {
@@ -10,8 +10,18 @@ export function createPlansRepository() {
       return db.insert(plans).values(values).returning();
     },
 
-    list(db: Executor): Promise<PlanType[]> {
-      return db.select().from(plans).orderBy(byName(plans.name));
+    page(db: Executor, page: PageRequestType) {
+      return db
+        .select({ ...getTableColumns(plans), sortValues: page.sortValues })
+        .from(plans)
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db.select({ total: count() }).from(plans).where(where);
+      return row?.total ?? 0;
     },
 
     findById(db: Executor, planId: string): Promise<PlanType[]> {

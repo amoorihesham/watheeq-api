@@ -1,7 +1,7 @@
-import { eq, sql } from "drizzle-orm";
-import { byName } from "@/db/order.js";
+import { count, eq, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import { files, roles, subscriptions, tenantMembers, tenants, users } from "@/db/schema/index.js";
+import type { PageRequestType } from "@/http/list.js";
 import { riyadhToday } from "@/modules/subscriptions/index.js";
 import type { NewTenantType, TenantOwnerType, TenantType } from "./tenants.types.js";
 
@@ -41,12 +41,23 @@ export function createTenantsRepository() {
       return db.insert(tenantMembers).values({ tenantId, userId, roleId });
     },
 
-    list(db: Executor) {
+    page(db: Executor, page: PageRequestType) {
       return db
-        .select(detailColumns)
+        .select({ ...detailColumns, sortValues: page.sortValues })
         .from(tenants)
         .innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
-        .orderBy(byName(tenants.name));
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db
+        .select({ total: count() })
+        .from(tenants)
+        .innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
+        .where(where);
+      return row?.total ?? 0;
     },
 
     findById(db: Executor, tenantId: string) {

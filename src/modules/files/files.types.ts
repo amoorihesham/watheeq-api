@@ -1,4 +1,5 @@
 import type { Readable } from "node:stream";
+import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { files } from "@/db/schema/index.js";
@@ -6,6 +7,7 @@ import type { FileStoreType } from "@/storage/index.js";
 import type { FILE_KINDS } from "./files.config.js";
 import type { createFilesController } from "./files.controller.js";
 import type { createFilesRepository } from "./files.repository.js";
+import type { fileResponseSchema } from "./files.responses.js";
 import type { createFilesService } from "./files.service.js";
 
 export type FileKindType = (typeof FILE_KINDS)[number];
@@ -15,18 +17,7 @@ export type NewFileType = typeof files.$inferInsert;
 export type FileStateType = FileRowType["state"];
 
 /** A file as the API returns it. */
-export interface FileType {
-  id: string;
-  name: string;
-  contentType: string;
-  size: number;
-  sha256: string;
-  expiresAt: Date;
-}
-
-export interface FileResponseType {
-  file: FileType;
-}
+export type FileType = z.output<typeof fileResponseSchema>;
 
 /** A pending file as an attach reads it; `expired` is decided by the database clock. */
 export interface LockedFileRowType {

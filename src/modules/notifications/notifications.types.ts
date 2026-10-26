@@ -1,8 +1,14 @@
+import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { notificationKinds } from "@/db/schema/index.js";
 import type { createNotificationsController } from "./notifications.controller.js";
 import type { createNotificationsRepository } from "./notifications.repository.js";
+import type {
+  notificationResponseSchema,
+  unreadCountResponseSchema,
+} from "./notifications.responses.js";
+import type { listNotificationsQuerySchema } from "./notifications.schemas.js";
 import type { createNotificationsService } from "./notifications.service.js";
 
 export type NotificationKindType = (typeof notificationKinds.enumValues)[number];
@@ -26,32 +32,9 @@ export interface NewNotificationType {
   data: Record<string, unknown>;
 }
 
-export interface NotificationRowType {
-  id: string;
-  kind: NotificationKindType;
-  requestId: string | null;
-  data: unknown;
-  createdAt: Date;
-  readAt: Date | null;
-}
-
-export interface NotificationType {
-  id: string;
-  kind: NotificationKindType;
-  request: { id: string } | null;
-  data: unknown;
-  createdAt: Date;
-  readAt: Date | null;
-}
-
-export interface ListNotificationsResponseType {
-  notifications: NotificationType[];
-  hasMore: boolean;
-}
-
-export interface UnreadCountResponseType {
-  count: number;
-}
+export type NotificationType = z.output<typeof notificationResponseSchema>;
+export type UnreadCountResponseType = z.output<typeof unreadCountResponseSchema>;
+export type ListNotificationsQueryType = z.output<typeof listNotificationsQuerySchema>;
 
 export interface NotificationsRouterDepsType {
   db: Db;

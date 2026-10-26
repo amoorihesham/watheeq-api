@@ -1,13 +1,15 @@
 import type { RequestHandler } from "express";
+import { sendData, sendNoContent } from "@/http/respond.js";
 import { auditContextOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import type { GetOrgTreeResponseType, OrgServiceType, UnitResponseType } from "./org.types.js";
+import { orgTreeResponseSchema, orgUnitResponseSchema } from "./org.responses.js";
+import type { OrgServiceType } from "./org.types.js";
 
 export function createOrgController({ service }: { service: OrgServiceType }) {
   return {
     tree: (async (req, res) => {
       const tree = await service.tree(subscriptionOf(req).tenantId);
-      res.status(200).json(tree satisfies GetOrgTreeResponseType);
+      sendData(res, 200, orgTreeResponseSchema, tree);
     }) satisfies RequestHandler,
 
     create: (async (req, res) => {
@@ -16,7 +18,7 @@ export function createOrgController({ service }: { service: OrgServiceType }) {
         req.body,
         auditContextOf(req),
       );
-      res.status(201).json({ unit } satisfies UnitResponseType);
+      sendData(res, 201, orgUnitResponseSchema, unit);
     }) satisfies RequestHandler,
 
     update: (async (req, res) => {
@@ -26,7 +28,7 @@ export function createOrgController({ service }: { service: OrgServiceType }) {
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ unit } satisfies UnitResponseType);
+      sendData(res, 200, orgUnitResponseSchema, unit);
     }) satisfies RequestHandler,
 
     delete: (async (req, res) => {
@@ -35,7 +37,7 @@ export function createOrgController({ service }: { service: OrgServiceType }) {
         String(req.params.unitId),
         auditContextOf(req),
       );
-      res.status(204).end();
+      sendNoContent(res);
     }) satisfies RequestHandler,
   };
 }

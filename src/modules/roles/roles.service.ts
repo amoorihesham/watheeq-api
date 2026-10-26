@@ -1,7 +1,12 @@
+import { eq, sql } from "drizzle-orm";
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
+import { byName } from "@/db/order.js";
 import type { Db, Executor } from "@/db/pool.js";
+import { roles } from "@/db/schema/index.js";
 import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
+import { listInMemory, listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { validate } from "@/http/validate.js";
 import {
   assertGrantsHeld,
@@ -15,12 +20,17 @@ import {
   type TenantPermissionType,
   type WantedGrantType,
 } from "@/modules/tenant-access/index.js";
-import { createRoleRequestSchema, roleIdSchema, updateRoleRequestSchema } from "./roles.schemas.js";
+import {
+  createRoleRequestSchema,
+  listPermissionsQuerySchema,
+  listRolesQuerySchema,
+  roleIdSchema,
+  updateRoleRequestSchema,
+} from "./roles.schemas.js";
 import type {
   CreateRoleRequestType,
   GrantRowType,
-  ListPermissionsResponseType,
-  ListRolesResponseType,
+  PermissionType,
   RoleRowType,
   RolesRepositoryType,
   RoleType,
@@ -118,20 +128,39 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
   }
 
   return {
-    permissions(): ListPermissionsResponseType {
-      return {
-        permissions: TENANT_PERMISSIONS.map((key) => ({ key, scopes: PERMISSION_CATALOG[key] })),
-      };
+    permissions(input: unknown): PageType<PermissionType> {
+      return listInMemory({
+        list: "permissions",
+        query: validate(listPermissionsQuerySchema, input),
+        items: TENANT_PERMISSIONS.map((key) => ({ key, scopes: [...PERMISSION_CATALOG[key]] })),
+        keyOf: (permission) => permission.key,
+      });
     },
 
-    async list(tenantId: string): Promise<ListRolesResponseType> {
-      const [rows, grants, counts] = await Promise.all([
-        repo.list(db, tenantId),
+    async list(tenantId: string, input: unknown): Promise<PageType<RoleType>> {
+      const query = validate(listRolesQuerySchema, input);
+      const page = await listPage({
+        db,
+        list: "roles",
+        query,
+        keys: [
+          { expr: byName(roles.name), type: "text" },
+          { expr: sql`${roles.id}`, type: "uuid" },
+        ],
+        direction: "asc",
+        where: () => eq(roles.tenantId, tenantId),
+        selectPage: repo.page,
+        count: repo.count,
+      });
+      const [grants, counts] = await Promise.all([
         repo.listGrants(db, tenantId),
         repo.countMembersByRole(db, tenantId),
       ]);
       const memberCount = new Map(counts.map((row) => [row.roleId, row.memberCount]));
-      return { roles: rows.map((role) => toRole(role, grants, memberCount.get(role.id) ?? 0)) };
+      return {
+        ...page,
+        items: page.items.map((role) => toRole(role, grants, memberCount.get(role.id) ?? 0)),
+      };
     },
 
     get(tenantId: string, roleId: string): Promise<RoleType> {

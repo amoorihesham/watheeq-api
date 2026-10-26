@@ -1,9 +1,13 @@
-import type { SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
+import { byName } from "@/db/order.js";
 import type { Db, Executor, Tx } from "@/db/pool.js";
+import { users } from "@/db/schema/index.js";
 import { withTx } from "@/db/tx.js";
 import type { EmailSenderType } from "@/email/index.js";
 import { AppError } from "@/http/errors.js";
+import { listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
 import {
@@ -31,7 +35,6 @@ import type {
   AssignRoleRequestType,
   CallerType,
   InviteUserRequestType,
-  ListUsersResponseType,
   MemberChangesType,
   UpdateUserRequestType,
   UserRowType,
@@ -130,14 +133,23 @@ export function createUsersService({
   }
 
   return {
-    async list(tenantId: string, callerId: string, input: unknown): Promise<ListUsersResponseType> {
+    async list(tenantId: string, callerId: string, input: unknown): Promise<PageType<UserType>> {
       const query = validate(listUsersQuerySchema, input);
       const visible = repo.visibleTo(tenantId, callerId);
-      const [rows, [counted]] = await Promise.all([
-        repo.list(db, tenantId, query, visible),
-        repo.count(db, tenantId, query, visible),
-      ]);
-      return { users: rows.map(toUser), total: counted?.total ?? 0 };
+      const page = await listPage({
+        db,
+        list: "users",
+        query,
+        keys: [
+          { expr: byName(users.userName), type: "text" },
+          { expr: sql`${users.id}`, type: "uuid" },
+        ],
+        direction: "asc",
+        where: (filters) => repo.listWhere(tenantId, filters, visible),
+        selectPage: repo.page,
+        count: repo.count,
+      });
+      return { ...page, items: page.items.map(toUser) };
     },
 
     /** A user outside the caller's scope is 404, like one of another tenant (R3.15). */

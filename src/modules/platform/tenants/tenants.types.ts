@@ -1,18 +1,18 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type { tenants } from "@/db/schema/index.js";
 import type { EmailSenderType } from "@/email/index.js";
-import type { SubscriptionViewType, UsageType } from "@/modules/subscriptions/index.js";
 import type { createTenantsController } from "./tenants.controller.js";
 import type { createTenantsRepository } from "./tenants.repository.js";
+import type { tenantDetailResponseSchema, tenantResponseSchema } from "./tenants.responses.js";
 import type {
   changeSubscriptionRequestSchema,
   createTenantRequestSchema,
+  listTenantsQuerySchema,
 } from "./tenants.schemas.js";
 import type { createTenantsService } from "./tenants.service.js";
 
-export type TenantType = typeof tenants.$inferSelect;
+export type TenantType = z.output<typeof tenantResponseSchema>;
 
 export interface NewTenantType {
   name: string;
@@ -30,26 +30,8 @@ export interface TenantOwnerType {
 export type CreateTenantRequestType = z.input<typeof createTenantRequestSchema>;
 export type ChangeSubscriptionRequestType = z.input<typeof changeSubscriptionRequestSchema>;
 
-export interface ChangeSubscriptionResponseType {
-  subscription: SubscriptionViewType;
-  usage: UsageType;
-}
-
-export interface CreateTenantResponseType {
-  tenant: TenantType;
-  subscription: SubscriptionViewType;
-  admin: { id: string; email: string };
-}
-
-export interface TenantDetailType {
-  tenant: TenantType;
-  subscription: SubscriptionViewType;
-  usage: UsageType;
-}
-export type GetTenantResponseType = TenantDetailType;
-export interface ListTenantsResponseType {
-  tenants: TenantDetailType[];
-}
+export type TenantDetailType = z.output<typeof tenantDetailResponseSchema>;
+export type ListTenantsQueryType = z.output<typeof listTenantsQuerySchema>;
 
 export interface TenantsSettingsType {
   appBaseUrl: string;

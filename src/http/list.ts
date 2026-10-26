@@ -192,3 +192,34 @@ export async function listPage<
     total,
   };
 }
+
+/**
+ * Pages a list that lives in code, not in a table (the permission catalog), with the same cursor and fingerprint
+ * rules as `listPage`. `keyOf` is the unique sort key; a cursor whose key is no longer in the list is invalid.
+ */
+export function listInMemory<T, Q extends ListQueryType>(options: {
+  list: string;
+  query: Q;
+  items: readonly T[];
+  keyOf: (item: T) => string;
+}): PageType<T> {
+  const { list, query, items, keyOf } = options;
+  const { cursor, limit, ...filters } = query;
+  const fp = fingerprintOf(list, filters);
+  let start = 0;
+  if (cursor !== undefined) {
+    const [key] = decodeCursor(cursor, fp, ["text"]);
+    const at = items.findIndex((item) => keyOf(item) === key);
+    if (at < 0) {
+      throw invalidCursor();
+    }
+    start = at + 1;
+  }
+  const pageItems = items.slice(start, start + limit);
+  const last = pageItems.at(-1);
+  return {
+    items: pageItems,
+    nextCursor: start + limit < items.length && last ? encodeCursor([keyOf(last)], fp) : null,
+    total: items.length,
+  };
+}

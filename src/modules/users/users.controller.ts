@@ -1,12 +1,9 @@
 import type { Request, RequestHandler } from "express";
+import { sendData, sendNoContent, sendPage } from "@/http/respond.js";
 import { auditContextOf, principalOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import type {
-  CallerType,
-  ListUsersResponseType,
-  UserResponseType,
-  UsersServiceType,
-} from "./users.types.js";
+import { userResponseSchema } from "./users.responses.js";
+import type { CallerType, UsersServiceType } from "./users.types.js";
 
 const callerOf = (req: Request): CallerType => {
   const { id, userName } = principalOf(req);
@@ -19,12 +16,12 @@ export function createUsersController({ service }: { service: UsersServiceType }
   return {
     list: (async (req, res) => {
       const page = await service.list(tenantOf(req), callerOf(req).id, req.query);
-      res.status(200).json(page satisfies ListUsersResponseType);
+      sendPage(res, userResponseSchema, page);
     }) satisfies RequestHandler,
 
     get: (async (req, res) => {
       const user = await service.get(tenantOf(req), callerOf(req).id, userIdOf(req));
-      res.status(200).json({ user } satisfies UserResponseType);
+      sendData(res, 200, userResponseSchema, user);
     }) satisfies RequestHandler,
 
     invite: (async (req, res) => {
@@ -35,7 +32,7 @@ export function createUsersController({ service }: { service: UsersServiceType }
         auditContextOf(req),
         req.log,
       );
-      res.status(201).json({ user } satisfies UserResponseType);
+      sendData(res, 201, userResponseSchema, user);
     }) satisfies RequestHandler,
 
     update: (async (req, res) => {
@@ -45,7 +42,7 @@ export function createUsersController({ service }: { service: UsersServiceType }
         req.body,
         auditContextOf(req),
       );
-      res.status(200).json({ user } satisfies UserResponseType);
+      sendData(res, 200, userResponseSchema, user);
     }) satisfies RequestHandler,
 
     assignRole: (async (req, res) => {
@@ -56,7 +53,7 @@ export function createUsersController({ service }: { service: UsersServiceType }
         callerOf(req),
         auditContextOf(req),
       );
-      res.status(200).json({ user } satisfies UserResponseType);
+      sendData(res, 200, userResponseSchema, user);
     }) satisfies RequestHandler,
 
     deactivate: (async (req, res) => {
@@ -66,7 +63,7 @@ export function createUsersController({ service }: { service: UsersServiceType }
         callerOf(req),
         auditContextOf(req),
       );
-      res.status(200).json({ user } satisfies UserResponseType);
+      sendData(res, 200, userResponseSchema, user);
     }) satisfies RequestHandler,
 
     reactivate: (async (req, res) => {
@@ -76,7 +73,7 @@ export function createUsersController({ service }: { service: UsersServiceType }
         callerOf(req),
         auditContextOf(req),
       );
-      res.status(200).json({ user } satisfies UserResponseType);
+      sendData(res, 200, userResponseSchema, user);
     }) satisfies RequestHandler,
 
     resendInvitation: (async (req, res) => {
@@ -86,7 +83,7 @@ export function createUsersController({ service }: { service: UsersServiceType }
         callerOf(req),
         auditContextOf(req),
       );
-      res.status(204).end();
+      sendNoContent(res);
     }) satisfies RequestHandler,
   };
 }
