@@ -74,7 +74,7 @@ const servicePayload = (name: string, workflowIds: string[], description?: strin
 async function createService(name: string, workflowIds: string[], token = huda): Promise<string> {
   const res = await as(token).post("/services", servicePayload(name, workflowIds));
   expect(res.status).toBe(201);
-  return res.body.service.id;
+  return res.body.data.id;
 }
 
 const auditOf = (resourceId: string) =>
@@ -171,7 +171,7 @@ describe("creating services (R5.11)", () => {
     });
 
     expect(res.status).toBe(201);
-    expect(res.body.service).toEqual({
+    expect(res.body.data).toEqual({
       id: expect.any(String),
       name: "Vendor contract review",
       description: "Review of a contract with a vendor",
@@ -182,7 +182,7 @@ describe("creating services (R5.11)", () => {
         { id: vendor, name: "Vendor contract", isDefault: true, retired: false },
       ],
     });
-    const audit = await auditOf(res.body.service.id);
+    const audit = await auditOf(res.body.data.id);
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({
       action: "service.created",
@@ -198,16 +198,16 @@ describe("creating services (R5.11)", () => {
         ],
       },
     });
-    expect((await as(huda).get(`/services/${res.body.service.id}`)).body.service).toEqual(
-      res.body.service,
+    expect((await as(huda).get(`/services/${res.body.data.id}`)).body.data).toEqual(
+      res.body.data,
     );
   });
 
   it("allows a single workflow, which is then the default, and no description", async () => {
     const res = await as(huda).post("/services", servicePayload(nextName("Single"), [vendor]));
     expect(res.status).toBe(201);
-    expect(res.body.service.description).toBeNull();
-    expect(res.body.service.workflows).toEqual([
+    expect(res.body.data.description).toBeNull();
+    expect(res.body.data.workflows).toEqual([
       { id: vendor, name: "Vendor contract", isDefault: true, retired: false },
     ]);
   });
@@ -218,8 +218,8 @@ describe("creating services (R5.11)", () => {
       description: "   ",
     });
     expect(res.status).toBe(201);
-    expect(res.body.service.description).toBeNull();
-    expect(res.body.service.name).toBe(res.body.service.name.trim());
+    expect(res.body.data.description).toBeNull();
+    expect(res.body.data.name).toBe(res.body.data.name.trim());
   });
 
   it("refuses a second name in any case, and leaves nothing behind", async () => {
@@ -322,7 +322,7 @@ describe("reading services", () => {
     const b = await createService(nextName("Beta Listed"), [complex]);
     expect((await as(huda).post(`/services/${b}/retire`)).status).toBe(200);
 
-    const listed = (await as(huda).get("/services")).body.services;
+    const listed = (await as(huda).get("/services")).body.data;
     const names = listed.map((service: { name: string }) => service.name);
     expect(names).toEqual(
       [...names].sort((x, y) => x.toLowerCase().localeCompare(y.toLowerCase())),
@@ -334,8 +334,42 @@ describe("reading services", () => {
     ]);
     expect(listed.some((service: { id: string }) => service.id === b)).toBe(false);
 
-    const all = (await as(huda).get("/services?includeRetired=true")).body.services;
+    const all = (await as(huda).get("/services?retired=all")).body.data;
     expect(all.find((service: { id: string }) => service.id === b).retired).toBe(true);
+  });
+
+  it("pages by name to the end with the total, and checks its filters", async () => {
+    await createService(nextName("Paged One"), [vendor]);
+    await createService(nextName("Paged Two"), [vendor]);
+    await createService(nextName("Paged Three"), [vendor]);
+    const first = await as(huda).get("/services?limit=2");
+    const total = first.body.page.total as number;
+    expect(total).toBeGreaterThanOrEqual(3);
+    const seen: string[] = first.body.data.map((s: { id: string }) => s.id);
+    let cursor: string | null = first.body.page.nextCursor;
+    while (cursor) {
+      const next = await as(huda).get(`/services?limit=2&cursor=${cursor}`);
+      expect(next.body.page.total).toBe(total);
+      seen.push(...next.body.data.map((s: { id: string }) => s.id));
+      cursor = next.body.page.nextCursor;
+    }
+    expect(seen).toHaveLength(total);
+    expect(new Set(seen).size).toBe(total);
+
+    const bad = await as(huda).get("/services?retired=maybe");
+    expect(bad.body.error.details).toEqual([{ path: "retired", code: "invalid_value" }]);
+    const replay = await as(huda).get(
+      `/services?limit=2&retired=all&cursor=${first.body.page.nextCursor}`,
+    );
+    expect(replay.body.error.details).toEqual([{ path: "cursor", code: "invalid_cursor" }]);
+  });
+
+  it("shows only retired services with retired=true", async () => {
+    const id = await createService(nextName("Only Retired"), [vendor]);
+    await as(huda).post(`/services/${id}/retire`);
+    const only = await as(huda).get("/services?retired=true&limit=100");
+    expect(only.body.data.every((s: { retired: boolean }) => s.retired)).toBe(true);
+    expect(only.body.data.map((s: { id: string }) => s.id)).toContain(id);
   });
 
   it("answers 404 for an unknown or malformed id", async () => {
@@ -356,7 +390,7 @@ describe("changing services (R5.11)", () => {
       description: "New text",
     });
     expect(res.status).toBe(200);
-    expect(res.body.service).toMatchObject({ name: renamed, description: "New text" });
+    expect(res.body.data).toMatchObject({ name: renamed, description: "New text" });
     const audit = await auditOf(id);
     expect(audit.map((entry) => entry.action)).toEqual(["service.created", "service.updated"]);
     expect(audit[1]?.details).toEqual({
@@ -365,7 +399,7 @@ describe("changing services (R5.11)", () => {
     });
 
     const cleared = await as(huda).patch(`/services/${id}`, { description: null });
-    expect(cleared.body.service.description).toBeNull();
+    expect(cleared.body.data.description).toBeNull();
   });
 
   it("replaces the workflow list and moves the default", async () => {
@@ -378,7 +412,7 @@ describe("changing services (R5.11)", () => {
     });
     expect(res.status).toBe(200);
     expect(
-      res.body.service.workflows.map((w: { name: string; isDefault: boolean }) => [
+      res.body.data.workflows.map((w: { name: string; isDefault: boolean }) => [
         w.name,
         w.isDefault,
       ]),
@@ -390,7 +424,7 @@ describe("changing services (R5.11)", () => {
     const fewer = await as(huda).patch(`/services/${id}`, {
       workflows: [{ id: complex, isDefault: true }],
     });
-    expect(fewer.body.service.workflows).toHaveLength(1);
+    expect(fewer.body.data.workflows).toHaveLength(1);
     const audit = await auditOf(id);
     expect(audit.at(-1)?.details).toEqual({
       before: {
@@ -414,7 +448,7 @@ describe("changing services (R5.11)", () => {
       ],
     });
     expect(res.status).toBe(200);
-    expect(res.body.service.name).toBe(name);
+    expect(res.body.data.name).toBe(name);
     expect(await auditOf(id)).toHaveLength(1);
   });
 
@@ -433,7 +467,7 @@ describe("changing services (R5.11)", () => {
     const empty = await as(huda).patch(`/services/${id}`, {});
     expect(empty.status).toBe(400);
     expect(empty.body.error.details).toEqual([{ path: "", code: "no_fields" }]);
-    expect((await as(huda).get(`/services/${id}`)).body.service.workflows).toHaveLength(1);
+    expect((await as(huda).get(`/services/${id}`)).body.data.workflows).toHaveLength(1);
   });
 
   it("refuses a name taken by another service, and allows changing only the case", async () => {
@@ -447,7 +481,7 @@ describe("changing services (R5.11)", () => {
     expect(taken.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     const recased = await as(huda).patch(`/services/${id}`, { name: name.toUpperCase() });
     expect(recased.status).toBe(200);
-    expect(recased.body.service.name).toBe(name.toUpperCase());
+    expect(recased.body.data.name).toBe(name.toUpperCase());
   });
 
   it("refuses a retired service", async () => {
@@ -464,14 +498,14 @@ describe("retiring and restoring (R5.15)", () => {
     const id = await createService(nextName("Cycle"), [vendor]);
     const retired = await as(huda).post(`/services/${id}/retire`);
     expect(retired.status).toBe(200);
-    expect(retired.body.service.retired).toBe(true);
+    expect(retired.body.data.retired).toBe(true);
     expect((await as(huda).post(`/services/${id}/retire`)).status).toBe(200);
     // A retired service can be read.
-    expect((await as(huda).get(`/services/${id}`)).body.service.retired).toBe(true);
+    expect((await as(huda).get(`/services/${id}`)).body.data.retired).toBe(true);
 
     const restored = await as(huda).post(`/services/${id}/restore`);
     expect(restored.status).toBe(200);
-    expect(restored.body.service.retired).toBe(false);
+    expect(restored.body.data.retired).toBe(false);
     expect((await as(huda).post(`/services/${id}/restore`)).status).toBe(200);
 
     expect((await auditOf(id)).map((entry) => entry.action)).toEqual([
@@ -504,7 +538,7 @@ describe("retiring and restoring (R5.15)", () => {
     expect(refused.body.error.details).toEqual([
       { path: expect.stringMatching(/^workflows\.\d\.id$/), code: "workflow_retired" },
     ]);
-    expect((await as(huda).get(`/services/${id}`)).body.service.retired).toBe(true);
+    expect((await as(huda).get(`/services/${id}`)).body.data.retired).toBe(true);
 
     expect((await as(huda).post(`/workflows/${flow}/restore`)).status).toBe(200);
     expect((await as(huda).post(`/services/${id}/restore`)).status).toBe(200);
@@ -654,7 +688,7 @@ describe("races (section 5)", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.details).toEqual([{ path: "workflows.1.id", code: "workflow_retired" }]);
-    expect((await as(huda).get(`/services/${id}`)).body.service.workflows).toHaveLength(1);
+    expect((await as(huda).get(`/services/${id}`)).body.data.workflows).toHaveLength(1);
   });
 
   it("refuses retiring a workflow whose service save is in flight", async () => {
@@ -805,10 +839,10 @@ describe("tenant isolation (R5.19)", () => {
       servicePayload(nextName("Al-Rashid Only"), [rashidWorkflow]),
     );
     expect(theirsRes.status).toBe(201);
-    const theirs = theirsRes.body.service.id;
+    const theirs = theirsRes.body.data.id;
 
     const idsOf = async (token: string) =>
-      (await as(token).get("/services")).body.services.map((s: { id: string }) => s.id);
+      (await as(token).get("/services")).body.data.map((s: { id: string }) => s.id);
     expect(await idsOf(huda)).toContain(mine);
     expect(await idsOf(huda)).not.toContain(theirs);
     expect(await idsOf(rashid)).toContain(theirs);

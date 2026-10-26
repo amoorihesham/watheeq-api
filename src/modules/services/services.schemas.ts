@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { booleanFilter, optionalText, pageQuery } from "@/http/filters.js";
 import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import {
   MAX_FIELD_HELP_TEXT_LENGTH,
@@ -13,12 +14,7 @@ import {
 const serviceName = z.string().trim().min(1).max(MAX_SERVICE_NAME_LENGTH);
 
 // A blank description is no description.
-const description = z
-  .string()
-  .trim()
-  .max(MAX_SERVICE_DESCRIPTION_LENGTH)
-  .nullable()
-  .transform((value) => (value === "" ? null : value));
+const description = optionalText(MAX_SERVICE_DESCRIPTION_LENGTH);
 
 export const serviceIdSchema = idSchema;
 
@@ -66,10 +62,8 @@ export const updateServiceRequestSchema = z
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listServicesQuerySchema = z.object({
-  includeRetired: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
+  retired: booleanFilter("false"),
+  ...pageQuery,
 });
 
 const label = (max: number) => z.string().trim().min(1).max(max);
@@ -78,13 +72,9 @@ const fieldBase = {
   id: idSchema.optional(),
   label: label(MAX_FIELD_LABEL_LENGTH),
   // A blank help text is no help text.
-  helpText: z
-    .string()
-    .trim()
-    .max(MAX_FIELD_HELP_TEXT_LENGTH)
-    .nullable()
+  helpText: optionalText(MAX_FIELD_HELP_TEXT_LENGTH)
     .optional()
-    .transform((value) => (value === undefined || value === "" ? null : value)),
+    .transform((value) => value ?? null),
   required: z.boolean(),
 };
 

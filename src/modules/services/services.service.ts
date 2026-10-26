@@ -4,7 +4,10 @@ import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
+import { listPage } from "@/http/list.js";
+import type { PageType } from "@/http/respond.js";
 import { validate } from "@/http/validate.js";
+import { SERVICE_SORT_KEYS } from "./services.repository.js";
 import {
   createServiceRequestSchema,
   listServicesQuerySchema,
@@ -15,7 +18,6 @@ import {
 import type {
   AllowedWorkflowRowType,
   CreateServiceRequestType,
-  ListServicesResponseType,
   RequestedFieldType,
   ServiceRowType,
   ServicesRepositoryType,
@@ -174,16 +176,26 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
   }
 
   return {
-    async list(tenantId: string, input: unknown): Promise<ListServicesResponseType> {
-      const { includeRetired } = validate(listServicesQuerySchema, input);
-      const rows = await repo.list(db, tenantId, includeRetired);
+    async list(tenantId: string, input: unknown): Promise<PageType<ServiceType>> {
+      const query = validate(listServicesQuerySchema, input);
+      const page = await listPage({
+        db,
+        list: "services",
+        query,
+        keys: SERVICE_SORT_KEYS,
+        direction: "asc",
+        where: ({ retired }) => repo.listWhere(tenantId, retired),
+        selectPage: (tx, request) => repo.selectPage(tx, request),
+        count: (tx, where) => repo.count(tx, where),
+      });
       const allowed = await repo.workflowsOf(
         db,
         tenantId,
-        rows.map((row) => row.id),
+        page.items.map((row) => row.id),
       );
       return {
-        services: rows.map((row) =>
+        ...page,
+        items: page.items.map((row) =>
           toService(
             row,
             allowed.filter((workflow) => workflow.serviceId === row.id),

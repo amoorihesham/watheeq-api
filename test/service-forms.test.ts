@@ -45,7 +45,7 @@ async function createService(token = huda, workflowId = workflow): Promise<strin
     workflows: [{ id: workflowId, isDefault: true }],
   });
   expect(res.status).toBe(201);
-  return res.body.service.id;
+  return res.body.data.id;
 }
 
 const saveForm = (id: string, baseRevision: number, fields: object[], token = huda) =>
@@ -130,7 +130,7 @@ beforeAll(async () => {
   ];
   workflow = (await as(huda).post("/workflows", { name: "Form flow", stages })).body.data.id;
   rashidWorkflow = (await as(rashid).post("/workflows", { name: "Their flow", stages })).body
-    .workflow.id;
+    .data.id;
 });
 
 afterAll(async () => {
@@ -141,11 +141,11 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
   it("starts empty at revision 0, and saves Huda's form as written, with new IDs, audited", async () => {
     const id = await createService();
     const fresh = await as(huda).get(`/services/${id}`);
-    expect(fresh.body.service.form).toEqual({ revision: 0, fields: [] });
+    expect(fresh.body.data.form).toEqual({ revision: 0, fields: [] });
 
     const res = await saveForm(id, 0, vendorForm());
     expect(res.status).toBe(200);
-    const { revision, fields } = res.body.service.form;
+    const { revision, fields } = res.body.data.form;
     expect(revision).toBe(1);
     expect(fields.map((field: { label: string }) => field.label)).toEqual([
       "Counterparty name",
@@ -171,8 +171,8 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
     ]);
     expect(fields[2].options.every((option: { id: string }) => option.id.length === 36)).toBe(true);
     expect(fields[5]).toMatchObject({ type: "file", maxFiles: 3 });
-    expect((await as(huda).get(`/services/${id}`)).body.service.form).toEqual(
-      res.body.service.form,
+    expect((await as(huda).get(`/services/${id}`)).body.data.form).toEqual(
+      res.body.data.form,
     );
 
     const audit = (await auditOf(id)).filter((row) => row.action === "service.form_updated");
@@ -186,26 +186,26 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
 
   it("keeps IDs across saves, and a no-op save returns 200 without a revision or audit entry", async () => {
     const id = await createService();
-    const first = (await saveForm(id, 0, vendorForm())).body.service.form;
+    const first = (await saveForm(id, 0, vendorForm())).body.data.form;
 
     const same = await saveForm(id, 1, first.fields);
     expect(same.status).toBe(200);
-    expect(same.body.service.form).toEqual(first);
+    expect(same.body.data.form).toEqual(first);
     expect((await auditOf(id)).filter((row) => row.action === "service.form_updated")).toHaveLength(
       1,
     );
 
     const reordered = [...first.fields].reverse();
     const second = await saveForm(id, 1, reordered);
-    expect(second.body.service.form.revision).toBe(2);
-    expect(second.body.service.form.fields.map((field: { id: string }) => field.id)).toEqual(
+    expect(second.body.data.form.revision).toBe(2);
+    expect(second.body.data.form.fields.map((field: { id: string }) => field.id)).toEqual(
       reordered.map((field: { id: string }) => field.id),
     );
   });
 
   it("keeps field and option IDs on edit, gives new ones to new entries, and allows removing a field", async () => {
     const id = await createService();
-    const first = (await saveForm(id, 0, vendorForm())).body.service.form.fields;
+    const first = (await saveForm(id, 0, vendorForm())).body.data.form.fields;
     const [name, , type] = first;
     const edited = [
       { ...name, label: "Vendor name" },
@@ -218,7 +218,7 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
     const res = await saveForm(id, 1, edited);
 
     expect(res.status).toBe(200);
-    const fields = res.body.service.form.fields;
+    const fields = res.body.data.form.fields;
     expect(fields[0]).toMatchObject({ id: name.id, label: "Vendor name" });
     expect(fields[1].id).toBe(type.id);
     expect(fields[1].options[0]).toEqual(type.options[0]);
@@ -239,7 +239,7 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
     expect(stale.status).toBe(409);
     expect(stale.body.error.code).toBe("VERSION_CHANGED");
     expect(stale.body.error.details).toEqual([{ path: "baseRevision", code: "version_changed" }]);
-    expect((await as(huda).get(`/services/${id}`)).body.service.form.fields).toHaveLength(7);
+    expect((await as(huda).get(`/services/${id}`)).body.data.form.fields).toHaveLength(7);
     const ahead = await saveForm(id, 5, []);
     expect(ahead.body.error.code).toBe("VERSION_CHANGED");
     expect(ahead.body.error.details).toEqual([{ path: "baseRevision", code: "version_changed" }]);
@@ -295,7 +295,7 @@ describe("form validation (R5.5.2, R5.5.3, R5.5.5)", () => {
       { path: "fields.0.options.3.label", code: "duplicate_option" },
     ]);
 
-    const first = (await saveForm(id, 0, [choice([{ label: "A" }, { label: "B" }])])).body.service
+    const first = (await saveForm(id, 0, [choice([{ label: "A" }, { label: "B" }])])).body.data
       .form;
     const optionId = first.fields[0].options[0].id;
     const repeated = await saveForm(id, first.revision, [
@@ -313,7 +313,7 @@ describe("form validation (R5.5.2, R5.5.3, R5.5.5)", () => {
   });
 
   it("refuses a field ID used twice", async () => {
-    const first = (await saveForm(id, 0, [short("A")])).body.service.form;
+    const first = (await saveForm(id, 0, [short("A")])).body.data.form;
     const field = first.fields[0];
     const res = await saveForm(id, first.revision, [field, { ...field, label: "B" }]);
     expect(detailsOf(res)).toEqual([{ path: "fields.1.id", code: "duplicate_field_id" }]);
@@ -336,12 +336,12 @@ describe("form validation (R5.5.2, R5.5.3, R5.5.5)", () => {
 
   it("refuses an ID that is not in this service's form, for fields and options", async () => {
     const other = await createService();
-    const theirs = (await saveForm(other, 0, [choice([{ label: "A" }])])).body.service.form;
+    const theirs = (await saveForm(other, 0, [choice([{ label: "A" }])])).body.data.form;
     const foreign = await saveForm(id, 0, [{ ...theirs.fields[0] }]);
     expect(foreign.status).toBe(400);
     expect(detailsOf(foreign)).toEqual([{ path: "fields.0.id", code: "unknown_field_id" }]);
 
-    const mine = (await saveForm(id, 0, [choice([{ label: "A" }])])).body.service.form;
+    const mine = (await saveForm(id, 0, [choice([{ label: "A" }])])).body.data.form;
     const badOption = await saveForm(id, mine.revision, [
       {
         ...mine.fields[0],
@@ -364,7 +364,7 @@ describe("form validation (R5.5.2, R5.5.3, R5.5.5)", () => {
       await saveForm(id, 0, [
         { type: "date", label: "Expected start date", helpText: null, required: false },
       ])
-    ).body.service.form;
+    ).body.data.form;
     const res = await saveForm(id, first.revision, [
       { ...short("Expected start date"), id: first.fields[0].id },
     ]);
@@ -414,9 +414,9 @@ describe("form validation (R5.5.2, R5.5.3, R5.5.5)", () => {
     ];
     const res = await saveForm(id, 0, fields);
     expect(res.status).toBe(200);
-    expect(res.body.service.form.fields).toHaveLength(153);
-    expect(res.body.service.form.fields[2].helpText).toBeNull();
-    expect((await saveForm(id, 1, [])).body.service.form).toEqual({ revision: 2, fields: [] });
+    expect(res.body.data.form.fields).toHaveLength(153);
+    expect(res.body.data.form.fields[2].helpText).toBeNull();
+    expect((await saveForm(id, 1, [])).body.data.form).toEqual({ revision: 2, fields: [] });
   });
 });
 
@@ -452,7 +452,7 @@ describe("race (section 5)", () => {
       saveForm(id, 0, vendorForm().slice(0, 2)),
     ]);
     expect(results.map((res) => res.status).sort()).toEqual([200, 409]);
-    const form = (await as(huda).get(`/services/${id}`)).body.service.form;
+    const form = (await as(huda).get(`/services/${id}`)).body.data.form;
     expect(form.revision).toBe(1);
   });
 });
@@ -462,7 +462,7 @@ describe("authorization, subscription, tenants (R5.5.14, R5.5.16)", () => {
     const id = await createService();
     expect((await saveForm(id, 0, [], nora)).status).toBe(403);
     expect((await saveForm(id, 0, [], viewer)).status).toBe(403);
-    expect((await as(viewer).get(`/services/${id}`)).body.service.form).toEqual({
+    expect((await as(viewer).get(`/services/${id}`)).body.data.form).toEqual({
       revision: 0,
       fields: [],
     });
@@ -473,7 +473,7 @@ describe("authorization, subscription, tenants (R5.5.14, R5.5.16)", () => {
     const id = await createService();
     await saveForm(id, 0, vendorForm());
     const list = await as(huda).get("/services");
-    const found = list.body.services.find((service: { id: string }) => service.id === id);
+    const found = list.body.data.find((service: { id: string }) => service.id === id);
     expect(found.form.revision).toBe(1);
   });
 
@@ -506,7 +506,7 @@ describe("authorization, subscription, tenants (R5.5.14, R5.5.16)", () => {
     const res = await saveForm(id, 0, vendorForm(), admin);
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("SUBSCRIPTION_READ_ONLY");
-    expect((await as(admin).get(`/services/${id}`)).body.service.form.revision).toBe(0);
+    expect((await as(admin).get(`/services/${id}`)).body.data.form.revision).toBe(0);
   });
 
   it("answers 404 across tenants and leaves the other tenant's form alone", async () => {
@@ -514,8 +514,8 @@ describe("authorization, subscription, tenants (R5.5.14, R5.5.16)", () => {
     const theirs = await createService(rashid, rashidWorkflow);
     expect((await saveForm(id, 0, vendorForm(), rashid)).status).toBe(404);
     expect((await saveForm(theirs, 0, vendorForm(), huda)).status).toBe(404);
-    expect((await as(huda).get(`/services/${id}`)).body.service.form.revision).toBe(0);
-    expect((await as(rashid).get(`/services/${theirs}`)).body.service.form.revision).toBe(0);
+    expect((await as(huda).get(`/services/${id}`)).body.data.form.revision).toBe(0);
+    expect((await as(rashid).get(`/services/${theirs}`)).body.data.form.revision).toBe(0);
   });
 });
 

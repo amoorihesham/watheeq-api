@@ -1,7 +1,8 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { byName } from "@/db/order.js";
 import type { Executor } from "@/db/pool.js";
 import { services, serviceWorkflows, workflows } from "@/db/schema/index.js";
+import type { PageRequestType, SortKeyType } from "@/http/list.js";
 import type {
   AllowedWorkflowRowType,
   ServiceRowType,
@@ -19,23 +20,42 @@ const serviceColumns = {
   formRevision: services.formRevision,
 };
 
+/** By name, then ID (T20). */
+export const SERVICE_SORT_KEYS: SortKeyType[] = [
+  { expr: byName(services.name), type: "text" },
+  { expr: sql`${services.id}`, type: "uuid" },
+];
+
 const ofTenant = (tenantId: string, serviceId: string) =>
   and(eq(services.tenantId, tenantId), eq(services.id, serviceId));
 
 /** Tenant code: every query is filtered by the caller's tenant (T2). */
 export function createServicesRepository() {
   return {
-    list(db: Executor, tenantId: string, includeRetired: boolean): Promise<ServiceRowType[]> {
+    /** The tenant's services that match the `retired` filter. */
+    listWhere(tenantId: string, retired: string): SQL | undefined {
+      return and(
+        eq(services.tenantId, tenantId),
+        retired === "all"
+          ? undefined
+          : retired === "true"
+            ? isNotNull(services.retiredAt)
+            : isNull(services.retiredAt),
+      );
+    },
+
+    selectPage(db: Executor, page: PageRequestType) {
       return db
-        .select(serviceColumns)
+        .select({ ...serviceColumns, sortValues: page.sortValues })
         .from(services)
-        .where(
-          and(
-            eq(services.tenantId, tenantId),
-            includeRetired ? undefined : isNull(services.retiredAt),
-          ),
-        )
-        .orderBy(byName(services.name), services.id);
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit);
+    },
+
+    async count(db: Executor, where: SQL | undefined): Promise<number> {
+      const [row] = await db.select({ total: count() }).from(services).where(where);
+      return Number(row?.total ?? 0);
     },
 
     findById(db: Executor, tenantId: string, serviceId: string): Promise<ServiceRowType[]> {

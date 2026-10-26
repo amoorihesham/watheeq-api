@@ -198,7 +198,7 @@ export async function seedAlNoor(
       ],
     }),
   );
-  const serviceId = service.body.service.id as string;
+  const serviceId = service.body.data.id as string;
   const form = await created(
     await sara.put(`/services/${serviceId}/form`, {
       baseRevision: 0,
@@ -223,7 +223,7 @@ export async function seedAlNoor(
     }),
     200,
   );
-  const fieldsOf = form.body.service.form.fields as {
+  const fieldsOf = form.body.data.form.fields as {
     id: string;
     label: string;
     options?: { id: string; label: string }[];

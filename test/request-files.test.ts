@@ -101,13 +101,13 @@ beforeAll(async () => {
     name: "NDA review",
     workflows: [{ id: alNoor.workflows.vendor, isDefault: true }],
   });
-  fileServiceId = service.body.service.id;
+  fileServiceId = service.body.data.id;
   const form = await as("sara").put(`/services/${fileServiceId}/form`, {
     baseRevision: 0,
     fields: [{ type: "file", label: "Draft contract", required: true, maxFiles: 3 }],
   });
   expect(form.status, JSON.stringify(form.body)).toBe(200);
-  draftField = form.body.service.form.fields[0].id;
+  draftField = form.body.data.form.fields[0].id;
 
   const passwordHash = await hashPassword("correct horse battery staple");
   await seedSubscribedTenant(pool, "req-files-al-rashid", [

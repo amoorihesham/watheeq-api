@@ -9,6 +9,7 @@ import type {
   updateServiceFormRequestSchema,
   updateServiceRequestSchema,
 } from "./services.schemas.js";
+import type { serviceResponseSchema } from "./services.responses.js";
 import type { createServicesService } from "./services.service.js";
 import type { FormFieldType } from "./shared/form.js";
 
@@ -43,21 +44,7 @@ export type RequestedFieldType = z.output<typeof updateServiceFormRequestSchema>
 export type ListServicesQueryType = z.output<typeof listServicesQuerySchema>;
 export type WorkflowChoiceType = z.output<typeof createServiceRequestSchema>["workflows"][number];
 
-export interface ServiceType {
-  id: string;
-  name: string;
-  description: string | null;
-  retired: boolean;
-  form: { revision: number; fields: FormFieldType[] };
-  workflows: { id: string; name: string; isDefault: boolean; retired: boolean }[];
-}
-
-export interface ListServicesResponseType {
-  services: ServiceType[];
-}
-export interface ServiceResponseType {
-  service: ServiceType;
-}
+export type ServiceType = z.output<typeof serviceResponseSchema>;
 
 export interface ServicesRouterDepsType {
   db: Db;
