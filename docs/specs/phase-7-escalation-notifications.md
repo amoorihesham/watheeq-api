@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                                                                                                                                                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Status**             | In Implementation                                                                                                                                                                                                                                                              |
+| **Status**             | Implemented                                                                                                                                                                                                                                                                    |
 | **Approved by / date** | _Amr - 26/10/2026 - 13:42 pm_                                                                                                                                                                                                                                                  |
 | **Depends on**         | Phase 1 (`phase-1-platform-subscriptions.md`), Phase 3 (`phase-3-roles-authorization.md`), Phase 4 (`phase-4-working-calendar.md`), Phase 5 (`phase-5-legal-configuration.md`), Phase 5.5 (`phase-5.5-service-forms-attachments.md`), Phase 6 (`phase-6-request-lifecycle.md`) |
 | **Related decisions**  | MVP 3.1, 3.6, 3.7, 3.8, 3.9, D7-D10, D13, D20, D24-D26, D30, D32, D33, D35, D39; open questions 6 and 8; Technical T2, T8, T11, T14-T17, T21, T25, T26, T29, T33, T34, T41, T42, T46; deferred decision "Background job runner"                                                |
@@ -131,6 +131,7 @@ Generated `0020_notifications`, `0021_request_escalations`, `0022_tenant_notices
 | `request.escalated` | request  | `system` | `{rule, dueAt, recipients: [userId], targets: [{target, level, userIds}], noRecipients}` |
 
 The audit entry's `requestId` is the job run's ID (`job:<name>:<uuid>`), which the run's log lines also carry.
+When nobody was found, `recipients` lists the holders of `escalation.manage` who were told instead, and `noRecipients` is true; `targets` shows the level each target ended at.
 Notifications themselves are not audited: the action they report is, in the same transaction (T8), and marking read is personal state.
 
 ### 4.2 API
@@ -141,7 +142,7 @@ No permission is required: every user has an inbox, as every user has `/auth/me`
 
 | Method | Path                          | Who       | Request                                                                        | Responses                                                                              |
 | ------ | ----------------------------- | --------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| GET    | `/notifications`              | any user  | `unread?` (`true`), `before?` (a notification ID), `limit` (1-100, default 25) | 200 `{notifications: [notification], hasMore}`; 400 `unknown_notification` at `before` |
+| GET    | `/notifications`              | any user  | `unread?` (`true`, or `false` for no filter), `before?` (a notification ID), `limit` (1-100, default 25) | 200 `{notifications: [notification], hasMore}`; 400 `unknown_notification` at `before` |
 | GET    | `/notifications/unread-count` | any user  |                                                                                | 200 `{count}`                                                                          |
 | POST   | `/notifications/:id/read`     | its owner |                                                                                | 204, also when already read; 404                                                       |
 | POST   | `/notifications/read-all`     | any user  | `{upTo}` (a notification ID)                                                   | 204; 400 `unknown_notification` at `upTo`                                              |
@@ -150,6 +151,8 @@ Shapes:
 
 - **Notification:** `{id, kind, request: {id} | null, data, createdAt, readAt}`.
 - Ordered by `created_at` descending, then `id` descending; `before` returns the ones after the given notification in that order.
+- Notifications written by one transaction share a `created_at`, so the ID breaks the tie; the order between them is arbitrary but stable, and `upTo` uses the same order, so "mark all read" covers exactly what the list showed up to that point.
+- `unread=false` means no filter, so a client can send its toggle's value as it is; any other value is 400.
 
 Why `before` instead of `offset` (as `GET /users` uses): a notification that arrives while Faisal reads page one would shift every later page by one with offsets, so he would see one twice; a position relative to a notification he has seen does not move.
 Why `read-all` takes `upTo`: Faisal opens his list at 10:00:00 and presses "mark all read" at 10:00:05; the R2 that arrived at 10:00:03 must stay unread, since he never saw it.
@@ -177,7 +180,8 @@ startScheduler({ jobs, db, logger }): { stop(): Promise<void> }
 
 - Each job runs once at start, then again `intervalMs` after each run ends: a `setTimeout` chain per job, as the file sweep does today (T42), so one process never overlaps a job with itself, and a slow sweep never delays the escalation check.
 - A failed run is logged with the job name and run ID and never crashes the process or stops the chain.
-- A run that did something logs its counts at `info`; an empty run logs at `debug`, so a check every minute does not flood the logs.
+- A run logs `job finished` with its counts, at `info` when any count is not zero and at `debug` otherwise, so a check every minute does not flood the logs; a failed run logs `job failed`.
+- At start the process logs `scheduler started` with the names of the jobs it runs.
 - `stop()` aborts the signal, clears the timers, and waits for running jobs; `main.ts` awaits it before closing the pool, as it does for the sweep today.
 
 **The contract every job meets**, which is what makes the later split a configuration change (Q1, Q9):
@@ -187,7 +191,8 @@ startScheduler({ jobs, db, logger }): { stop(): Promise<void> }
 - It works in short transactions and stops between them when the signal is aborted.
 
 `src/jobs.ts` is the composition root of jobs, as `app.ts` is of routes: it builds the list from each module's job factory.
-`main.ts` starts the scheduler with the jobs the `JOBS` setting selects: `all` (default), `none`, or a comma-separated list of names; an unknown name fails configuration at startup.
+`main.ts` starts the scheduler with the jobs the `JOBS` setting selects: `all` (default), `none`, or a comma-separated list of names.
+Configuration parses the setting (an empty value or an empty name is a configuration error); `main.ts` checks the names against the job list before it opens the pool or listens, and an unknown name stops the process with a fatal log that names it and lists the known jobs.
 Splitting later: a `worker.ts` entrypoint starts the scheduler without the HTTP server, and the API is deployed with `JOBS=none`; one job can get a worker of its own the same way (`JOBS=requests.escalations`).
 
 | Job                     | Module        | Interval   | Does                                                                                                    |
@@ -219,6 +224,8 @@ Each run:
    - R2: the deadline `addWorkingDays(calendar, accepted_at, priority_days)`; due when `now > ` it (`met` means "not past the deadline yet", Phase 6).
    - R1: `addWorkingDays(calendar, accepted_at, priority_days × r1Percent / 100)` (fractional days, Phase 4 R4.10); due when `now >= ` it **and** R2 is not due (Q2).
 4. Fire each due rule in its own transaction (below), and stop starting new ones when the signal is aborted or 50 seconds have passed; the rest waits for the next run.
+5. A tenant whose calendar cannot be loaded, or a request whose firing fails, is logged with its tenant (and request) ID and counted as `failed`; the run goes on with the others, and the failed firing, rolled back whole, is tried again on the next run.
+   Example: at 10:01 #42's R2 and #50's R1 are due and #42's transaction fails; #50's R1 still fires, and the run logs `{r1: 1, failed: 1}`.
 
 **Firing** one rule on one request, in one transaction:
 
@@ -232,6 +239,8 @@ Each run:
 The race the lock and the re-check prevent: the check reads #42 as open at 10:00:30, Faisal's completion commits at 10:00:31, and without them the check would insert R2 and tell Huda and Ahmed that a completed request is late.
 With them, the firing waits for or skips Faisal's lock and then sees `completed`.
 The race the primary key prevents: two instances both find #42 due at 10:01; both try the insert, one gets the row, the other stops at step 3, so nobody is told twice.
+
+`due_at` is the computed threshold and `fired_at` the firing transaction's database time, so in production `fired_at` is never before `due_at`; tests that pass a fixed `now` can see it earlier, since `fired_at` stays the real clock.
 
 What the check does not do: it never changes the request, its stages, or its SLA; escalation is notification only (MVP 3.7).
 
@@ -272,6 +281,8 @@ Not notified: submission, stage completion (the next assignees are told), withdr
 
 **Stage notifications** come from the stage transitions Phase 6 already lists for the audit (`TransitionType`): one helper turns an action's transitions into `stage_assigned` for people new to an active run and `stage_held` for a held run.
 "New to the run" makes refresh, handler escalation, and reassignment tell only the people the change added: Faisal refreshes Business approval after Sara makes Majed Finance's manager, and only Majed is told.
+`stage_held` goes to the handler every time an action leaves a run held, the actor excluded: Faisal's own refresh of a stage that stays held tells nobody, while Ahmed's reassignment of Lina's request to Nora tells Nora that Business approval is held, since she is new to the request.
+Handler escalation has no transition list of its own, so it passes the run's new assignees as one active transition, with the earlier assignees as `before`.
 A request whose stages all skip at acceptance completes at once; Khalid gets both "accepted" and "completed", which are both true.
 
 #### Subscription warnings
@@ -293,6 +304,8 @@ In the upload's reservation transaction, which already holds the tenant's upload
 - If usage after the reservation is 90% of the limit or more: insert `storage_nearly_full` (key `''`) on conflict do nothing; a new row notifies the holders of `subscription.view` with `{usedBytes, limitBytes}`.
 - If usage before the reservation is below 80%: delete that row, so the next crossing warns again (Q10).
 
+The re-arm runs before the insert, so one upload that jumps from below 80% to 90% or more warns afresh.
+The uploader is not excluded: the warning reports the tenant's usage, not the uploader's action, so a Tenant Admin whose own upload crosses the line is told too.
 Usage only rises through uploads, so the upload is the only place that can see it cross 90%.
 A downgrade that puts usage above 90% warns at the next upload.
 
@@ -323,6 +336,7 @@ db/migrations/0020_notifications.sql ... 0022_tenant_notices.sql
 ```
 
 `app.ts` gains `/notifications`.
+`subscriptions/shared/notices.ts` imports `notify` from `notifications/shared/notify.ts`, not the module's index, because the index mounts routes through `auth`, which imports `subscriptions`.
 The escalation check lives in the requests module because it reads requests and the live deadline (`slaOf`, Phase 6), and requests already imports the escalation settings; putting it in `escalation` would make the two modules import each other.
 
 ## 5. Edge Cases and Failure Behavior
@@ -347,8 +361,10 @@ The escalation check lives in the requests module because it reads requests and 
 | The operator ends a subscription early to a past date.                                         | The next hourly run sends the current notice only (Grace or Read-only).                                                                                         |
 | Faisal marks all read while an R2 arrives.                                                     | `upTo` covers only what he had seen; the R2 stays unread.                                                                                                       |
 | Faisal is deactivated with unread notifications.                                               | They stay; he gets no new ones; a reactivated Faisal sees the old ones and nothing from the time in between.                                                    |
+| Faisal is deactivated while his access token is still valid. | He can still read and mark his own inbox until the token expires (at most 30 minutes, T7); it holds no request data beyond the number and title. |
+| One request's firing fails while others are due in the same tenant. | It is logged and counted as `failed` and retried on the next run; the others fire. |
 | `notify` with the actor as the only recipient.                                                 | No rows.                                                                                                                                                        |
-| An unknown name in `JOBS`.                                                                     | The process refuses to start, naming the job.                                                                                                                   |
+| An unknown name in `JOBS`, or an empty `JOBS=`. | The process refuses to start: an unknown name is named with the list of known jobs; an empty value is a configuration error. |
 | Shutdown during a run.                                                                         | The signal stops the job between transactions; the open transaction commits or rolls back before the pool closes.                                               |
 
 ## 6. Security and Authorization
@@ -430,7 +446,9 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P7.11 | The file sweep, the token cleanup, and the notification retention run on the shared scheduler.                                                                                                                                       | Owner decision (Q9); closes the cleanup Phase 0 left for this phase.                                                                                                                                       |
 | P7.12 | Escalation recipients gain no visibility of the request; visibility stays with parties and permissions.                                                                                                                              | Owner decision (Q11): one definition of who sees a request (T45); escalation is notification only (MVP 3.7).                                                                                               |
 
-To promote when the phase is implemented: P7.4-P7.7 and P7.9 to `MVP_SCOPE.md` (resolving open questions 6 and 8, updating 3.7 and 3.8, and adding "time in Read-only counts against the SLA" and "alerts can arrive up to a minute late, or later after downtime" to Known Limitations); P7.1-P7.3, P7.8, and P7.10 to `TECHNICAL_DECISIONS.md` (resolving the deferred "Background job runner", and adding to "Deferred hardening": a separate worker process, stored due times when the check grows slow, live push to the browser, and monitoring that alerts when a job keeps failing).
+Promoted on 2026-10-26: P7.4, P7.5, P7.6, P7.7, P7.9, and P7.12 to `MVP_SCOPE.md` as D41-D46 (with 3.7, 3.8, and Known Limitations updated and open questions 6 and 8 resolved); P7.1, P7.2, P7.3, P7.8, and P7.10 to `TECHNICAL_DECISIONS.md` as T47-T51, resolving the deferred "Background job runner" and adding four deferred hardening items. Decisions not promoted are detail that stays authoritative here.
+
+The plan, as drafted: P7.4-P7.7 and P7.9 to `MVP_SCOPE.md` (resolving open questions 6 and 8, updating 3.7 and 3.8, and adding "time in Read-only counts against the SLA" and "alerts can arrive up to a minute late, or later after downtime" to Known Limitations); P7.1-P7.3, P7.8, and P7.10 to `TECHNICAL_DECISIONS.md` (resolving the deferred "Background job runner", and adding to "Deferred hardening": a separate worker process, stored due times when the check grows slow, live push to the browser, and monitoring that alerts when a job keeps failing).
 
 ## 11. Change Log
 
@@ -438,3 +456,5 @@ To promote when the phase is implemented: P7.4-P7.7 and P7.9 to `MVP_SCOPE.md` (
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
 | 2026-10-26 | Initial draft from the owner's answers to the pre-spec discussion (Q1-Q9), with Q10 and Q11 open.                              | Phase 6 implemented; Phase 7 spec drafted. |
 | 2026-10-26 | Resolved Q10 and Q11 with option (a): the storage warning re-arms below 80%; escalation recipients gain no visibility (P7.12). | Owner answering round.                     |
+| 2026-10-26 | Implemented and verified: 7.2 then 7.4 by one agent, 7.1 then 7.3 and 7.5 by the other; migrations `0020`-`0022`; full suite, ten mutation checks re-run in review, and an end-to-end run of all ten scenarios against a running server, including two instances and Read-only. Approved by the owner and folded in: `unread=false` as no filter (4.2), the tie order of one transaction's notifications (4.2), the scheduler's log lines and the empty or unknown `JOBS` refusal (4.3), per-request failure isolation and the `failed` count (4.3), `fired_at` from the database clock (4.3), `stage_held` on every held result and the handler escalation's single transition (4.3), the storage re-arm order and the uploader not excluded (4.3), the no-recipients audit (4.1), the `notify` import path (4.4), and two rows of section 5. Also found in review and fixed: the first file test could time out while a fresh SeaweedFS allocated its volumes; the test setup now warms the store up. | Phase 7 implemented. |
+| 2026-10-26 | Status set to `Implemented`; decisions promoted (D41-D46, T47-T51). | Phase 7 complete. |

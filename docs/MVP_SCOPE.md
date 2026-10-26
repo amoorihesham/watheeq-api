@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Status:** Agreed scope baseline (last updated 2026-10-25). Implementation progress is tracked in `ROADMAP_AND_STATUS.md`.
+**Status:** Agreed scope baseline (last updated 2026-10-26). Implementation progress is tracked in `ROADMAP_AND_STATUS.md`.
 **Relationship to other docs:** `PRODUCT_VISION.md` describes the long-term product. This document defines what the first release must do. When they differ, this document governs the MVP.
 
 ---
@@ -140,12 +140,18 @@ Escalation is notification-only in the MVP.
 
 - Each rule can be turned on or off, and _N_, _X%_, and the recipients (as positions) are configurable per tenant (D32).
 - Each rule fires **at most once per request**; firing is recorded.
+- R1 fires only before the deadline: a request found already late gets R2 alone (D41).
+- The current settings apply to open requests; turning a rule on fires it for every open request already past its threshold (D42).
+- Recipients are resolved when the rule fires; a recipient position that finds nobody climbs to the managers above it, and if nobody is found at all, the holders of `escalation.manage` are told (D43).
+- Escalations keep firing in Grace and Read-only (D44); recipients gain no access to the request through an escalation (D46).
 - Built-in managers positions (for example, the handler's unit managers) never include the handler or requester they are relative to (D30).
 
 #### 3.8 Notifications
 
-- In-app only, with read/unread status.
-- Delivered for escalations, key request lifecycle events, and subscription warnings to Tenant Admins (exact event list to be finalized during design).
+- In-app only, with read/unread status; the web app checks for new ones by polling.
+- Delivered for escalations, key request lifecycle events (D45), subscription warnings (ends in 14 days, Grace, Read-only), and the storage warning at 90% of the limit; the warnings go to the holders of `subscription.view`.
+- Nobody is notified of their own action; inactive members are not notified.
+- Read notifications are deleted 90 days after they were read; unread ones are kept.
 
 #### 3.9 Audit
 
@@ -220,6 +226,12 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 | D38 | A stage's assignees are recorded when it starts and re-checked against current data when one acts; party actions need no permission | "Waiting on whom" is a stored fact, and a move or deactivation takes effect at once; the handler refreshes a stage after a structure change (Phase 6 spec, P6.3, P6.4). |
 | D39 | The deadline of an open request is computed when read; the closure record is frozen at closure | Never stale while open, never rewritten once closed (Phase 6 spec, P6.6). |
 | D40 | A request ends as Completed, Rejected (in review only), Rejected - no response (in progress, with an open information request), or Withdrawn (by the requester, before acceptance only) | Once legal accepts, the work is either finished or ended by the requester's silence; resolves open question 4 (Phase 6 spec, P6.7). |
+| D41 | R1 fires only between its share of the deadline and the deadline itself; a request found already late gets R2 alone | Nobody is told "at risk" and "breached" at the same moment, for example after downtime (Phase 7 spec, P7.4). |
+| D42 | The escalation check always uses the tenant's current settings; a rule turned on catches up on every open request already past its threshold | Those requests really are at the threshold, and no record of when each rule was turned on is needed (Phase 7 spec, P7.5). |
+| D43 | An escalation recipient that resolves to nobody climbs to the managers above it, as a stage's escalate fallback does; if nobody is found at all, the holders of `escalation.manage` are told | Keeps D33's promise that no request goes unmonitored, and tells the people who can fix the configuration (Phase 7 spec, P7.6). |
+| D44 | In Read-only, the SLA clock and the escalation check of open requests continue; users can still read and clear their notifications | The record stays truthful and a renewal causes no burst of late alerts; resolves open question 6 (Phase 7 spec, P7.7). |
+| D45 | Lifecycle notifications: the requester on acceptance, rejection, completion, "no response" closure, a priority change, and information asked or cancelled; the asker on an answer; each person newly assigned to a stage; the handler when a stage holds; the new and the previous handler on reassignment. Not on submission, withdrawal, attachments, narrowing, a completed stage, or role changes | People are told what needs them without being flooded; the review list is the reviewers' queue and R0 catches neglect; resolves open question 8 (Phase 7 spec, P7.9). |
+| D46 | An escalation gives its recipients no access to the request; who sees a request stays with its parties and permissions | One definition of who sees a request; whoever configures recipients picks people who can see the requests (Phase 7 spec, P7.12). |
 
 ---
 
@@ -228,6 +240,8 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 - Time spent awaiting requester information counts against the legal team's SLA.
 - The organization structure is limited to departments and sections.
 - Users only see escalations and subscription warnings when they open the application.
+- Time while the subscription is Read-only counts against the SLA of open requests, though nobody can act on them (D44).
+- An escalation can reach people up to a minute after its threshold passes, and later if the server was down; it then fires on the first check after.
 - Subscription renewals depend on the operator acting manually.
 
 ---
@@ -239,6 +253,6 @@ Important actions are recorded with: actor, timestamp, affected resource, action
 3. ~~Deadline calculation precision (end of working day vs. exact time) and whether calendar changes affect already-accepted requests.~~ Resolved in Phase 4: deadlines are exact moments, placed proportionally within working days (D24, D25); calendar changes affect only days after today, so the future deadlines of open requests follow them and past outcomes never change (D26).
 4. ~~Whether a requester can withdraw a request.~~ Resolved in Phase 6: before acceptance only, with a reason (D40).
 5. ~~Length of the grace period, and whether it is a platform-wide setting or defined per plan.~~ Resolved in Phase 1: defined per plan (`grace_days`, 0-365) and copied into each subscription.
-6. In the read-only state, whether SLA clocks and escalations for still-open requests continue, stop, or are marked as affected by the subscription state.
+6. ~~In the read-only state, whether SLA clocks and escalations for still-open requests continue, stop, or are marked as affected by the subscription state.~~ Resolved in Phase 7: both continue, and users can still read their notifications (D44).
 7. ~~Whether the operator can suspend a tenant independently of its subscription (e.g. for abuse or contract disputes).~~ Resolved in Phase 1: deferred; ending a subscription early (a past end date, with a reason) covers the MVP.
-8. The exact list of notification-triggering events.
+8. ~~The exact list of notification-triggering events.~~ Resolved in Phase 7: escalations, the lifecycle events of D45, subscription warnings, and the storage warning (3.8).
