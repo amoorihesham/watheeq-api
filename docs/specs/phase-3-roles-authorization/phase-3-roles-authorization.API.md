@@ -8,13 +8,13 @@ In Read-only, every write below is refused by the guard.
 
 | Method | Path                  | Permission    | Request                                                            | Responses                                                                                                        |
 | ------ | --------------------- | ------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| GET    | `/permissions`        | `role.view`   | none                                                               | 200 `{permissions:[{key, scopes}]}` in catalog order                                                             |
-| GET    | `/roles`              | `role.view`   | none                                                               | 200 `{roles:[role]}` ordered by name (T20)                                                                       |
-| GET    | `/roles/:roleId`      | `role.view`   | none                                                               | 200 `{role}`; 404                                                                                                |
-| POST   | `/roles`              | `role.manage` | `{name, permissions:[{key, scope}]}`                               | 201 `{role}`; 400; 403 `PERMISSION_NOT_HELD`; 409 `ROLE_NAME_TAKEN`                                              |
-| PATCH  | `/roles/:roleId`      | `role.manage` | any of `{name, permissions}`; `permissions` replaces the whole set | 200 `{role}`; 400; 403 `PERMISSION_NOT_HELD`; 404; 409 `ROLE_NAME_TAKEN`, `ROLE_PROTECTED`                       |
+| GET    | `/permissions`        | `role.view`   | `cursor`, `limit`                                                  | 200 a page of catalog entries `{key, scopes}` in catalog order                                                   |
+| GET    | `/roles`              | `role.view`   | `cursor`, `limit`                                                  | 200 a page of roles, ordered by name (T20)                                                                       |
+| GET    | `/roles/:roleId`      | `role.view`   | none                                                               | 200 the role; 404                                                                                                |
+| POST   | `/roles`              | `role.manage` | `{name, permissions:[{key, scope}]}`                               | 201 the role; 400; 403 `PERMISSION_NOT_HELD`; 409 `TAKEN` at `name`                                              |
+| PATCH  | `/roles/:roleId`      | `role.manage` | any of `{name, permissions}`; `permissions` replaces the whole set | 200 the role; 400; 403 `PERMISSION_NOT_HELD`; 404; 409 `TAKEN` at `name`, `ROLE_PROTECTED`                       |
 | DELETE | `/roles/:roleId`      | `role.manage` | none                                                               | 204; 403 `PERMISSION_NOT_HELD`; 404; 409 `ROLE_IN_USE`, `ROLE_PROTECTED`                                         |
-| PUT    | `/users/:userId/role` | `role.assign` | `{roleId}`                                                         | 200 `{user}`; 400 `unknown_role`; 403 `SELF_CHANGE_FORBIDDEN`, `PERMISSION_NOT_HELD`; 404; 409 `OWNER_PROTECTED` |
+| PUT    | `/users/:userId/role` | `role.assign` | `{roleId}`                                                         | 200 the user; 400 `unknown_role`; 403 `SELF_CHANGE_FORBIDDEN`, `PERMISSION_NOT_HELD`; 404; 409 `OWNER_PROTECTED` |
 
 A role in a response is `{id, name, isSystem, permissions:[{key, scope}], memberCount, createdAt, updatedAt}`.
 For the Tenant Admin role, `permissions` is the computed full catalog, so clients render it like any other role, and `isSystem` lets them show a localized label and hide edit and delete.
@@ -24,7 +24,7 @@ Changes to Phase 2 endpoints:
 | Endpoint                                        | Change                                                                                                        |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | User in every response                          | `role` becomes `{id, name, isSystem}`.                                                                        |
-| `GET /users`                                    | New filter `roleId?`. Rows limited to the caller's `user.view` scope (R3.15).                                 |
+| `GET /users`                                    | New filter `roleId` (an ID, `all`). Rows limited to the caller's `user.view` scope (R3.15).                   |
 | `GET /users/:userId`                            | 404 for a user outside the caller's `user.view` scope.                                                        |
 | `POST /users`                                   | `role` becomes `roleId`; the role must be within the caller's permissions (403 `PERMISSION_NOT_HELD`).        |
 | `PATCH /users/:userId`                          | No longer accepts a role; a role change is `PUT /users/:userId/role`.                                         |
@@ -44,8 +44,8 @@ Scopes are read from the database when rows are filtered (4.3), so the token ans
 
 | HTTP | Code                  | When                                                                                                                              |
 | ---- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 403  | `PERMISSION_NOT_HELD` | A subset rule fails (R3.8, R3.10). `details` has one item per permission the actor lacks, or holds only at a narrower scope: `{path: <permission key>, code: "permission_not_held", scope: <the scope needed>}`, for example `[{path: "user.create", code: "permission_not_held", scope: "organization"}]`, so the client can explain. `scope` is an optional field of the error detail, present only here. |
-| 409  | `ROLE_NAME_TAKEN`     | Another role of this tenant has the name (R3.5).                                                                                  |
+| 403  | `PERMISSION_NOT_HELD` | A subset rule fails (R3.8, R3.10). Each detail is `{path: <the body entry that asked for the permission>, code: "permission_not_held"}`, for example `[{path: "permissions.3", code: "permission_not_held"}]` for the fourth entry of `permissions`, or `roleId` when a role is assigned. A refusal that no input caused (the route's own permission, a role being replaced or deleted, deactivating a user whose role is above the actor's) has `details: []`. |
+| 409  | `TAKEN`               | Another role of this tenant has the name (R3.5), with the detail at `name`.                                                       |
 | 409  | `ROLE_IN_USE`         | Delete of a role someone holds (R3.7).                                                                                            |
 | 409  | `ROLE_PROTECTED`      | Edit or delete of the Tenant Admin role (R3.2).                                                                                   |
 
