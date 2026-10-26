@@ -270,7 +270,8 @@ describe("creating a role (R3.4, R3.5)", () => {
     for (const name of ["مستشار قانوني", "head of legal", "TENANT ADMIN"]) {
       const res = await as(sara).post("/roles", { name, permissions: [] });
       expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe("ROLE_NAME_TAKEN");
+      expect(res.body.error.code).toBe("TAKEN");
+      expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     }
     expect(
       (await as(rashid).post("/roles", { name: "Head of Legal", permissions: [] })).status,
@@ -347,7 +348,8 @@ describe("editing a role (R3.6)", () => {
     const id = await createRole();
     expect((await as(sara).patch(`/roles/${id}`, {})).status).toBe(400);
     const res = await as(sara).patch(`/roles/${id}`, { name: "Head Of Legal" });
-    expect(res.body.error.code).toBe("ROLE_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
   });
 });
 
@@ -399,8 +401,8 @@ describe("the subset rule (R3.8)", () => {
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("PERMISSION_NOT_HELD");
     expect(res.body.error.details).toEqual([
-      { path: "user.create", code: "permission_not_held", scope: "organization" },
-      { path: "user.deactivate", code: "permission_not_held", scope: "organization" },
+      { path: "permissions.1", code: "permission_not_held" },
+      { path: "permissions.2", code: "permission_not_held" },
     ]);
   });
 
@@ -417,7 +419,7 @@ describe("the subset rule (R3.8)", () => {
     expect(res.status).toBe(status);
     if (status === 403) {
       expect(res.body.error.details).toEqual([
-        { path: "user.view", code: "permission_not_held", scope },
+        { path: "permissions.0", code: "permission_not_held" },
       ]);
     }
   });
@@ -426,9 +428,7 @@ describe("the subset rule (R3.8)", () => {
     for (const body of [{ name: "Renamed Finance" }, { permissions: [] }]) {
       const res = await as(huda).patch(`/roles/${financeAdmin}`, body);
       expect(res.status).toBe(403);
-      expect(res.body.error.details).toEqual([
-        { path: "user.deactivate", code: "permission_not_held", scope: "organization" },
-      ]);
+      expect(res.body.error.details).toEqual([]);
     }
     expect((await as(huda).delete(`/roles/${financeAdmin}`)).status).toBe(403);
     expect((await as(sara).get(`/roles/${financeAdmin}`)).body.role.name).toBe("Finance Admin");
@@ -460,7 +460,7 @@ describe("the subset rule (R3.8)", () => {
     expect(res.status).toBe(403);
     expect(res.body.error).toMatchObject({
       code: "PERMISSION_NOT_HELD",
-      details: [{ path: "role.manage", code: "permission_not_held", scope: "organization" }],
+      details: [],
     });
   });
 
@@ -494,9 +494,7 @@ describe("concurrency (P3.5)", () => {
       await client.query("commit");
       const res = await edit;
       expect(res.status).toBe(403);
-      expect(res.body.error.details).toEqual([
-        { path: "user.deactivate", code: "permission_not_held", scope: "organization" },
-      ]);
+      expect(res.body.error.details).toEqual([]);
     } finally {
       client.release();
     }

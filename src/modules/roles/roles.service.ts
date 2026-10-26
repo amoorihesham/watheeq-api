@@ -13,6 +13,7 @@ import {
   type PermissionScopeType,
   TENANT_PERMISSIONS,
   type TenantPermissionType,
+  type WantedGrantType,
 } from "@/modules/tenant-access/index.js";
 import { createRoleRequestSchema, roleIdSchema, updateRoleRequestSchema } from "./roles.schemas.js";
 import type {
@@ -69,13 +70,20 @@ function catalogGrants(requested: { key: string; scope: PermissionScopeType }[])
   return grantListOf(grants);
 }
 
+/** The grants as the body entries that asked for them (the keys are catalog keys, each listed once). */
+const askedAt = (requested: { key: string }[], grants: GrantType[]): WantedGrantType[] =>
+  grants.map((grant) => ({
+    ...grant,
+    path: `permissions.${requested.findIndex(({ key }) => key === grant.key)}`,
+  }));
+
 export function createRolesService({ db, repo }: { db: Db; repo: RolesRepositoryType }) {
   /** The subset rule (R3.8), including the route's own permission (P3.4). */
   const assertWithinActor = (
     executor: Executor,
     tenantId: string,
     actorId: string,
-    wanted: GrantType[],
+    wanted: WantedGrantType[],
   ) =>
     assertGrantsHeld(executor, tenantId, actorId, [
       { key: "role.manage", scope: "organization" },
@@ -140,7 +148,7 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
       const body = validate(createRoleRequestSchema, input);
       const grants = catalogGrants(body.permissions);
       return withTx(db, async (tx) => {
-        await assertWithinActor(tx, tenantId, actorId, grants);
+        await assertWithinActor(tx, tenantId, actorId, askedAt(body.permissions, grants));
         const [role] = await repo.insert(tx, tenantId, body.name);
         if (!role) {
           throw new Error("insert returned no row");
@@ -179,7 +187,10 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
         const { role: before, grants: beforeGrants } = await lockEditableRole(tx, tenantId, id);
         const name = body.name ?? before.name;
         const grants = requested ?? beforeGrants;
-        await assertWithinActor(tx, tenantId, actorId, [...beforeGrants, ...grants]);
+        await assertWithinActor(tx, tenantId, actorId, [
+          ...beforeGrants,
+          ...(body.permissions === undefined ? grants : askedAt(body.permissions, grants)),
+        ]);
 
         const nameChanged = name !== before.name;
         const grantsChanged = !sameGrants(grants, beforeGrants);

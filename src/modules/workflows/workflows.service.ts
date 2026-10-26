@@ -273,7 +273,7 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
           throw new Error("workflow has no current version");
         }
         if (body.baseVersion !== current.number) {
-          throw new AppError("WORKFLOW_VERSION_CHANGED");
+          throw new AppError("VERSION_CHANGED", [{ path: "baseVersion", code: "version_changed" }]);
         }
         await assertStagePositionsActive(tx, tenantId, body.stages);
 

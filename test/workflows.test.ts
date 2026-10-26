@@ -345,7 +345,8 @@ describe("creating workflows (R5.8)", () => {
       stages: simpleStages(),
     });
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("WORKFLOW_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
   });
 
   it("leaves nothing behind when the name is taken", async () => {
@@ -644,14 +645,16 @@ describe("versions (R5.9)", () => {
       stages: [stage("Ahmed's stage", { builtin: "handler" })],
     });
     expect(ahmed.status).toBe(409);
-    expect(ahmed.body.error.code).toBe("WORKFLOW_VERSION_CHANGED");
+    expect(ahmed.body.error.code).toBe("VERSION_CHANGED");
+    expect(ahmed.body.error.details).toEqual([{ path: "baseVersion", code: "version_changed" }]);
     const read = (await as(huda).get(`/workflows/${id}`)).body.workflow;
     expect(read.name).toBe(name);
     expect(read.version.stages.map((s: { name: string }) => s.name)).toEqual(["Negotiation"]);
     expect(await auditOf(id)).toHaveLength(2);
 
     const future = await save(id, { name, baseVersion: 7, stages: simpleStages() });
-    expect(future.body.error.code).toBe("WORKFLOW_VERSION_CHANGED");
+    expect(future.body.error.code).toBe("VERSION_CHANGED");
+    expect(future.body.error.details).toEqual([{ path: "baseVersion", code: "version_changed" }]);
   });
 
   it("refuses a save that names a taken workflow name, creating no version", async () => {
@@ -665,7 +668,8 @@ describe("versions (R5.9)", () => {
       stages: [stage("New", { builtin: "handler" })],
     });
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("WORKFLOW_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     expect(await versionCountOf(id)).toBe(1);
   });
 
@@ -860,7 +864,8 @@ describe("retiring and restoring (R5.15)", () => {
 
     const res = await as(huda).post(`/workflows/${old}/restore`);
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("WORKFLOW_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     expect((await as(huda).get(`/workflows/${old}`)).body.workflow.retired).toBe(true);
   });
 
@@ -964,7 +969,7 @@ describe("a position in use cannot be retired (R5.16)", () => {
 });
 
 describe("races (section 5)", () => {
-  it("serializes two saves from the same version: one wins, the other gets WORKFLOW_VERSION_CHANGED", async () => {
+  it("serializes two saves from the same version: one wins, the other gets VERSION_CHANGED", async () => {
     const name = nextName("Race Saves");
     const id = await createWorkflow(name);
     const body = (stageName: string) => ({
@@ -985,7 +990,8 @@ describe("races (section 5)", () => {
 
     expect(results.map((res) => res.status).sort()).toEqual([200, 409]);
     const loser = results.find((res) => res.status === 409);
-    expect(loser?.body.error.code).toBe("WORKFLOW_VERSION_CHANGED");
+    expect(loser?.body.error.code).toBe("VERSION_CHANGED");
+    expect(loser?.body.error.details).toEqual([{ path: "baseVersion", code: "version_changed" }]);
     expect(await versionCountOf(id)).toBe(2);
     const winner = results.find((res) => res.status === 200);
     const read = (await as(huda).get(`/workflows/${id}`)).body.workflow;

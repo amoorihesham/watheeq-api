@@ -6,6 +6,7 @@ export {
   loadMemberGrants,
   loadRoleGrants,
   missingGrants,
+  type WantedGrantType,
 } from "./shared/grants.js";
 export { requireTenantPermission } from "./shared/middlewares.js";
 export { grantedPermissions, systemRoleGrants, tenantPermissionsOf } from "./shared/permissions.js";

@@ -179,7 +179,8 @@ describe("creating and ordering priorities (R5.12)", () => {
     await seedAlNoorList();
     const res = await as(huda).post("/priorities", { name: "URGENT", days: 1 });
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("PRIORITY_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     expect(await orderOf()).toEqual(["Urgent", "High", "Normal"]);
     expect((await as(huda).post("/priorities", { name: "After", days: 3 })).status).toBe(201);
     expect(await placesOf(alNoor)).toEqual([1, 2, 3, 4]);
@@ -319,7 +320,8 @@ describe("changing priorities (R5.12)", () => {
     const { high } = await seedAlNoorList();
     const taken = await as(huda).patch(`/priorities/${high}`, { name: "urgent" });
     expect(taken.status).toBe(409);
-    expect(taken.body.error.code).toBe("PRIORITY_NAME_TAKEN");
+    expect(taken.body.error.code).toBe("TAKEN");
+    expect(taken.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     expect((await as(huda).patch(`/priorities/${high}`, { name: "HIGH" })).status).toBe(200);
   });
 
@@ -389,7 +391,8 @@ describe("retiring and restoring (R5.15)", () => {
     await create("High", 6);
     const res = await as(huda).post(`/priorities/${high}/restore`);
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("PRIORITY_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
   });
 
   it("lets a create after a retire take the next free place", async () => {

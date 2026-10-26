@@ -237,10 +237,12 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
     expect((await saveForm(id, 0, vendorForm())).status).toBe(200);
     const stale = await saveForm(id, 0, []);
     expect(stale.status).toBe(409);
-    expect(stale.body.error.code).toBe("SERVICE_FORM_CHANGED");
+    expect(stale.body.error.code).toBe("VERSION_CHANGED");
+    expect(stale.body.error.details).toEqual([{ path: "baseRevision", code: "version_changed" }]);
     expect((await as(huda).get(`/services/${id}`)).body.service.form.fields).toHaveLength(7);
     const ahead = await saveForm(id, 5, []);
-    expect(ahead.body.error.code).toBe("SERVICE_FORM_CHANGED");
+    expect(ahead.body.error.code).toBe("VERSION_CHANGED");
+    expect(ahead.body.error.details).toEqual([{ path: "baseRevision", code: "version_changed" }]);
   });
 
   it("refuses a retired service", async () => {
@@ -439,7 +441,8 @@ describe("race (section 5)", () => {
     }
     const res = await saving;
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("SERVICE_FORM_CHANGED");
+    expect(res.body.error.code).toBe("VERSION_CHANGED");
+    expect(res.body.error.details).toEqual([{ path: "baseRevision", code: "version_changed" }]);
   });
 
   it("lets only one of two saves from the same revision win", async () => {

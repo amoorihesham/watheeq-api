@@ -1,5 +1,5 @@
 import type { Tx } from "@/db/pool.js";
-import { AppError, type ErrorDetail } from "@/http/errors.js";
+import { AppError, type DetailCode, type ErrorDetail } from "@/http/errors.js";
 import { createFilesRepository } from "../files.repository.js";
 import { fileIdSchema } from "../files.schemas.js";
 import type { AttachedFileType, FileRowType } from "../files.types.js";
@@ -52,7 +52,7 @@ export async function attachFiles(
   const seen = new Set<string>();
   for (const [index, id] of ids.entries()) {
     const row = id === undefined ? undefined : locked.get(id);
-    let code: string | undefined;
+    let code: DetailCode | undefined;
     if (!id || !row || row.uploadedBy !== userId) {
       code = "unknown_file";
     } else if (row.state === "attached" || seen.has(id)) {

@@ -231,7 +231,8 @@ describe("creating services (R5.11)", () => {
       servicePayload(name.toUpperCase(), [vendor, complex]),
     );
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("SERVICE_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     expect(await rowCount("service_workflows")).toBe(before);
   });
 });
@@ -442,7 +443,8 @@ describe("changing services (R5.11)", () => {
     await createService(other, [vendor]);
     const taken = await as(huda).patch(`/services/${id}`, { name: other.toLowerCase() });
     expect(taken.status).toBe(409);
-    expect(taken.body.error.code).toBe("SERVICE_NAME_TAKEN");
+    expect(taken.body.error.code).toBe("TAKEN");
+    expect(taken.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     const recased = await as(huda).patch(`/services/${id}`, { name: name.toUpperCase() });
     expect(recased.status).toBe(200);
     expect(recased.body.service.name).toBe(name.toUpperCase());
@@ -486,7 +488,8 @@ describe("retiring and restoring (R5.15)", () => {
     await createService(name, [vendor]);
     const res = await as(huda).post(`/services/${id}/restore`);
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("SERVICE_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
   });
 
   it("refuses to restore a service while an allowed workflow is retired", async () => {

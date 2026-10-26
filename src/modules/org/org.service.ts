@@ -1,7 +1,7 @@
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
-import { AppError } from "@/http/errors.js";
+import { AppError, type DetailCode } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import { createUnitRequestSchema, unitIdSchema, updateUnitRequestSchema } from "./org.schemas.js";
 import type {
@@ -20,7 +20,7 @@ function existingUnitId(unitId: string): string {
   return unitId;
 }
 
-const invalidParent = (code: string) =>
+const invalidParent = (code: DetailCode) =>
   new AppError("VALIDATION_FAILED", [{ path: "parentId", code }]);
 
 const auditDetailsOf = (unit: OrgUnitType) => ({

@@ -2,7 +2,7 @@ import type { Readable } from "node:stream";
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor, Tx } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
-import { AppError, type ErrorDetail } from "@/http/errors.js";
+import { AppError, type DetailCode, type ErrorDetail } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import { loadCalendar } from "@/modules/calendar/index.js";
 import { isEscalationConfigured } from "@/modules/escalation/index.js";
@@ -111,7 +111,8 @@ function existingChildId(fileId: string): string {
   return parsed.data;
 }
 
-const invalid = (path: string, code: string) => new AppError("VALIDATION_FAILED", [{ path, code }]);
+const invalid = (path: string, code: DetailCode) =>
+  new AppError("VALIDATION_FAILED", [{ path, code }]);
 
 function assertState(request: RequestRowType, state: RequestRowType["state"]): void {
   if (request.state !== state) {
@@ -1072,7 +1073,9 @@ export function createRequestsService({
         }
         const before = await assigneeIdsOf(tx, request, live.run);
         const notAssigned = body.userIds.flatMap((userId, index) =>
-          before.includes(userId) ? [] : [{ path: `userIds.${index}`, code: "not_assignee" }],
+          before.includes(userId)
+            ? []
+            : [{ path: `userIds.${index}`, code: "not_assignee" as const }],
         );
         if (notAssigned.length > 0) {
           throw new AppError("VALIDATION_FAILED", notAssigned);

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { AppError, type ErrorDetail } from "./errors.js";
+import { contractChecksEnabled } from "./checks.js";
+import { AppError, DETAIL_CODES, type DetailCode, type ErrorDetail } from "./errors.js";
+
+const isDetailCode = (code: unknown): code is DetailCode =>
+  DETAIL_CODES.some((known) => known === code);
 
 /**
  * A UUID from untrusted input, lower-cased: PostgreSQL accepts either case, but services compare ids as strings
@@ -12,7 +16,8 @@ export const NO_FIELDS = { params: { code: "no_fields" } };
 
 /**
  * One detail per problem, with a code the client can localize: zod's own code, `unknown_field` for each key a
- * strict schema does not accept (at its full path), or the `params.code` a refine names.
+ * strict schema does not accept (at its full path), or the `params.code` a refine names. A custom issue without a
+ * registered code is a server bug, caught outside production.
  */
 function detailsOf(issue: z.core.$ZodIssue): ErrorDetail[] {
   const path = issue.path.join(".");
@@ -23,7 +28,11 @@ function detailsOf(issue: z.core.$ZodIssue): ErrorDetail[] {
     }));
   }
   const named = issue.code === "custom" ? issue.params?.code : undefined;
-  return [{ path, code: typeof named === "string" ? named : issue.code }];
+  const code = typeof named === "string" ? named : issue.code;
+  if (contractChecksEnabled() && !isDetailCode(code)) {
+    throw new Error(`detail code "${code}" at "${path}" is not in DETAIL_CODES`);
+  }
+  return [{ path, code: code as DetailCode }];
 }
 
 /** Parses untrusted input with a zod schema, or throws VALIDATION_FAILED with `{path, code}` details. */

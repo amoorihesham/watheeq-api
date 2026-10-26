@@ -102,11 +102,13 @@ export function createUsersService({
     tenantId: string,
     caller: CallerType,
     permission: TenantPermissionType,
-    roles: GrantMapType[],
+    roles: { grants: GrantMapType; path?: string }[],
   ) {
     return assertGrantsHeld(tx, tenantId, caller.id, [
       { key: permission, scope: "organization" },
-      ...roles.flatMap(grantListOf),
+      ...roles.flatMap(({ grants, path }) =>
+        grantListOf(grants).map((grant) => (path === undefined ? grant : { ...grant, path })),
+      ),
     ]);
   }
 
@@ -163,7 +165,9 @@ export function createUsersService({
       const { user, token, tenantName } = await withTx(db, async (tx) => {
         await assertUnit(tx, tenantId, body.unitId);
         const role = await grantsOfRole(tx, tenantId, body.roleId);
-        await assertWithinCaller(tx, tenantId, caller, "user.create", [role]);
+        await assertWithinCaller(tx, tenantId, caller, "user.create", [
+          { grants: role, path: "roleId" },
+        ]);
         await assertSeatAvailable(tx, tenantId);
         const created = await insertPendingUser(tx, { email: body.email, userName: body.userName });
         await repo.insertMember(tx, {
@@ -308,7 +312,10 @@ export function createUsersService({
         }
         const role = await grantsOfRole(tx, tenantId, roleId);
         const current = await grantsOfRole(tx, tenantId, before.roleId);
-        await assertWithinCaller(tx, tenantId, caller, "role.assign", [current, role]);
+        await assertWithinCaller(tx, tenantId, caller, "role.assign", [
+          { grants: current },
+          { grants: role, path: "roleId" },
+        ]);
         if (roleId === before.roleId) {
           return toUser(before);
         }
@@ -346,7 +353,7 @@ export function createUsersService({
           throw new AppError("OWNER_PROTECTED");
         }
         const role = await grantsOfRole(tx, tenantId, before.roleId);
-        await assertWithinCaller(tx, tenantId, caller, "user.deactivate", [role]);
+        await assertWithinCaller(tx, tenantId, caller, "user.deactivate", [{ grants: role }]);
         if (!before.isActive) {
           return toUser(before);
         }
@@ -396,7 +403,7 @@ export function createUsersService({
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
         const role = await grantsOfRole(tx, tenantId, before.roleId);
-        await assertWithinCaller(tx, tenantId, caller, "user.deactivate", [role]);
+        await assertWithinCaller(tx, tenantId, caller, "user.deactivate", [{ grants: role }]);
         if (before.isActive) {
           return toUser(before);
         }

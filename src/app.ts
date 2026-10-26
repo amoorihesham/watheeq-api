@@ -4,6 +4,7 @@ import type pg from "pg";
 import type { Config } from "./config/config.js";
 import { createDb } from "./db/pool.js";
 import { createSmtpSender, type EmailSenderType, smtpSettingsOf } from "./email/index.js";
+import { setContractChecks } from "./http/checks.js";
 import type { Logger } from "./logging/logger.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { jsonBody } from "./middleware/json-body.js";
@@ -41,6 +42,7 @@ export interface AppDeps {
 
 /** Builds the shared middleware and mounts each module's router; every module composes its own layers (T14). */
 export function buildApp(deps: AppDeps): express.Express {
+  setContractChecks(deps.config.NODE_ENV !== "production");
   const app = express();
   app.disable("x-powered-by");
   app.use(requestLogger(deps.logger));

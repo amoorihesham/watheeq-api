@@ -2,7 +2,7 @@ import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import type { EmailSenderType } from "@/email/index.js";
-import { AppError } from "@/http/errors.js";
+import { AppError, fromDatabaseError } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
 import { insertPendingUser, issuePasswordToken, verificationEmail } from "@/modules/auth/index.js";
@@ -52,6 +52,15 @@ function toDetail(row: {
     subscription: toSubscriptionView(row.subscription, row.today),
     usage: toUsage(row.activeUsers, row.storedBytes, row.subscription),
   };
+}
+
+/** The first admin's email is `admin.email` in the create body, not the `email` the constraint map names. */
+function adminEmailPath(err: unknown): never {
+  const known = fromDatabaseError(err);
+  if (known?.code === "TAKEN" && known.details?.[0]?.path === "email") {
+    throw new AppError("TAKEN", [{ path: "admin.email", code: "taken" }]);
+  }
+  throw err;
 }
 
 export function createTenantsService({
@@ -170,7 +179,7 @@ export function createTenantsService({
             admin: { id: admin.id, email: admin.email },
           },
         };
-      });
+      }).catch(adminEmailPath);
 
       try {
         await emailSender.send(verificationEmail(admin, token, settings.appBaseUrl));

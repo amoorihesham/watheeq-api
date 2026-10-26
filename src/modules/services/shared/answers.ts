@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ErrorDetail } from "@/http/errors.js";
+import type { DetailCode, ErrorDetail } from "@/http/errors.js";
 import { MAX_LONG_TEXT_LENGTH, MAX_SHORT_TEXT_LENGTH } from "../services.config.js";
 import type { FormFieldType, FormOptionType } from "./form.js";
 
@@ -39,7 +39,7 @@ function isUnanswered(value: unknown): boolean {
 }
 
 /** The first problem with an answer to this field, as a detail code, or undefined when it is valid. */
-function problemWith(field: FormFieldType, value: unknown): string | undefined {
+function problemWith(field: FormFieldType, value: unknown): DetailCode | undefined {
   switch (field.type) {
     case "short_text":
     case "long_text": {

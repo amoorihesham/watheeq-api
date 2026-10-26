@@ -92,10 +92,11 @@ describe("create a plan (R1.1, R1.14)", () => {
     expect(half.body.plan).toMatchObject({ paymentPeriod: "yearly", discountPercent: 12.5 });
   });
 
-  it("refuses a duplicate name in any case with 409 PLAN_NAME_TAKEN, leaving no audit row", async () => {
+  it("refuses a duplicate name in any case with 409 TAKEN, leaving no audit row", async () => {
     const res = await as(omar).post("/operator/plans", { ...basic, name: "  plans basic " });
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("PLAN_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     const { rows } = await pool.query(
       "select count(*)::int as n from audit_log where action = 'plan.created' and details->'after'->>'name' = 'plans basic'",
     );
@@ -191,7 +192,8 @@ describe("edit a plan (R1.1, R1.14)", () => {
     const id = created.body.plan.id;
     const taken = await as(omar).patch(`/operator/plans/${id}`, { name: "PLANS BASIC" });
     expect(taken.status).toBe(409);
-    expect(taken.body.error.code).toBe("PLAN_NAME_TAKEN");
+    expect(taken.body.error.code).toBe("TAKEN");
+    expect(taken.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     expect((await as(omar).patch(`/operator/plans/${id}`, {})).status).toBe(400);
     expect((await as(omar).patch(`/operator/plans/${id}`, { discountPercent: 100.5 })).status).toBe(
       400,

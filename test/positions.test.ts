@@ -241,7 +241,8 @@ describe("creating positions (R5.1)", () => {
     ] as const) {
       const res = await as(huda).post("/positions", { unitId, name });
       expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe("POSITION_NAME_TAKEN");
+      expect(res.body.error.code).toBe("TAKEN");
+      expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     }
   });
 
@@ -306,7 +307,8 @@ describe("renaming positions (R5.1)", () => {
     const name = (await as(huda).get(`/positions/${taken}`)).body.position.name.toUpperCase();
     const res = await as(huda).patch(`/positions/${other}`, { name });
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("POSITION_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
   });
 
   it("refuses editing a retired position", async () => {
@@ -645,7 +647,8 @@ describe("retiring and restoring (R5.15, R5.16)", () => {
     const replacement = await createPosition(name, procurement);
     const res = await as(huda).post(`/positions/${old}/restore`);
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("POSITION_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
     await as(huda).post(`/positions/${replacement}/retire`);
     expect((await as(huda).post(`/positions/${old}/restore`)).status).toBe(200);
   });

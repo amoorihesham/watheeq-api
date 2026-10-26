@@ -91,22 +91,30 @@ export async function loadRoleGrants(
   return first ? grantMapOf({ isSystem: first.isSystem, grants: storedGrants(rows) }) : null;
 }
 
+/** A grant the actor asks for; `path` is the request body entry that asked for it, when an input did. */
+export interface WantedGrantType extends GrantType {
+  path?: string;
+}
+
 /**
  * Throws PERMISSION_NOT_HELD unless the actor's role, as it is now, covers `wanted` (D2, R3.12). Callers include
  * the route's own permission, so a token that still carries it after it was removed is not enough (P3.4).
- * Each detail names a permission the actor lacks, or holds only at a narrower scope than `scope`.
+ * Each detail is the body entry (`path`) that asked for a grant the actor does not hold; a refusal that no input
+ * caused (the route's own permission, the grants of an existing role) has no details (Phase 8 spec 4.2.5).
  */
 export async function assertGrantsHeld(
   executor: Executor,
   tenantId: string,
   actorId: string,
-  wanted: Iterable<GrantType>,
+  wanted: Iterable<WantedGrantType>,
 ): Promise<void> {
-  const missing = missingGrants(await loadMemberGrants(executor, tenantId, actorId), wanted);
-  if (missing.length > 0) {
+  const held = await loadMemberGrants(executor, tenantId, actorId);
+  const refused = [...wanted].filter((grant) => missingGrants(held, [grant]).length > 0);
+  if (refused.length > 0) {
+    const paths = new Set(refused.flatMap(({ path }) => (path === undefined ? [] : [path])));
     throw new AppError(
       "PERMISSION_NOT_HELD",
-      missing.map(({ key, scope }) => ({ path: key, code: "permission_not_held", scope })),
+      [...paths].map((path) => ({ path, code: "permission_not_held" })),
     );
   }
 }

@@ -2,7 +2,7 @@ import type { ErrorRequestHandler } from "express";
 import { AppError, type ErrorDetail, fromDatabaseError } from "../http/errors.js";
 
 interface ErrorBody {
-  error: { code: string; requestId: string; details?: ErrorDetail[] };
+  error: { code: string; requestId: string; details: ErrorDetail[] };
 }
 
 /**
@@ -15,7 +15,7 @@ function fromExpressError(err: unknown): AppError | undefined {
   if (typeof err !== "object" || err === null) {
     return undefined;
   }
-  const { status, expose } = err as { status?: unknown; expose?: unknown };
+  const { status, expose, type } = err as { status?: unknown; expose?: unknown; type?: unknown };
   if (err instanceof URIError && status === 400) {
     return new AppError("NOT_FOUND");
   }
@@ -24,7 +24,10 @@ function fromExpressError(err: unknown): AppError | undefined {
   }
   switch (status) {
     case 400:
-      return new AppError("VALIDATION_FAILED");
+      return new AppError(
+        "VALIDATION_FAILED",
+        type === "entity.parse.failed" ? [{ path: "", code: "invalid_json" }] : undefined,
+      );
     case 413:
       return new AppError("PAYLOAD_TOO_LARGE");
     case 415:
@@ -49,9 +52,8 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     // pino-http logs the response line at error level and serializes `res.err` with its stack.
     res.err = err instanceof Error ? err : new Error(String(err));
   }
-  const body: ErrorBody = { error: { code: resolved.code, requestId: String(req.id) } };
-  if (resolved.details) {
-    body.error.details = resolved.details;
-  }
+  const body: ErrorBody = {
+    error: { code: resolved.code, requestId: String(req.id), details: resolved.details ?? [] },
+  };
   res.status(resolved.status).json(body);
 };

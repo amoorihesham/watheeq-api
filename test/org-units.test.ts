@@ -127,7 +127,8 @@ describe("creating units (R2.2, R2.3)", () => {
     await unit("Operations");
     const res = await as(sara).post("/org-units", { name: "OPERATIONS" });
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("UNIT_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
   });
 
   it("allows the same section name under different departments, but not twice in one", async () => {
@@ -137,7 +138,8 @@ describe("creating units (R2.2, R2.3)", () => {
     await unit("reporting", risk);
     const res = await as(sara).post("/org-units", { name: "REPORTING", parentId: audit });
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("UNIT_NAME_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "name", code: "taken" }]);
   });
 
   it("lets another tenant reuse a name", async () => {
@@ -262,9 +264,10 @@ describe("renaming and moving (R2.4)", () => {
   it("refuses a rename onto a sibling's name and an empty body", async () => {
     const a = await unit("Alpha");
     await unit("Beta");
-    expect((await as(sara).patch(`/org-units/${a}`, { name: "beta" })).body.error.code).toBe(
-      "UNIT_NAME_TAKEN",
-    );
+    expect((await as(sara).patch(`/org-units/${a}`, { name: "beta" })).body.error).toMatchObject({
+      code: "TAKEN",
+      details: [{ path: "name", code: "taken" }],
+    });
     expect((await as(sara).patch(`/org-units/${a}`, {})).status).toBe(400);
   });
 

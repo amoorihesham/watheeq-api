@@ -164,7 +164,7 @@ describe("login (R0.10, R0.11)", () => {
     for (const { res } of attempts) {
       expect(res.status).toBe(401);
       expect(res.body).toEqual({
-        error: { code: "INVALID_CREDENTIALS", requestId: res.headers["x-request-id"] },
+        error: { code: "INVALID_CREDENTIALS", requestId: res.headers["x-request-id"], details: [] },
       });
       expect(res.headers["set-cookie"]).toBeUndefined();
     }

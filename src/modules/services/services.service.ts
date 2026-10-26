@@ -154,8 +154,16 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
   ) {
     const { unknown, retired } = await lockWorkflows(tx, tenantId, choices);
     const details: (ErrorDetail & { index: number })[] = [
-      ...unknown.map((index) => ({ index, path: workflowPath(index), code: "unknown_workflow" })),
-      ...retired.map((index) => ({ index, path: workflowPath(index), code: "workflow_retired" })),
+      ...unknown.map((index) => ({
+        index,
+        path: workflowPath(index),
+        code: "unknown_workflow" as const,
+      })),
+      ...retired.map((index) => ({
+        index,
+        path: workflowPath(index),
+        code: "workflow_retired" as const,
+      })),
     ].sort((a, b) => a.index - b.index);
     if (details.length > 0) {
       throw new AppError(
@@ -296,7 +304,9 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
           throw new AppError("RESOURCE_RETIRED");
         }
         if (body.baseRevision !== service.formRevision) {
-          throw new AppError("SERVICE_FORM_CHANGED");
+          throw new AppError("VERSION_CHANGED", [
+            { path: "baseRevision", code: "version_changed" },
+          ]);
         }
         const { fields, details } = resolveForm(service.form, body.fields);
         if (details.length > 0) {
@@ -355,7 +365,10 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
         if (retired.length > 0) {
           throw new AppError(
             "SERVICE_WORKFLOW_RETIRED",
-            retired.map((index) => ({ path: workflowPath(index), code: "workflow_retired" })),
+            retired.map((index) => ({
+              path: workflowPath(index),
+              code: "workflow_retired" as const,
+            })),
           );
         }
         await repo.setRetired(tx, tenantId, id, false);

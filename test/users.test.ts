@@ -211,7 +211,8 @@ describe("inviting a user (R2.8)", () => {
         roleId: memberRoleId,
       });
       expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe("EMAIL_TAKEN");
+      expect(res.body.error.code).toBe("TAKEN");
+      expect(res.body.error.details).toEqual([{ path: "email", code: "taken" }]);
     }
     const { rows } = await pool.query(
       "select count(*)::int as n from users where user_name = 'Duplicate Invitee'",
@@ -629,11 +630,7 @@ describe("the subset rule for users (R3.10, P3.11)", () => {
     });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("PERMISSION_NOT_HELD");
-    expect(res.body.error.details).toContainEqual({
-      path: "role.manage",
-      code: "permission_not_held",
-      scope: "organization",
-    });
+    expect(res.body.error.details).toEqual([{ path: "roleId", code: "permission_not_held" }]);
   });
 
   it("lets Huda move a user between roles within her grants", async () => {
@@ -646,16 +643,13 @@ describe("the subset rule for users (R3.10, P3.11)", () => {
     const res = await as(huda).put(`/users/${id}/role`, { roleId: adminRoleId });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("PERMISSION_NOT_HELD");
+    expect(res.body.error.details).toEqual([{ path: "roleId", code: "permission_not_held" }]);
   });
 
   it("refuses taking a role beyond Huda's grants away from its holder", async () => {
     const res = await as(huda).put(`/users/${majedId}/role`, { roleId: employeeRoleId });
     expect(res.status).toBe(403);
-    expect(res.body.error.details).toContainEqual({
-      path: "org.manage",
-      code: "permission_not_held",
-      scope: "organization",
-    });
+    expect(res.body.error.details).toEqual([]);
     expect((await as(sara).get(`/users/${majedId}`)).body.user.role).toEqual(adminRole());
   });
 
@@ -667,6 +661,7 @@ describe("the subset rule for users (R3.10, P3.11)", () => {
     const deactivate = await as(huda).post(`/users/${majedId}/deactivate`);
     expect(deactivate.status).toBe(403);
     expect(deactivate.body.error.code).toBe("PERMISSION_NOT_HELD");
+    expect(deactivate.body.error.details).toEqual([]);
 
     const { id: admin } = await inviteActive({ roleId: adminRoleId });
     await as(sara).post(`/users/${admin}/deactivate`);
@@ -683,9 +678,7 @@ describe("the subset rule for users (R3.10, P3.11)", () => {
     try {
       const res = await as(huda).put(`/users/${id}/role`, { roleId: employeeRoleId });
       expect(res.status).toBe(403);
-      expect(res.body.error.details).toEqual([
-        { path: "role.assign", code: "permission_not_held", scope: "organization" },
-      ]);
+      expect(res.body.error.details).toEqual([]);
     } finally {
       await pool.query(
         "insert into role_permissions (tenant_id, role_id, permission, scope) values ($1, $2, 'role.assign', 'organization')",

@@ -203,7 +203,8 @@ describe("create a tenant (R1.3, R1.14)", () => {
   it("refuses an email that already belongs to a user, leaving nothing behind (R1.3)", async () => {
     const res = await createTenant("tn-al-noor-2", "sara@tenants-alnoor.test");
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("EMAIL_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "admin.email", code: "taken" }]);
     const { rows } = await pool.query(
       "select count(*)::int as n from tenants where slug = 'tn-al-noor-2'",
     );
@@ -213,7 +214,8 @@ describe("create a tenant (R1.3, R1.14)", () => {
   it("refuses a taken slug and rolls back the admin it had already inserted", async () => {
     const res = await createTenant("tn-al-noor", "other-admin@tenants-alnoor.test");
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("SLUG_TAKEN");
+    expect(res.body.error.code).toBe("TAKEN");
+    expect(res.body.error.details).toEqual([{ path: "slug", code: "taken" }]);
     const { rows } = await pool.query(
       "select count(*)::int as n from users where email = 'other-admin@tenants-alnoor.test'",
     );

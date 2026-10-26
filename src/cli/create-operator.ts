@@ -108,7 +108,7 @@ function messageFor(err: AppError): string | undefined {
       const fields = [...new Set((err.details ?? []).map((detail) => detail.path))];
       return `Invalid ${fields.map((field) => labels[field] ?? field).join(" and ")}. The name must be 1-${MAX_USER_NAME_LENGTH} characters and the password ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH}.`;
     }
-    case "EMAIL_TAKEN":
+    case "TAKEN":
       return `An account with email ${email?.trim().toLowerCase()} already exists.`;
     default:
       return undefined;
