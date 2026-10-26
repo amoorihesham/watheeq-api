@@ -1,4 +1,9 @@
-import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  CreateBucketCommand,
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import type { TestProject } from "vitest/node";
@@ -47,7 +52,19 @@ async function startObjectStore(): Promise<StorageSettingsType> {
     forcePathStyle: true,
   };
   await createBucket(settings);
+  await warmUp(settings);
   return settings;
+}
+
+/**
+ * The first write to a fresh SeaweedFS allocates its volumes, which takes about 15 seconds and stalls every write
+ * until done; doing it here keeps that wait out of the first file test, whose timeout is 15 seconds.
+ */
+async function warmUp(settings: StorageSettingsType): Promise<void> {
+  const client = new S3Client(s3ClientConfigOf(settings));
+  const key = "warm-up";
+  await client.send(new PutObjectCommand({ Bucket: settings.bucket, Key: key, Body: "x" }));
+  await client.send(new DeleteObjectCommand({ Bucket: settings.bucket, Key: key }));
 }
 
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
