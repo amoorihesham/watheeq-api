@@ -7,7 +7,11 @@ import {
 
 // Query strings stay lenient: links and proxies add parameters the API does not control (T25).
 export const listNotificationsQuerySchema = z.object({
-  unread: z.literal("true").optional(),
+  // `false` means no filter, so a client can send its toggle's value as it is.
+  unread: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
   before: idSchema.optional(),
   limit: z.coerce
     .number()

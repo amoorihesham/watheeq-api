@@ -300,6 +300,8 @@ describe("GET /notifications (R7.15)", () => {
     expect(unread.body.notifications.map((n: { id: string }) => n.id)).toEqual([unreadB, unreadA]);
     const after = await as("faisal").get(`/notifications?unread=true&before=${readCursor}`);
     expect(after.body.notifications.map((n: { id: string }) => n.id)).toEqual([unreadA]);
+    const all = await as("faisal").get("/notifications?unread=false");
+    expect(all.body.notifications).toHaveLength(4);
   });
 
   it("rejects a before that is not the caller's own, with the same answer for another user's and a made-up ID", async () => {
@@ -318,7 +320,7 @@ describe("GET /notifications (R7.15)", () => {
 
   it("validates limit and before, and ignores unrelated query parameters", async () => {
     await seed("faisal", "2026-11-02T09:00:00Z");
-    for (const query of ["limit=0", "limit=101", "limit=abc", "before=nope", "unread=false"]) {
+    for (const query of ["limit=0", "limit=101", "limit=abc", "before=nope", "unread=yes"]) {
       const res = await as("faisal").get(`/notifications?${query}`);
       expect(res.status, query).toBe(400);
     }

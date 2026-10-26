@@ -41,7 +41,7 @@ export function createNotificationsService({
       }
       // One extra row tells whether another page follows.
       const rows = await repo.list(db, tenantId, userId, {
-        unread: query.unread === "true",
+        unread: query.unread,
         before: query.before,
         limit: query.limit + 1,
       });
