@@ -1,15 +1,20 @@
 import { z } from "zod";
 import { parseJobsSetting } from "../scheduler/select.js";
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+// Fields the server and the CLIs share, defined once; each schema spreads them.
+const databaseFields = {
   DATABASE_URL: z
     .string()
     .min(1)
     .refine((value) => /^postgres(ql)?:\/\//.test(value), {
       message: "must be a PostgreSQL URL",
     }),
+};
+
+export const envSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  ...databaseFields,
   // HS256 signing key for access tokens (Phase 0 spec, P0.12). 32 characters is the floor for a 256-bit HMAC key.
   JWT_SECRET: z.string().min(32),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(1800),
@@ -56,6 +61,18 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
+// What `pnpm db:migrate` and `pnpm operator:create` need: no SMTP, storage, or JWT settings (Phase 9 spec, 4.4).
+export const cliEnvSchema = z.object({
+  ...databaseFields,
+  // Only non-empty is checked here: the CLI applies the password-length rules itself.
+  OPERATOR_PASSWORD: z.string().min(1).optional(),
+});
+
+const cliConfigSchema = cliEnvSchema.transform((env) => ({
+  database: { url: env.DATABASE_URL },
+  operatorPassword: env.OPERATOR_PASSWORD,
+}));
+
 const configSchema = envSchema.transform((env) => ({
   server: { env: env.NODE_ENV, port: env.PORT, logLevel: env.LOG_LEVEL },
   database: { url: env.DATABASE_URL },
@@ -99,6 +116,17 @@ export type EmailConfigType = Config["email"];
 export type StorageConfigType = Config["storage"];
 
 export type ConfigResult = { ok: true; config: Config } | { ok: false; message: string };
+export type CliConfigType = z.infer<typeof cliConfigSchema>;
+export type CliConfigResult = { ok: true; config: CliConfigType } | { ok: false; message: string };
+
+function failureMessage(error: z.ZodError, env: NodeJS.ProcessEnv): string {
+  const problems = error.issues.map((issue) => {
+    const key = issue.path.join(".");
+    const reason = env[key] === undefined ? "Required" : issue.code;
+    return `${key} (${reason})`;
+  });
+  return `Invalid configuration: ${problems.join(", ")}`;
+}
 
 /**
  * Validates environment variables.
@@ -107,16 +135,15 @@ export type ConfigResult = { ok: true; config: Config } | { ok: false; message: 
  */
 export function parseConfig(env: NodeJS.ProcessEnv): ConfigResult {
   const result = configSchema.safeParse(env);
-  if (result.success) {
-    return { ok: true, config: result.data };
-  }
-  const problems = result.error.issues.map((issue) => {
-    const key = issue.path.join(".");
-    const reason = env[key] === undefined ? "Required" : issue.code;
-    return `${key} (${reason})`;
-  });
-  return {
-    ok: false,
-    message: `Invalid configuration: ${problems.join(", ")}`,
-  };
+  return result.success
+    ? { ok: true, config: result.data }
+    : { ok: false, message: failureMessage(result.error, env) };
+}
+
+/** Validates the settings the command-line tools need, with the same failure message as `parseConfig`. */
+export function parseCliConfig(env: NodeJS.ProcessEnv): CliConfigResult {
+  const result = cliConfigSchema.safeParse(env);
+  return result.success
+    ? { ok: true, config: result.data }
+    : { ok: false, message: failureMessage(result.error, env) };
 }

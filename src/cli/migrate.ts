@@ -1,14 +1,14 @@
+import { parseCliConfig } from "../config/config.js";
 import { runMigrations } from "../db/migrate.js";
 
-// Reads the URL directly: validated config is for the running app, not this tool.
-const url = process.env.DATABASE_URL;
-if (!url) {
-  console.error("DATABASE_URL is required.");
+const parsed = parseCliConfig(process.env);
+if (!parsed.ok) {
+  console.error(parsed.message);
   process.exit(1);
 }
 
 try {
-  await runMigrations(url);
+  await runMigrations(parsed.config.database.url);
   console.log("migrations applied");
 } catch (err) {
   console.error(err);

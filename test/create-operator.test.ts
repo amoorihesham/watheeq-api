@@ -9,6 +9,16 @@ afterAll(async () => {
 });
 
 describe("operator:create CLI", () => {
+  it("exits 1 with the config message for a non-PostgreSQL DATABASE_URL, without printing it", async () => {
+    const out = await runCli(["a@watheeq.sa", "A"], {
+      DATABASE_URL: "mysql://u:topsecret@localhost/db",
+      OPERATOR_PASSWORD: "cli-created-password-1",
+    });
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain("Invalid configuration: DATABASE_URL (custom)");
+    expect(out.stderr).not.toContain("topsecret");
+  });
+
   it("creates an active operator with a normalized email and an argon2id hash, and echoes no secret", async () => {
     const out = await runCli(["Omar@Watheeq.SA", "  Omar Al-Harbi "], {
       OPERATOR_PASSWORD: "cli-created-password-1",

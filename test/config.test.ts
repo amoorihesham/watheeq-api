@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseConfig } from "../src/config/config.js";
+import { parseCliConfig, parseConfig } from "../src/config/config.js";
 
 const valid = {
   DATABASE_URL: "postgres://u:secret@localhost:5432/db",
@@ -178,5 +178,34 @@ describe("parseConfig", () => {
 
   it("rejects an out-of-range PORT", () => {
     expect(parseConfig({ ...valid, PORT: "70000" }).ok).toBe(false);
+  });
+});
+
+describe("parseCliConfig", () => {
+  it("needs only DATABASE_URL", () => {
+    expect(parseCliConfig({ DATABASE_URL: valid.DATABASE_URL })).toEqual({
+      ok: true,
+      config: { database: { url: valid.DATABASE_URL }, operatorPassword: undefined },
+    });
+  });
+
+  it("reads OPERATOR_PASSWORD when set and rejects an empty one", () => {
+    const set = parseCliConfig({ DATABASE_URL: valid.DATABASE_URL, OPERATOR_PASSWORD: "pw" });
+    expect(set.ok && set.config.operatorPassword).toBe("pw");
+    expect(parseCliConfig({ DATABASE_URL: valid.DATABASE_URL, OPERATOR_PASSWORD: "" }).ok).toBe(
+      false,
+    );
+  });
+
+  it("names a non-PostgreSQL DATABASE_URL without printing it", () => {
+    const result = parseCliConfig({ DATABASE_URL: "mysql://u:topsecret@host/db" });
+    expect(result).toEqual({ ok: false, message: "Invalid configuration: DATABASE_URL (custom)" });
+  });
+
+  it("reports a missing DATABASE_URL as Required", () => {
+    expect(parseCliConfig({})).toEqual({
+      ok: false,
+      message: "Invalid configuration: DATABASE_URL (Required)",
+    });
   });
 });

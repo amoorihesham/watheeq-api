@@ -1,4 +1,5 @@
 import pg from "pg";
+import { parseCliConfig } from "../config/config.js";
 import { createDb } from "../db/pool.js";
 import { AppError, fromDatabaseError } from "../http/errors.js";
 import {
@@ -8,12 +9,16 @@ import {
 } from "../modules/auth/auth.constants.js";
 import { createOperator } from "../modules/auth/auth.service.js";
 
-// Reads the URL directly: validated config is for the running app, not this tool.
-const url = process.env.DATABASE_URL;
+const parsed = parseCliConfig(process.env);
+if (!parsed.ok) {
+  console.error(parsed.message);
+  process.exit(1);
+}
+const { database, operatorPassword } = parsed.config;
 const email = process.argv[2];
 const userName = process.argv[3];
 
-if (!url || !email || !userName || process.argv.length > 4) {
+if (!email || !userName || process.argv.length > 4) {
   console.error('Usage: pnpm operator:create <email> "<full name>"');
   console.error(
     "Reads the password from OPERATOR_PASSWORD, or prompts for it. Never pass it as an argument.",
@@ -67,9 +72,8 @@ function promptHidden(label: string): Promise<string> {
 }
 
 async function readPassword(): Promise<string> {
-  const fromEnv = process.env.OPERATOR_PASSWORD;
-  if (fromEnv) {
-    return fromEnv;
+  if (operatorPassword) {
+    return operatorPassword;
   }
   if (!process.stdin.isTTY) {
     throw new CliError("Set OPERATOR_PASSWORD, or run this in an interactive terminal.");
@@ -116,7 +120,7 @@ function messageFor(err: AppError): string | undefined {
 }
 
 try {
-  const operator = await createWithConnection(url, email, userName);
+  const operator = await createWithConnection(database.url, email, userName);
   console.log(`operator created: ${operator.userName} <${operator.email}> (${operator.id})`);
 } catch (err) {
   const appError = err instanceof AppError ? err : fromDatabaseError(err);

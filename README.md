@@ -24,7 +24,10 @@ pnpm dev
 
 ## Configuration
 
+All settings are validated by `src/config/`, and changes take effect on restart.
+`.env.example` lists every key: required ones are set, optional overrides are commented with their default.
 The app validates its environment at startup.
+`pnpm db:migrate` and `pnpm operator:create` need only `DATABASE_URL` (the operator password may also come from `OPERATOR_PASSWORD`).
 If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` and exits with code 1, naming keys and reasons only, never values.
 
 | Key            | Default       | Meaning |
