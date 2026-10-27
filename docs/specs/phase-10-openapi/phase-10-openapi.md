@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                                                                                                                                                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status**             | In Implementation                                                                                                                                                                                                                                                         |
+| **Status**             | Implemented                                                                                                                                                                                                                                                               |
 | **Approved by / date** | _Amr - 27/10/2026 - 16:29 pm_                                                                                                                                                                                                                                             |
 | **Depends on**         | Phase 0.5 (`phase-0.5-refactor.md`) for the layers and per-module files, Phase 8 (`phase-8-api-contract.md`) for the response, list, and error shapes and the contract tests, Phase 9 (`phase-9-config.md`), merged first because both phases touch every module's wiring |
 | **Related decisions**  | Technical T14, T24, T25, T37, T52-T56; Phase 8 Q1 (reversed here)                                                                                                                                                                                                         |
@@ -124,7 +124,8 @@ Realms (each one is today's `router.use` chain, so nothing moves in the order of
 
 | Realm         | Chain                                                                    | Used by                                                                               |
 | ------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| `public`      | `noStore`                                                                | login, refresh, logout, verify, password reset; `/health` without `noStore`, as today |
+| `open`        | none                                                                     | `/health`, which today sends no `noStore` (P10.8) |
+| `public`      | `noStore`                                                                | login, refresh, logout, verify, password reset |
 | `session`     | `noStore`, `authenticate`                                                | `GET /auth/me`, `POST /auth/password`                                                 |
 | `operator`    | `noStore`, `authenticate`, `requireRole("operator")`                     | `/operator/plans`, `/operator/tenants`                                                |
 | `tenant`      | `noStore`, `authenticate`, `requireRole("user")`, `subscriptionGuard`    | every tenant module, `/files`                                                         |
@@ -156,7 +157,7 @@ After: the builder has already parsed both, so the service takes `AcceptRequestT
 
 What stays in services: validation that needs the database or the resource's current state, built from the request's own data.
 Examples: `validateAnswers` against the service's current form revision (Phase 5.5), `definitionProblems` for a calendar period, workflow stage rules.
-Inline schemas a service builds for one path or query value (`effectiveFromOf`, `yearOf` in the calendar service) become part of the endpoint's declared `params` or `query`.
+Inline schemas a service builds for one path or query value become part of the endpoint's declared `params` or `query`, with one exception: the calendar's `effectiveFrom` and `year` path values are declared as plain strings and still checked by the calendar service, so an impossible date (`PUT /calendar/hours/2027-02-30`) stays 400 `invalid_format` at `effectiveFrom`, as before, instead of 404: it is bad input, not a missing resource (P10.8).
 
 The `operator:create` CLI calls `validate(createOperatorRequestSchema, input)` itself before `createOperator`, since the CLI is its own trust boundary.
 
@@ -192,6 +193,7 @@ The `operator:create` CLI calls `validate(createOperatorRequestSchema, input)` i
 `buildApp` mounts it only when `server.env` is not `production`, before the 404 handler.
 The page is on the API's own origin, so try-it sends the login cookies with no CORS or token setup.
 The page must load its script from the package, not a CDN (R10.10); if the package cannot serve its bundle locally, step 10.4 serves the `@scalar/api-reference` standalone bundle from `node_modules` at `/docs/scalar.js` and records it as a proposal.
+As implemented, the page's script is that bundle at `/docs/scalar.js` (the package defaults to a CDN), and the page turns off Scalar's default fonts, telemetry, AI agent, and MCP features, which reach `fonts.scalar.com` or `api.scalar.com` and would upload the document; it shows each operation's `x-permission` and hides the developer toolbar (P10.8).
 
 ### 4.7 `.API.md` after this phase
 
@@ -308,8 +310,9 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P10.5 | Scalar serves the document at `/docs` outside production, from the API's origin, with no third-party request.                                                                                                                                  | Try-it works with the session cookies; production does not publish the API map.                                    |
 | P10.6 | An implemented phase's `.API.md` is an index (Method, Path, Who, Purpose, Spec refs, behavior notes, no error-code section); full shapes only while the spec is in Draft; C5 reads only the tables of phases in implementation or implemented. | Each fact has one owner; the spec still designs endpoints before code exists, without failing the suite.           |
 | P10.7 | Handlers return the value to send; the realm is declared per group with a per-endpoint override; components are named by `.meta({ id })` on the schemas.                                                                                       | The builder is the only way to answer, one realm line per router as today, and the document reads in domain names. |
+| P10.8 | Approved implementation choices: the `open` realm for `/health` only; an endpoint's realm may only add guards to its group's; the calendar's `effectiveFrom` and `year` path values keep their 400; no `operationId`; the upload's `name` query read leniently so a missing name stays `invalid_name`; `versionNumberSchema` yields a number; `ReasonRequest` shared by the reason-only bodies, with return and escalate separate; the per-module ID schemas removed; tags `operator-plans` and `operator-tenants`; component names as generated; `/docs/scalar.js` served locally with `@scalar/api-reference` 1.74.0 and `@scalar/express-api-reference` 0.10.29 as runtime dependencies and `@scalar/openapi-parser` 0.29.13 as a dev dependency; `no-store` on `/docs` and `/openapi.json`; Scalar's AI agent, MCP, telemetry, fonts, and developer toolbar off, `x-permission` shown; the document names the `docs/api/` guides instead of linking them; the Generate SDK promotion stays (no request unless clicked); tag descriptions, free-form value types, a few repeated inline shapes, and success-response descriptions left as generated. | Owner approval of the implementation report (2026-10-27). |
 
-Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented: a new T-entry for P10.1-P10.5 and P10.7, T14 amended for `<module>.endpoints.ts` and validation in the router builder, and T56's rejected alternative updated.
+Promoted to `TECHNICAL_DECISIONS.md` as T60 (P10.2, P10.7), T61 (P10.1, P10.3, P10.4, P10.6), and T62 (P10.5); T14 now names `<module>.endpoints.ts` and validation in the router builder, and T56 reads only phases in implementation or implemented. The lifecycle's Done step in `CLAUDE.md` trims the `.API.md`.
 
 ## 11. Change Log
 
@@ -317,3 +320,5 @@ Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented: a new T
 | ---------- | ----------------------------- | ------------------------------------------- |
 | 2026-10-27 | Initial draft.                | Pre-spec discussion with the owner (Q1-Q9). |
 | 2026-10-27 | Q10-Q15 resolved as proposed. | Owner accepted the proposed answers.        |
+| 2026-10-27 | Approved; status set to In Implementation. | Owner signed the approval line. |
+| 2026-10-27 | Implemented and verified (steps 10.1-10.5). Folded in the approved implementation choices: the `open` realm, the realm override rule, the calendar path values' 400, the lenient upload name, the Scalar script served locally with every third-party feature off, and the rest of P10.8. | Owner approval of the implementation report. |

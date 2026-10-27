@@ -13,7 +13,7 @@ Each phase follows this lifecycle:
 3. **Approved:** I change the status to `Approved`. Only now may implementation start.
 4. **Implement:** the whole spec is implemented by two sub-agents, each in its own git worktree, with the spec's steps split between them along their dependencies and built in the order the spec defines. There is no review gate between steps. After the whole spec is implemented, you review everything once (every step's acceptance criteria, the full test suite, mutation checks for locks and races, and an end-to-end check against a running server) and report to me with the verification results per step.
 5. **Change during implementation:** if implementation shows the spec is wrong or incomplete, do not silently deviate. Make the smallest reasonable choice and list it as "proposed for owner approval" in the final report; if the gap blocks a correct implementation, stop and ask me before continuing.
-6. **Done:** after I approve the report and its proposals, fold them into the spec, set the status to `Implemented`, promote decisions to the relevant decision logs, and update `ROADMAP_AND_STATUS.md`.
+6. **Done:** after I approve the report and its proposals, fold them into the spec, set the status to `Implemented`, trim the phase's `.API.md` to its implemented form (`templates/SPEC_API_TEMPLATE.md`), promote decisions to the relevant decision logs, and update `ROADMAP_AND_STATUS.md`.
 
 Follow the engineering principles below on every task. In particular:
 
@@ -35,9 +35,9 @@ Each document is authoritative for its own topic. Do not duplicate content betwe
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | `docs/PRODUCT_VISION.md`      | Long-term product direction                                                      |
 | `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1-D46; open product questions |
-| `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T56; deferred hardening                 |
+| `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T62; deferred hardening                 |
 | `docs/ROADMAP_AND_STATUS.md`  | Phase list, phase status, next action                                            |
-| `docs/api/`                   | The HTTP contract for clients: success, list, and error shapes, auth, access     |
+| `docs/api/`                   | The HTTP contract for clients: the rules (`*.md`) and the generated endpoint shapes (`openapi.json`) |
 | `docs/specs/phase-<N>-*/phase-<N>-*.md` | Detailed requirements, design, steps, and acceptance criteria for one phase |
 | `docs/specs/phase-<N>-*/phase-<N>-*.API.md` | The endpoints one phase adds or changes (the spec's section 4.2) |
 | `templates/SPEC_TEMPLATE.md`  | Structure every phase spec must follow                                           |
