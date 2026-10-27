@@ -20,8 +20,8 @@ Tenant routes run `authenticate()`, `requireRole('user')`, and the subscription 
 
 Shapes:
 
-- **Field:** as in 4.1; in a request `id` is omitted for a new field or option, and in a response every field has its `id`, with `helpText` `null` when blank.
-  Settings that do not belong to the type are `unknown_field` (T25); every setting of the type is required (`min` and `max` may be null).
+- **Field:** in a response every field is `{id, type, label, helpText, required, min, max, integer, options, maxFiles}`: every setting of every type, `null` where the field's type has none, and `helpText` `null` when blank (Phase 8, R8.4).
+  In a request `id` is omitted for a new field or option; every setting of the type is required (`min` and `max` may be null); a setting of another type may be sent as `null`, so a field can be sent back as it was read, and a non-null one is `unknown_field` (T25).
 - **File:** `{id, name, contentType, size, sha256, expiresAt}`.
 
 `GET /files/:id` for a file that is not the caller's pending upload is 404, whoever owns it, so a file ID reveals nothing; Phase 6 adds the routes for attached files.

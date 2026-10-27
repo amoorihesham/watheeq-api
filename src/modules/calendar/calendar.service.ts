@@ -22,7 +22,7 @@ import type {
   CalendarPeriodType,
   CalendarRepositoryType,
   CalendarResponseType,
-  HoursVersionType,
+  HoursVersionResponseType,
   PeriodOverrideType,
   PeriodViewType,
   RecurringPeriodType,
@@ -41,7 +41,7 @@ import {
   tomorrowOf,
 } from "./shared/period-rules.js";
 import { daysBetweenDates, msToTime } from "./shared/riyadh-time.js";
-import { canonicalWeek, sameWeek, toCalendarPeriod } from "./shared/rows.js";
+import { canonicalWeek, sameWeek, toCalendarPeriod, weekView } from "./shared/rows.js";
 import { dayHours, holidaysOn, seasonOn } from "./shared/week.js";
 
 const effectiveFromOf = (value: string) =>
@@ -194,7 +194,7 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
       );
       return {
         today,
-        hours: hours.map((version) => ({ ...version, week: canonicalWeek(version.week) })),
+        hours: hours.map((version) => ({ ...version, week: weekView(version.week) })),
         periods: periods.map(toPeriodResponse),
       };
     },
@@ -226,7 +226,7 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
       effectiveFromInput: string,
       input: unknown,
       context: AuditContextType,
-    ): Promise<HoursVersionType> {
+    ): Promise<HoursVersionResponseType> {
       const effectiveFrom = effectiveFromOf(effectiveFromInput);
       const week = canonicalWeek(validate(weekShapeSchema, input));
       return withTx(db, async (tx) => {
@@ -236,7 +236,7 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
         assertWithinReach(effectiveFrom, today, "effectiveFrom");
         const [before] = await repo.findHours(tx, tenantId, effectiveFrom);
         if (before && sameWeek(before.week, week)) {
-          return { effectiveFrom, week };
+          return { effectiveFrom, week: weekView(week) };
         }
         await repo.upsertHours(tx, tenantId, effectiveFrom, week);
         await writeAuditEntry(tx, {
@@ -251,7 +251,7 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
             after: week,
           },
         });
-        return { effectiveFrom, week };
+        return { effectiveFrom, week: weekView(week) };
       });
     },
 

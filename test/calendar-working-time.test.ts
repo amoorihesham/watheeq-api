@@ -16,6 +16,7 @@ import {
   toRiyadh,
   type WeekShapeType,
   weekShapeSchema,
+  weekView,
   workingDaysBetween,
 } from "../src/modules/calendar/index.js";
 
@@ -386,40 +387,74 @@ describe("weekShapeSchema (R4.2)", () => {
       return (error as { details?: unknown }).details;
     }
   };
+  // Clients send each weekday as {mode, start, end} (Phase 8, R8.4).
+  const body = (week: WeekShapeType) => weekView(week);
 
-  it("accepts a default span with weekday spans and days off", () => {
+  it("accepts a default span with weekday spans and days off, and stores the rules", () => {
     const week = sunToThu("08:00", "16:00");
-    expect(detailsOf({ ...week, days: { ...week.days, thu: hours("08:00", "13:00") } })).toEqual(
-      [],
-    );
-    expect(detailsOf({ ...week, end: "24:00" })).toEqual([]);
+    const shortThursdays = { ...week, days: { ...week.days, thu: hours("08:00", "13:00") } };
+    expect(detailsOf(body(shortThursdays))).toEqual([]);
+    expect(validate(weekShapeSchema, body(shortThursdays))).toEqual(shortThursdays);
+    expect(detailsOf(body({ ...week, end: "24:00" }))).toEqual([]);
+  });
+
+  it("requires start and end for a custom day, and refuses them on a default or off day", () => {
+    const days = body(sunToThu("08:00", "16:00")).days;
+    expect(
+      detailsOf({
+        start: "08:00",
+        end: "16:00",
+        days: { ...days, thu: { mode: "custom", start: "08:00", end: null } },
+      }),
+    ).toEqual([{ path: "days.thu.end", code: "required" }]);
+    expect(
+      detailsOf({
+        start: "08:00",
+        end: "16:00",
+        days: { ...days, fri: { mode: "off", start: "08:00", end: null } },
+      }),
+    ).toEqual([{ path: "days.fri.start", code: "not_allowed" }]);
+    expect(
+      detailsOf({
+        start: "08:00",
+        end: "16:00",
+        days: { ...days, thu: { mode: "custom", start: "13:00", end: "08:00" } },
+      }),
+    ).toEqual([{ path: "days.thu.end", code: "end_before_start" }]);
+    expect(
+      detailsOf({
+        start: "08:00",
+        end: "16:00",
+        days: { ...days, thu: { mode: "short", start: null, end: null } },
+      }),
+    ).toEqual([{ path: "days.thu.mode", code: "invalid_value" }]);
   });
 
   it("requires at least one working weekday", () => {
     const allOff = Object.fromEntries(
       ["sun", "mon", "tue", "wed", "thu", "fri", "sat"].map((day) => [day, "off"]),
-    );
-    expect(detailsOf({ start: "08:00", end: "16:00", days: allOff })).toEqual([
+    ) as WeekShapeType["days"];
+    expect(detailsOf(body({ start: "08:00", end: "16:00", days: allOff }))).toEqual([
       { path: "days", code: "no_working_day" },
     ]);
   });
 
   it("refuses a span that ends at or before its start, and times outside 00:00-24:00", () => {
     const week = sunToThu("08:00", "16:00");
-    expect(detailsOf({ ...week, end: "08:00" })).toEqual([
+    expect(detailsOf(body({ ...week, end: "08:00" }))).toEqual([
       { path: "end", code: "end_before_start" },
     ]);
-    expect(detailsOf({ ...week, start: "24:30" })).toEqual([
+    expect(detailsOf(body({ ...week, start: "24:30" }))).toEqual([
       { path: "start", code: "invalid_format" },
     ]);
   });
 
   it("requires every weekday and refuses unknown fields", () => {
-    const { fri: _fri, ...sixDays } = sunToThu("08:00", "16:00").days;
+    const { fri: _fri, ...sixDays } = body(sunToThu("08:00", "16:00")).days;
     expect(detailsOf({ start: "08:00", end: "16:00", days: sixDays })).toEqual([
-      { path: "days.fri", code: "invalid_union" },
+      { path: "days.fri", code: "invalid_type" },
     ]);
-    expect(detailsOf({ ...sunToThu("08:00", "16:00"), lunch: "12:00" })).toEqual([
+    expect(detailsOf({ ...body(sunToThu("08:00", "16:00")), lunch: "12:00" })).toEqual([
       { path: "lunch", code: "unknown_field" },
     ]);
   });

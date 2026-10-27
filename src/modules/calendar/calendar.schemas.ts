@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import {
+  DAY_MODES,
   MAX_DAY_VIEW_DAYS,
   MAX_PERIOD_NAME_LENGTH,
   MAX_SEASON_RANK,
@@ -8,6 +9,7 @@ import {
   PERIOD_RECURRENCES,
   TIME_PATTERN,
 } from "./calendar.config.js";
+import type { DayRuleType } from "./calendar.types.js";
 import { daysBetweenDates } from "./shared/riyadh-time.js";
 
 const time = z.string().regex(TIME_PATTERN);
@@ -17,9 +19,33 @@ const endAfterStart = (span: { start: string; end: string }) =>
   !TIME_PATTERN.test(span.start) || !TIME_PATTERN.test(span.end) || span.end > span.start;
 const END_BEFORE_START = { path: ["end"], params: { code: "end_before_start" } };
 
-const span = z.strictObject({ start: time, end: time }).refine(endAfterStart, END_BEFORE_START);
-
-const dayRule = z.union([z.literal("default"), z.literal("off"), span]);
+/**
+ * A weekday as clients send and read it (Phase 8, R8.4): `start` and `end` are set for `custom` and `null`
+ * otherwise. It becomes the stored rule: `"default"`, `"off"`, or the span.
+ */
+const dayRule = z
+  .strictObject({ mode: z.enum(DAY_MODES), start: time.nullable(), end: time.nullable() })
+  .superRefine((day, ctx) => {
+    for (const key of ["start", "end"] as const) {
+      if (day.mode === "custom" && day[key] === null) {
+        ctx.addIssue({ code: "custom", path: [key], params: { code: "required" } });
+      }
+      if (day.mode !== "custom" && day[key] !== null) {
+        ctx.addIssue({ code: "custom", path: [key], params: { code: "not_allowed" } });
+      }
+    }
+    if (
+      day.start !== null &&
+      day.end !== null &&
+      !endAfterStart({ start: day.start, end: day.end })
+    ) {
+      ctx.addIssue({ code: "custom", ...END_BEFORE_START });
+    }
+  })
+  .transform(
+    (day): DayRuleType =>
+      day.mode === "custom" ? { start: day.start ?? "", end: day.end ?? "" } : day.mode,
+  );
 
 /** Normal hours and seasons share this shape (P4.4, P4.5); at least one weekday works (R4.2). */
 export const weekShapeSchema = z

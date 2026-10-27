@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createLogger } from "../src/logging/logger.js";
-import { DEFAULT_WEEK } from "../src/modules/calendar/index.js";
+import { DEFAULT_WEEK, type WeekShapeType, weekView } from "../src/modules/calendar/index.js";
 import { addDays } from "../src/modules/subscriptions/index.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
@@ -32,7 +32,7 @@ const as = (access: string) => ({
   delete: (path: string) => request(app).delete(path).set("Cookie", accessCookie(access)),
 });
 
-const shortThursdays = {
+const shortThursdays: WeekShapeType = {
   ...DEFAULT_WEEK,
   days: { ...DEFAULT_WEEK.days, thu: { start: "08:00", end: "13:00" } },
 };
@@ -110,7 +110,7 @@ describe("a tenant's calendar (R4.1)", () => {
     const res = await as(sara).get("/calendar");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
-      data: { today, hours: [{ effectiveFrom: today, week: DEFAULT_WEEK }], periods: [] },
+      data: { today, hours: [{ effectiveFrom: today, week: weekView(DEFAULT_WEEK) }], periods: [] },
     });
   });
 
@@ -137,14 +137,14 @@ describe("a tenant's calendar (R4.1)", () => {
 describe("normal hours (R4.2, R4.3, R4.8)", () => {
   it("adds a version from a future date, audited, without touching the days before it", async () => {
     const from = addDays(today, 10);
-    const res = await as(sara).put(`/calendar/hours/${from}`, shortThursdays);
+    const res = await as(sara).put(`/calendar/hours/${from}`, weekView(shortThursdays));
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ data: { effectiveFrom: from, week: shortThursdays } });
+    expect(res.body).toEqual({ data: { effectiveFrom: from, week: weekView(shortThursdays) } });
 
     const calendar = (await as(sara).get("/calendar")).body.data;
     expect(calendar.hours).toEqual([
-      { effectiveFrom: today, week: DEFAULT_WEEK },
-      { effectiveFrom: from, week: shortThursdays },
+      { effectiveFrom: today, week: weekView(DEFAULT_WEEK) },
+      { effectiveFrom: from, week: weekView(shortThursdays) },
     ]);
     const before = nextWeekday(today, 4);
     const after = nextWeekday(from, 4);
@@ -166,10 +166,12 @@ describe("normal hours (R4.2, R4.3, R4.8)", () => {
 
   it("replaces a future version with before and after in the audit, and ignores a no-op", async () => {
     const from = addDays(today, 20);
-    await as(sara).put(`/calendar/hours/${from}`, shortThursdays);
-    const res = await as(sara).put(`/calendar/hours/${from}`, DEFAULT_WEEK);
+    await as(sara).put(`/calendar/hours/${from}`, weekView(shortThursdays));
+    const res = await as(sara).put(`/calendar/hours/${from}`, weekView(DEFAULT_WEEK));
     expect(res.status).toBe(200);
-    expect((await as(sara).put(`/calendar/hours/${from}`, DEFAULT_WEEK)).status).toBe(200);
+    expect((await as(sara).put(`/calendar/hours/${from}`, weekView(DEFAULT_WEEK))).status).toBe(
+      200,
+    );
     expect((await hoursAudit(alNoor, from)).map((row) => row.details)).toEqual([
       { effectiveFrom: from, before: null, after: shortThursdays },
       { effectiveFrom: from, before: shortThursdays, after: DEFAULT_WEEK },
@@ -178,7 +180,7 @@ describe("normal hours (R4.2, R4.3, R4.8)", () => {
 
   it("deletes a future version, audited", async () => {
     const from = addDays(today, 30);
-    await as(sara).put(`/calendar/hours/${from}`, shortThursdays);
+    await as(sara).put(`/calendar/hours/${from}`, weekView(shortThursdays));
     expect((await as(sara).delete(`/calendar/hours/${from}`)).status).toBe(204);
     const hours = (await as(sara).get("/calendar")).body.data.hours;
     expect(hours.map((v: { effectiveFrom: string }) => v.effectiveFrom)).not.toContain(from);
@@ -193,7 +195,10 @@ describe("normal hours (R4.2, R4.3, R4.8)", () => {
     ["today", 0],
     ["yesterday", -1],
   ])("refuses to set hours from %s: the past is fixed (Q10)", async (_name, offset) => {
-    const res = await as(sara).put(`/calendar/hours/${addDays(today, offset)}`, shortThursdays);
+    const res = await as(sara).put(
+      `/calendar/hours/${addDays(today, offset)}`,
+      weekView(shortThursdays),
+    );
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("CALENDAR_DATE_LOCKED");
   });
@@ -205,7 +210,7 @@ describe("normal hours (R4.2, R4.3, R4.8)", () => {
   });
 
   it("validates the date and the week shape", async () => {
-    const cases: [string, object, object[]][] = [
+    const cases: [string, WeekShapeType, object[]][] = [
       [addDays(today, 1827), DEFAULT_WEEK, [{ path: "effectiveFrom", code: "too_far_ahead" }]],
       ["2027-02-30", DEFAULT_WEEK, [{ path: "effectiveFrom", code: "invalid_format" }]],
       ["soon", DEFAULT_WEEK, [{ path: "effectiveFrom", code: "invalid_format" }]],
@@ -213,7 +218,9 @@ describe("normal hours (R4.2, R4.3, R4.8)", () => {
         addDays(today, 5),
         {
           ...DEFAULT_WEEK,
-          days: Object.fromEntries(Object.keys(DEFAULT_WEEK.days).map((d) => [d, "off"])),
+          days: Object.fromEntries(
+            Object.keys(DEFAULT_WEEK.days).map((d) => [d, "off"]),
+          ) as WeekShapeType["days"],
         },
         [{ path: "days", code: "no_working_day" }],
       ],
@@ -224,12 +231,13 @@ describe("normal hours (R4.2, R4.3, R4.8)", () => {
       ],
     ];
     for (const [date, week, details] of cases) {
-      const res = await as(sara).put(`/calendar/hours/${date}`, week);
+      const res = await as(sara).put(`/calendar/hours/${date}`, weekView(week));
       expect(res.status, date).toBe(400);
       expect(res.body.error.details).toEqual(details);
     }
     expect(
-      (await as(sara).put(`/calendar/hours/${addDays(today, 1826)}`, DEFAULT_WEEK)).status,
+      (await as(sara).put(`/calendar/hours/${addDays(today, 1826)}`, weekView(DEFAULT_WEEK)))
+        .status,
     ).toBe(200);
   });
 
@@ -246,7 +254,7 @@ describe("normal hours (R4.2, R4.3, R4.8)", () => {
         [alNoor, from, JSON.stringify(shortThursdays)],
       );
       const change = as(sara)
-        .put(`/calendar/hours/${from}`, DEFAULT_WEEK)
+        .put(`/calendar/hours/${from}`, weekView(DEFAULT_WEEK))
         .then((res) => res);
       await waitUntilCalendarWriteWaits();
       await client.query("commit");
@@ -367,7 +375,10 @@ describe("access (R4.12-R4.14)", () => {
   it("lets calendar.view read and only calendar.manage write", async () => {
     expect((await as(huda).get("/calendar")).status).toBe(200);
     expect((await as(huda).get(`/calendar/days?from=${today}&to=${today}`)).status).toBe(200);
-    const write = await as(huda).put(`/calendar/hours/${addDays(today, 3)}`, DEFAULT_WEEK);
+    const write = await as(huda).put(
+      `/calendar/hours/${addDays(today, 3)}`,
+      weekView(DEFAULT_WEEK),
+    );
     expect(write.status).toBe(403);
     expect(write.body.error.code).toBe("FORBIDDEN");
     expect((await as(huda).delete(`/calendar/hours/${addDays(today, 3)}`)).status).toBe(403);
@@ -384,16 +395,16 @@ describe("access (R4.12-R4.14)", () => {
       [tenant.id],
     );
     const admin = (await login(app, "admin@cal-read-only.test", PASSWORD)).access;
-    const res = await as(admin).put(`/calendar/hours/${addDays(today, 3)}`, DEFAULT_WEEK);
+    const res = await as(admin).put(`/calendar/hours/${addDays(today, 3)}`, weekView(DEFAULT_WEEK));
     expect(res.body.error.code).toBe("SUBSCRIPTION_READ_ONLY");
     expect((await as(admin).get("/calendar")).status).toBe(200);
   });
 
   it("keeps each tenant's calendar to itself", async () => {
     const from = addDays(today, 50);
-    await as(sara).put(`/calendar/hours/${from}`, shortThursdays);
+    await as(sara).put(`/calendar/hours/${from}`, weekView(shortThursdays));
     const rashidHours = (await as(rashid).get("/calendar")).body.data.hours;
-    expect(rashidHours).toEqual([{ effectiveFrom: today, week: DEFAULT_WEEK }]);
+    expect(rashidHours).toEqual([{ effectiveFrom: today, week: weekView(DEFAULT_WEEK) }]);
     expect((await as(rashid).delete(`/calendar/hours/${from}`)).status).toBe(404);
     expect((await as(sara).get("/calendar")).body.data.periods).toEqual([]);
   });

@@ -2,6 +2,8 @@ import { z } from "zod";
 import { booleanFilter, optionalText, pageQuery } from "@/http/filters.js";
 import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import {
+  ALL_FIELD_SETTINGS,
+  FIELD_SETTINGS,
   MAX_FIELD_HELP_TEXT_LENGTH,
   MAX_FIELD_LABEL_LENGTH,
   MAX_FILES_PER_FIELD,
@@ -91,26 +93,54 @@ const plainField = (type: "short_text" | "long_text" | "date" | "yes_no") =>
 const choiceField = (type: "single_choice" | "multiple_choice") =>
   z.strictObject({ ...fieldBase, type: z.literal(type), options: choiceOptions });
 
-const formFieldSchema = z.discriminatedUnion("type", [
-  plainField("short_text"),
-  plainField("long_text"),
-  plainField("date"),
-  plainField("yes_no"),
-  z.strictObject({
-    ...fieldBase,
-    type: z.literal("number"),
-    min: z.number().nullable(),
-    max: z.number().nullable(),
-    integer: z.boolean(),
-  }),
-  choiceField("single_choice"),
-  choiceField("multiple_choice"),
-  z.strictObject({
-    ...fieldBase,
-    type: z.literal("file"),
-    maxFiles: z.int().min(1).max(MAX_FILES_PER_FIELD),
-  }),
-]);
+/**
+ * A field may be sent back as it was read: a setting its type does not have may be sent as `null` and is dropped.
+ * A non-null one stays and is refused as `unknown_field`.
+ */
+function withoutOtherSettings(field: unknown): unknown {
+  if (typeof field !== "object" || field === null || Array.isArray(field)) {
+    return field;
+  }
+  const { type } = field as { type?: unknown };
+  const own: readonly string[] =
+    typeof type === "string" && type in FIELD_SETTINGS
+      ? FIELD_SETTINGS[type as keyof typeof FIELD_SETTINGS]
+      : [];
+  return Object.fromEntries(
+    Object.entries(field).filter(
+      ([key, value]) =>
+        !(
+          value === null &&
+          (ALL_FIELD_SETTINGS as readonly string[]).includes(key) &&
+          !own.includes(key)
+        ),
+    ),
+  );
+}
+
+const formFieldSchema = z.preprocess(
+  withoutOtherSettings,
+  z.discriminatedUnion("type", [
+    plainField("short_text"),
+    plainField("long_text"),
+    plainField("date"),
+    plainField("yes_no"),
+    z.strictObject({
+      ...fieldBase,
+      type: z.literal("number"),
+      min: z.number().nullable(),
+      max: z.number().nullable(),
+      integer: z.boolean(),
+    }),
+    choiceField("single_choice"),
+    choiceField("multiple_choice"),
+    z.strictObject({
+      ...fieldBase,
+      type: z.literal("file"),
+      maxFiles: z.int().min(1).max(MAX_FILES_PER_FIELD),
+    }),
+  ]),
+);
 
 /** Adds an issue at the second and later places a (case-folded) value is used. */
 function flagRepeats(

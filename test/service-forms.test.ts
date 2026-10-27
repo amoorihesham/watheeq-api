@@ -1,6 +1,7 @@
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createLogger } from "../src/logging/logger.js";
+import { ALL_FIELD_SETTINGS, FIELD_SETTINGS } from "../src/modules/services/services.config.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
 import {
@@ -38,6 +39,17 @@ const as = (access: string) => ({
 });
 
 const org = (key: string) => ({ key, scope: "organization" });
+
+/** Fields as stored and audited: a response lists every setting, `null` where the field's type has none. */
+const stored = (fields: { type: string }[]) =>
+  fields.map((field) => {
+    const own: readonly string[] = FIELD_SETTINGS[field.type as keyof typeof FIELD_SETTINGS] ?? [];
+    return Object.fromEntries(
+      Object.entries(field).filter(
+        ([key]) => !(ALL_FIELD_SETTINGS as readonly string[]).includes(key) || own.includes(key),
+      ),
+    );
+  });
 
 async function createService(token = huda, workflowId = workflow): Promise<string> {
   const res = await as(token).post("/services", {
@@ -178,7 +190,7 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
     expect(audit[0]).toMatchObject({
       tenant_id: alNoor,
       actor_id: hudaId,
-      details: { revision: 1, before: [], after: fields },
+      details: { revision: 1, before: [], after: stored(fields) },
     });
   });
 
@@ -227,7 +239,11 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
     );
     expect(fields).toHaveLength(2);
     const audit = (await auditOf(id)).filter((row) => row.action === "service.form_updated");
-    expect(audit[1]?.details).toMatchObject({ revision: 2, before: first, after: fields });
+    expect(audit[1]?.details).toMatchObject({
+      revision: 2,
+      before: stored(first),
+      after: stored(fields),
+    });
   });
 
   it("refuses a save based on an older revision", async () => {
@@ -254,6 +270,48 @@ describe("saving a form (R5.5.1-R5.5.4)", () => {
   it("answers 404 for an unknown or malformed service", async () => {
     expect((await saveForm("00000000-0000-4000-8000-000000000000", 0, [])).status).toBe(404);
     expect((await saveForm("nope", 0, [])).status).toBe(404);
+  });
+});
+
+describe("one field shape (Phase 8, R8.4)", () => {
+  it("answers every setting on every field, null where the type has none", async () => {
+    const id = await createService();
+    const fields = (await saveForm(id, 0, vendorForm())).body.data.form.fields;
+    for (const field of fields) {
+      expect(Object.keys(field).sort()).toEqual([
+        "helpText",
+        "id",
+        "integer",
+        "label",
+        "max",
+        "maxFiles",
+        "min",
+        "options",
+        "required",
+        "type",
+      ]);
+    }
+    expect(fields[0]).toMatchObject({
+      type: "short_text",
+      min: null,
+      max: null,
+      integer: null,
+      options: null,
+      maxFiles: null,
+    });
+  });
+
+  it("takes a field back as it was read, and refuses a setting its type does not have", async () => {
+    const id = await createService();
+    const fields = (await saveForm(id, 0, vendorForm())).body.data.form.fields;
+    const renamed = [{ ...fields[0], label: "Vendor" }, ...fields.slice(1)];
+    const res = await saveForm(id, 1, renamed);
+    expect(res.status).toBe(200);
+    expect(res.body.data.form.fields[0]).toEqual({ ...fields[0], label: "Vendor" });
+
+    const wrong = await saveForm(id, 2, [{ ...fields[0], maxFiles: 3 }]);
+    expect(wrong.status).toBe(400);
+    expect(detailsOf(wrong)).toEqual([{ path: "fields.0.maxFiles", code: "unknown_field" }]);
   });
 });
 

@@ -5,6 +5,7 @@ import type {
   DayRuleType,
   PeriodOverrideType,
   WeekShapeType,
+  WeekViewType,
 } from "../calendar.types.js";
 
 type PeriodRowType = typeof calendarPeriods.$inferSelect;
@@ -20,6 +21,22 @@ const rule = (value: DayRuleType): DayRuleType =>
 export function canonicalWeek(week: WeekShapeType): WeekShapeType {
   const days = Object.fromEntries(WEEKDAYS.map((day) => [day, rule(week.days[day])]));
   return { start: week.start, end: week.end, days: days as WeekShapeType["days"] };
+}
+
+/** A week shape as clients read it: every weekday is `{mode, start, end}` (Phase 8, R8.4). */
+export function weekView(week: WeekShapeType): WeekViewType {
+  const days = Object.fromEntries(
+    WEEKDAYS.map((day) => {
+      const value = week.days[day];
+      return [
+        day,
+        typeof value === "string"
+          ? { mode: value, start: null, end: null }
+          : { mode: "custom", start: value.start, end: value.end },
+      ];
+    }),
+  );
+  return { start: week.start, end: week.end, days: days as WeekViewType["days"] };
 }
 
 export const sameWeek = (a: WeekShapeType, b: WeekShapeType) =>

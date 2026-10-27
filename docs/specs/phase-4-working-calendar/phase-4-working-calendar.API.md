@@ -20,7 +20,8 @@ All dates are Riyadh dates (`YYYY-MM-DD`); all times are Riyadh wall-clock times
 | DELETE | `/calendar/periods/:periodId/overrides/:year` | `calendar.manage` | none                                                        | 204; 404; 409 `CALENDAR_DATE_LOCKED`                                                                              |
 
 A **period definition** (the request): `{kind, name, recurrence, startDate?, endDate?, start?: {month, day}, end?: {month, day}, week?, rank?}`.
-An **hours version** (`data` of the hours write, an entry of `GET /calendar`'s `hours`): `{effectiveFrom, week}`, where `week` is `{start, end, days}` and each day is `"default"`, `"off"`, or `{start, end}`.
+An **hours version** (`data` of the hours write, an entry of `GET /calendar`'s `hours`): `{effectiveFrom, week}`.
+A **week** (the body of the hours write, a season's `week`, and both in responses): `{start, end, days}`, where each of the seven days is `{mode, start, end}`: `mode` is `default` (the week's span), `off`, or `custom` (its own `start` and `end`); `start` and `end` are `null` unless the mode is `custom` (Phase 8, R8.4).
 A **period** (`data` of a period or override write, an entry of `GET /calendar`'s `periods`) always has every key; the keys its kind and recurrence do not use are `null`:
 `{id, name, kind, recurrence, startDate, endDate, start, end, validFrom, validUntil, overrides, week, rank, replacesId, next}`.
 `startDate` and `endDate` belong to a one-off period, `start`, `end`, `validFrom`, `validUntil`, and `overrides` to a recurring one (`overrides` is `[]` for a one-off), and `week` and `rank` to a season.
@@ -36,11 +37,12 @@ A `DELETE` of a missing hours version is 404 before the date check.
 ## Validation
 
 - Times: `HH:MM`, 00:00 to 24:00; `start < end`.
-- Week shape: every weekday present; at least one working weekday (`no_working_day`).
+- Week shape: every weekday present; at least one working weekday (`no_working_day`); a `custom` day needs `start` and `end` (`required`), and a `default` or `off` day refuses them (`not_allowed`).
 - Dates and `:effectiveFrom`: valid Riyadh dates, at most 5 years after today (`too_far_ahead`).
 - One-off range and moved occurrence: `startDate <= endDate` (`end_before_start`); a holiday at most 30 days, a season at most 184 days (`period_too_long`), also checked on recurring rules' longest possible occurrence.
 - Recurring days: a valid month and day; Gregorian 29 February is allowed and falls on 28 February in other years; Hijri day 30 falls on the 29th in a 29-day month.
 - A definition is checked whole, also after a `PATCH`: a field its kind or recurrence needs is `required`, one it does not take is `not_allowed`; a day the month cannot have is `invalid_day`.
+  Every field a period's kind uses is required, so a `PATCH` has nothing a `null` could clear, and `null` is refused (`invalid_type`).
 - Overrides: only on recurring periods (`not_recurring`); only for a year the version has an occurrence in (`no_occurrence`), so Hijri years outside the Umm al-Qura data (1300-1600 AH) are refused.
 - `rank`: an integer 0-100, unique among the tenant's seasons in force (`rank_taken`).
 

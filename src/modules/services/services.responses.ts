@@ -1,37 +1,21 @@
 import { z } from "zod";
-
-const fieldBase = {
-  id: z.string(),
-  label: z.string(),
-  helpText: z.string().nullable(),
-  required: z.boolean(),
-};
+import { FIELD_TYPES } from "./services.config.js";
 
 const option = z.strictObject({ id: z.string(), label: z.string() });
 
-const plainField = (type: "short_text" | "long_text" | "date" | "yes_no") =>
-  z.strictObject({ ...fieldBase, type: z.literal(type) });
-
-const choiceField = (type: "single_choice" | "multiple_choice") =>
-  z.strictObject({ ...fieldBase, type: z.literal(type), options: z.array(option) });
-
-/** A form field keeps the settings of its type, as the form is saved (every setting of the type is required). */
-export const formFieldResponseSchema = z.discriminatedUnion("type", [
-  plainField("short_text"),
-  plainField("long_text"),
-  plainField("date"),
-  plainField("yes_no"),
-  z.strictObject({
-    ...fieldBase,
-    type: z.literal("number"),
-    min: z.number().nullable(),
-    max: z.number().nullable(),
-    integer: z.boolean(),
-  }),
-  choiceField("single_choice"),
-  choiceField("multiple_choice"),
-  z.strictObject({ ...fieldBase, type: z.literal("file"), maxFiles: z.number() }),
-]);
+/** A form field: every setting of every type, `null` where the field's type has none (R8.4). */
+export const formFieldResponseSchema = z.strictObject({
+  id: z.string(),
+  type: z.enum(FIELD_TYPES),
+  label: z.string(),
+  helpText: z.string().nullable(),
+  required: z.boolean(),
+  min: z.number().nullable(),
+  max: z.number().nullable(),
+  integer: z.boolean().nullable(),
+  options: z.array(option).nullable(),
+  maxFiles: z.number().nullable(),
+});
 
 export const serviceResponseSchema = z.strictObject({
   id: z.string(),

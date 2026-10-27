@@ -14,7 +14,7 @@ import {
   type FileDownloadType,
   storageKeyOf,
 } from "@/modules/files/index.js";
-import { snapshotAnswers, validateAnswers } from "@/modules/services/index.js";
+import { fieldView, snapshotAnswers, validateAnswers } from "@/modules/services/index.js";
 import {
   assertGrantsHeld,
   type GrantMapType,
@@ -167,7 +167,7 @@ function answersWithFiles(
   const byId = new Map(files.map((file) => [file.id, file]));
   return answers.map((answer) => {
     const base = {
-      field: answer.field,
+      field: fieldView(answer.field),
       value: answer.value as RequestAnswerType["value"],
       chosen: answer.chosen ?? null,
     };
@@ -615,7 +615,7 @@ export function createRequestsService({
           id: service.id,
           name: service.name,
           description: service.description,
-          form: { revision: service.formRevision, fields: service.form },
+          form: { revision: service.formRevision, fields: service.form.map(fieldView) },
         })),
         priorities: priorities.map(({ id, name, days }) => ({ id, name, days })),
       };

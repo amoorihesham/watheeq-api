@@ -27,6 +27,7 @@ Example: `PATCH /priorities/<urgent>` answers `{"data": {"id": "...", "name": "U
   An empty value is `null`, never a missing key, and the variants of one shape carry the same keys.
 - A write returns the resource it changed, in exactly the shape its read returns.
   Huda accepts request #42: the response's `data` equals `GET /requests/<#42>`'s `data`, so the client needs no refetch.
+  A value computed when it is read, such as the elapsed time of an open request's SLA, is as of each answer, so a later read can show a later value.
 - A collection inside one resource (a request's files, a workflow's stages, the org tree, a calendar's periods) is an array inside that resource and is not paged.
 
 ## Lists and cursors

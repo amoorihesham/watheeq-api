@@ -1,7 +1,13 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createLogger } from "../src/logging/logger.js";
-import { DEFAULT_WEEK, hijriToGregorian, toHijri } from "../src/modules/calendar/index.js";
+import {
+  DEFAULT_WEEK,
+  hijriToGregorian,
+  toHijri,
+  type WeekShapeType,
+  weekView,
+} from "../src/modules/calendar/index.js";
 import { addDays } from "../src/modules/subscriptions/index.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
@@ -37,11 +43,14 @@ const monthDay = (date: string) => ({
 const yearOf = (date: string) => Number(date.slice(0, 4));
 const nextName = (prefix: string) => `${prefix} ${++counter}`;
 
-const ramadanHours = {
+// A season's hours as the API sends and returns them.
+const ramadanHours = weekView({
   start: "10:00",
   end: "15:00",
-  days: Object.fromEntries(Object.keys(DEFAULT_WEEK.days).map((d) => [d, "default"])),
-};
+  days: Object.fromEntries(
+    Object.keys(DEFAULT_WEEK.days).map((d) => [d, "default"]),
+  ) as WeekShapeType["days"],
+});
 
 /** A recurring Gregorian holiday whose current occurrence began yesterday and ends in two days. */
 async function seedBegunHoliday(name = nextName("Begun")): Promise<string> {

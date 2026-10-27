@@ -1,4 +1,5 @@
 import type { PeriodResponseType, PeriodViewType } from "../calendar.types.js";
+import { weekView } from "./rows.js";
 
 /** A period view in its response shape: every key present, `null` where the variant has none (R8.4). */
 export function toPeriodResponse(view: PeriodViewType): PeriodResponseType {
@@ -7,7 +8,7 @@ export function toPeriodResponse(view: PeriodViewType): PeriodResponseType {
     id: view.id,
     name: view.name,
     kind: view.kind,
-    week: season ? view.week : null,
+    week: season && view.week ? weekView(view.week) : null,
     rank: season ? view.rank : null,
     replacesId: view.replacesId,
     next: view.next,

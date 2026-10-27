@@ -515,7 +515,13 @@ describe("a deleted unit (R6.5)", () => {
 describe("a write answers as its read does (R8.2)", () => {
   it("returns the request of accept, priority, and withdraw exactly as GET does", async () => {
     const { id } = await submit("khalid");
-    const read = async (person: PersonType) => (await as(person).get(`/requests/${id}`)).body;
+    // The SLA of an open request is computed when read (D39), so during working hours its elapsed and awaiting
+    // times grow between the write and the read; every other field must be equal.
+    const live = { elapsedDays: expect.any(Number), awaitingInfoDays: expect.any(Number) };
+    const read = async (person: PersonType) => {
+      const body = (await as(person).get(`/requests/${id}`)).body;
+      return body.data.sla ? { data: { ...body.data, sla: { ...body.data.sla, ...live } } } : body;
+    };
     const priority = await as("huda").put(`/requests/${id}/priority`, {
       priorityId: alNoor.priorities.urgent,
       reason: "Board deadline",

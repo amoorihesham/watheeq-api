@@ -7,7 +7,9 @@ import type { createCalendarRepository } from "./calendar.repository.js";
 import type {
   calendarDaysResponseSchema,
   calendarResponseSchema,
+  hoursVersionResponseSchema,
   periodResponseSchema,
+  weekShapeResponseSchema,
 } from "./calendar.responses.js";
 import type { createCalendarService } from "./calendar.service.js";
 
@@ -26,6 +28,9 @@ export type DayRuleType = "default" | "off" | SpanType;
 export interface WeekShapeType extends SpanType {
   days: Record<WeekdayType, DayRuleType>;
 }
+
+export type WeekViewType = z.output<typeof weekShapeResponseSchema>;
+export type HoursVersionResponseType = z.output<typeof hoursVersionResponseSchema>;
 
 /** A version of the normal hours, in force from `effectiveFrom` until the next version (R4.3). */
 export interface HoursVersionType {

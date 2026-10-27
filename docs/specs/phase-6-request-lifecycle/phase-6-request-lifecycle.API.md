@@ -34,7 +34,7 @@ Shapes:
 
 - **Summary:** `{id, number: "REQ-42-2026", title, state, service: {id, name}, priority: {name, days}, requester: {id, name}, handler, submittedAt, acceptedAt, closedAt, deadline, activeStage}`; `handler`, `acceptedAt`, `closedAt`, `deadline`, and `activeStage` (`{name, waitingOn:[{id, name}]}`) are `null` when they do not apply.
 - **Request:** the summary plus `answers`, `files`, `stages` (every run in order, with assignees, state, times, and comments), `informationRequests`, `sla`, `escalations`, and `allowedActions` (the actions the caller may take now, so the web app shows only valid buttons).
-- **Answer:** `{field, value, chosen, files}`: `field` is the copy of the form field's definition, `chosen` is the list of chosen options for a choice field and `null` otherwise, and `files` is the list of the files named for a file field and `null` otherwise.
+- **Answer:** `{field, value, chosen, files}`: `field` is the copy of the form field's definition, in the field shape of Phase 5.5 (every setting present, `null` where the type has none), `chosen` is the list of chosen options for a choice field and `null` otherwise, and `files` is the list of the files named for a file field and `null` otherwise.
   An answer's file is `{id, removed, name, contentType, sizeBytes}`; once removed (R6.25) `removed` is `true` and the other three are `null`.
 - **SLA:** `{deadline, elapsedDays, met, breachDays, awaitingInfoDays}`: live while in progress, the frozen record once closed, `null` before acceptance.
 

@@ -26,7 +26,7 @@ import type {
   UpdateServiceRequestType,
   WorkflowChoiceType,
 } from "./services.types.js";
-import type { FormFieldType } from "./shared/form.js";
+import { type FormFieldType, fieldView } from "./shared/form.js";
 
 /** A non-UUID id is answered like an unknown one, never as a database cast error. */
 function existingServiceId(serviceId: string): string {
@@ -41,7 +41,7 @@ const toService = (row: ServiceRowType, allowed: AllowedWorkflowRowType[]): Serv
   name: row.name,
   description: row.description,
   retired: row.retiredAt !== null,
-  form: { revision: row.formRevision, fields: row.form },
+  form: { revision: row.formRevision, fields: row.form.map(fieldView) },
   workflows: allowed.map((workflow) => ({
     id: workflow.id,
     name: workflow.name,

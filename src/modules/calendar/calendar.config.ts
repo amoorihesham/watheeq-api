@@ -6,6 +6,9 @@ export const CALENDAR_TIME_ZONE = "Asia/Riyadh";
 /** In `getUTCDay()` order, so a weekday's index is its JavaScript day number. */
 export const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
+/** How a weekday works: the week's own span, off, or its own span. */
+export const DAY_MODES = ["default", "off", "custom"] as const;
+
 /** `HH:MM` from 00:00 to 24:00; strings in this form compare in time order. */
 export const TIME_PATTERN = /^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/;
 

@@ -1,7 +1,11 @@
 import { z } from "zod";
+import { DAY_MODES } from "./calendar.config.js";
 
-const span = z.strictObject({ start: z.string(), end: z.string() });
-const dayRule = z.union([z.literal("default"), z.literal("off"), span]);
+const dayRule = z.strictObject({
+  mode: z.enum(DAY_MODES),
+  start: z.string().nullable(),
+  end: z.string().nullable(),
+});
 
 export const weekShapeResponseSchema = z.strictObject({
   start: z.string(),
