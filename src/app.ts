@@ -47,7 +47,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.disable("x-powered-by");
   app.use(requestLogger(deps.logger));
   // /health is mounted before body parsing and any future authentication.
-  app.use(createHealthRouter(deps.pool));
+  app.use(createHealthRouter(deps.pool, deps.config.database));
   app.use(cookieParser());
 
   const db = createDb(deps.pool);

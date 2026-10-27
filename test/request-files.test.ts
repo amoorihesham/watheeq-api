@@ -6,6 +6,7 @@ import { storageKeyOf, sweepFiles } from "../src/modules/files/index.js";
 import { type AlNoorType, asUser, type PersonType, seedAlNoor } from "./helpers/al-noor.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
+import { testConfig } from "./helpers/config.js";
 import {
   createIsolatedDb,
   type IsolatedDbType,
@@ -405,7 +406,7 @@ describe("removing (R6.25)", () => {
     expect(again.status).toBe(404);
 
     // The sweep deletes the bytes and the row (Phase 5.5).
-    await sweepFiles(createDb(pool), store);
+    await sweepFiles(createDb(pool), store, testConfig().jobs.fileSweep);
     expect(await objectExists(store, storageKeyOf(alNoor.tenantId, fileId))).toBe(false);
     expect(await fileState(fileId)).toBeUndefined();
   });

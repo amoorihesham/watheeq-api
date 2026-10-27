@@ -6,11 +6,7 @@ import {
   type S3ClientConfig,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import {
-  MAX_KEYS_PER_DELETE,
-  UPLOAD_PART_SIZE_BYTES,
-  UPLOAD_QUEUE_SIZE,
-} from "./storage.constants.js";
+import { MAX_KEYS_PER_DELETE, UPLOAD_PART_SIZE_BYTES } from "./storage.constants.js";
 import type { FileStoreType, StorageSettingsType } from "./storage.types.js";
 
 export function s3ClientConfigOf(settings: StorageSettingsType): S3ClientConfig {
@@ -34,7 +30,7 @@ export function createS3Store(settings: StorageSettingsType): FileStoreType {
         client,
         params: { Bucket: bucket, Key: key, Body: body },
         partSize: UPLOAD_PART_SIZE_BYTES,
-        queueSize: UPLOAD_QUEUE_SIZE,
+        queueSize: settings.uploadQueueSize,
         leavePartsOnError: false,
       });
       await upload.done();

@@ -47,8 +47,8 @@ export interface DueFileRowType {
 export type SweepResultType = Record<SweepKindType, number>;
 
 export interface SweepOptionsType {
-  batchSize?: number;
-  budgetMs?: number;
+  batchSize: number;
+  budgetMs: number;
   /** Stops the run between batches (shutdown). */
   signal?: AbortSignal;
 }

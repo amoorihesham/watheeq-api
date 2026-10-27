@@ -15,6 +15,8 @@ export interface JobType {
   name: string;
   /** The pause between the end of one run and the start of the next. */
   intervalMs: number;
+  /** The effective settings of this job (interval, batch size, budget), logged at startup. Never secrets. */
+  settings: Readonly<Record<string, number>>;
   /** Returns counts for the log line; a run with any non-zero count logs at info. */
   run(context: JobContextType): Promise<Record<string, number>>;
 }

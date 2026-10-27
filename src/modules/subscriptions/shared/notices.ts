@@ -1,3 +1,4 @@
+import type { SubscriptionNoticesJobConfigType } from "@/config/config.js";
 import type { Db, Executor, Tx } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import type { Logger } from "@/logging/logger.js";
@@ -5,11 +6,7 @@ import type { Logger } from "@/logging/logger.js";
 import { notify } from "@/modules/notifications/shared/notify.js";
 import { holdersOf } from "@/modules/tenant-access/index.js";
 import type { JobType } from "@/scheduler/index.js";
-import {
-  ENDING_SOON_DAYS,
-  NOTICE_NOTIFICATION_KINDS,
-  NOTICES_INTERVAL_MS,
-} from "../subscriptions.constants.js";
+import { ENDING_SOON_DAYS, NOTICE_NOTIFICATION_KINDS } from "../subscriptions.constants.js";
 import { createSubscriptionsRepository } from "../subscriptions.repository.js";
 import type { NoticeKindType } from "../subscriptions.types.js";
 import { addDays, subscriptionState } from "./subscription-state.js";
@@ -133,10 +130,11 @@ export async function checkSubscriptionNotices(
   return counts;
 }
 
-export function createSubscriptionNoticesJob(): JobType {
+export function createSubscriptionNoticesJob(settings: SubscriptionNoticesJobConfigType): JobType {
   return {
     name: "subscriptions.notices",
-    intervalMs: NOTICES_INTERVAL_MS,
+    intervalMs: settings.intervalMs,
+    settings,
     run: ({ db, logger, signal }) => checkSubscriptionNotices(db, { logger, signal }),
   };
 }

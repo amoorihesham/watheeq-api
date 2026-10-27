@@ -1,4 +1,5 @@
 import { writeAuditEntry } from "@/audit/index.js";
+import type { EscalationsJobConfigType } from "@/config/config.js";
 import type { Db, Executor, Tx } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import type { Logger } from "@/logging/logger.js";
@@ -17,11 +18,7 @@ import {
 } from "@/modules/positions/index.js";
 import { holdersOf } from "@/modules/tenant-access/index.js";
 import type { JobType } from "@/scheduler/index.js";
-import {
-  ESCALATION_BUDGET_MS,
-  ESCALATION_INTERVAL_MS,
-  ESCALATION_RULE_STATES,
-} from "../requests.constants.js";
+import { ESCALATION_RULE_STATES } from "../requests.constants.js";
 import type {
   EscalationCandidateRowType,
   EscalationFiringType,
@@ -45,7 +42,8 @@ export interface CheckEscalationsOptionsType {
   signal?: AbortSignal;
   /** The moment to check against; the database clock when omitted. */
   now?: Date;
-  budgetMs?: number;
+  /** A run still firing after this long stops starting firings; the rest waits for the next run. */
+  budgetMs: number;
   /** Runs after the candidates are read and before any firing: the window in which a request can change. */
   afterScan?: () => Promise<void>;
 }
@@ -207,14 +205,7 @@ async function fire(
  */
 export async function checkEscalations(
   db: Db,
-  {
-    logger,
-    runId,
-    signal,
-    now: fixedNow,
-    budgetMs = ESCALATION_BUDGET_MS,
-    afterScan,
-  }: CheckEscalationsOptionsType,
+  { logger, runId, signal, now: fixedNow, budgetMs, afterScan }: CheckEscalationsOptionsType,
 ): Promise<EscalationCountsType> {
   const counts: EscalationCountsType = { r0: 0, r1: 0, r2: 0, skippedLocked: 0, failed: 0 };
   const startedAt = Date.now();
@@ -261,11 +252,13 @@ export async function checkEscalations(
   return counts;
 }
 
-export function createEscalationsJob(): JobType {
+export function createEscalationsJob(settings: EscalationsJobConfigType): JobType {
   return {
     name: "requests.escalations",
-    intervalMs: ESCALATION_INTERVAL_MS,
-    run: ({ db, logger, signal, runId }) => checkEscalations(db, { logger, runId, signal }),
+    intervalMs: settings.intervalMs,
+    settings,
+    run: ({ db, logger, signal, runId }) =>
+      checkEscalations(db, { logger, runId, signal, budgetMs: settings.budgetMs }),
   };
 }
 

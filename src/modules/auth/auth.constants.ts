@@ -22,6 +22,3 @@ export const MIN_PASSWORD_LENGTH = 12;
 export const MAX_PASSWORD_LENGTH = 256;
 export const MAX_EMAIL_LENGTH = 254;
 export const MAX_USER_NAME_LENGTH = 100;
-
-export const TOKEN_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
-export const TOKEN_CLEANUP_BATCH_SIZE = 1000;

@@ -15,6 +15,7 @@ import {
 } from "../src/modules/files/index.js";
 import { startScheduler } from "../src/scheduler/index.js";
 import type { FileStoreType } from "../src/storage/index.js";
+import { testConfig } from "./helpers/config.js";
 import {
   createIsolatedDb,
   type IsolatedDbType,
@@ -31,6 +32,7 @@ import { connectToTestStore, objectExists } from "./helpers/storage.js";
 // The sweep deletes every tenant's due rows, so this file runs in a database of its own and never touches the rows
 // other test files are using.
 const store = connectToTestStore();
+const sweepOptions = testConfig().jobs.fileSweep;
 let isolated: IsolatedDbType;
 let pool: pg.Pool;
 let db: Db;
@@ -256,7 +258,7 @@ describe("discardFiles", () => {
   it("is deleted by the next sweep, bytes first", async () => {
     const [attached] = await seedWithBytes(alNoor, khalid, { count: 1, state: "attached" });
     await withTx(db, (tx) => discardFiles(tx, alNoor.id, [attached ?? ""]));
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
     expect(await stateOf(alNoor.id, attached ?? "")).toBeUndefined();
     expect(await objectExists(store, storageKeyOf(alNoor.id, attached ?? ""))).toBe(false);
   });
@@ -275,7 +277,7 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
       state: "uploading",
       ageHours: 2,
     });
-    const result = await sweepFiles(db, store);
+    const result = await sweepFiles(db, store, sweepOptions);
     expect(result.discarded).toBeGreaterThanOrEqual(2);
     expect(result.expired).toBeGreaterThanOrEqual(3);
     expect(result.abandoned).toBeGreaterThanOrEqual(1);
@@ -297,7 +299,7 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
       ...(await seedWithBytes(alNoor, khalid, { count: 1, state: "attached", ageHours: 500 })),
       ...(await seedWithBytes(alNoor, khalid, { count: 1, state: "uploading", ageHours: 0.5 })),
     ];
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
     for (const id of keep) {
       expect(await stateOf(alNoor.id, id)).toBeDefined();
       expect(await objectExists(store, storageKeyOf(alNoor.id, id))).toBe(true);
@@ -311,7 +313,7 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
       count: 1,
       state: "discarded",
     });
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
     expect(await stateOf(alNoor.id, id ?? "")).toBeUndefined();
   });
 
@@ -330,7 +332,7 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
         return store.delete(keys);
       },
     };
-    const result = await sweepFiles(db, counting);
+    const result = await sweepFiles(db, counting, sweepOptions);
     expect(result.discarded).toBeGreaterThanOrEqual(250);
     // Other tests' due rows may add to the last batch, never split a batch.
     expect(calls.slice(0, 2)).toEqual([100, 100]);
@@ -357,7 +359,7 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
     expect(partial.discarded).toBeGreaterThan(0);
     expect(left.length).toBeGreaterThan(0);
     expect(left.length).toBeLessThan(30);
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
     expect((await filesOf(pool, alNoor.id)).filter((f) => ids.includes(f.id))).toEqual([]);
   });
 
@@ -370,22 +372,22 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
     });
     const controller = new AbortController();
     controller.abort();
-    const result = await sweepFiles(db, store, { signal: controller.signal });
+    const result = await sweepFiles(db, store, { ...sweepOptions, signal: controller.signal });
     expect(result).toEqual({ discarded: 0, expired: 0, abandoned: 0 });
     expect((await filesOf(pool, alNoor.id)).filter((f) => ids.includes(f.id))).toHaveLength(5);
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
   });
 
   it("keeps every row and its bytes when the store fails, and deletes them on the next run", async () => {
     const ids = await seedWithBytes(alNoor, khalid, { count: 3, state: "discarded" });
-    await expect(sweepFiles(db, failingStore(store, { delete: true }))).rejects.toThrow(
-      "object store unavailable",
-    );
+    await expect(
+      sweepFiles(db, failingStore(store, { delete: true }), sweepOptions),
+    ).rejects.toThrow("object store unavailable");
     for (const id of ids) {
       expect(await stateOf(alNoor.id, id)).toBe("discarded");
       expect(await objectExists(store, storageKeyOf(alNoor.id, id))).toBe(true);
     }
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
     for (const id of ids) {
       expect(await stateOf(alNoor.id, id)).toBeUndefined();
       expect(await objectExists(store, storageKeyOf(alNoor.id, id))).toBe(false);
@@ -398,7 +400,7 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
     try {
       await holder.query("begin");
       await holder.query("select id from files where id = $1 for update", [held]);
-      await sweepFiles(db, store);
+      await sweepFiles(db, store, sweepOptions);
       expect(await stateOf(alNoor.id, free ?? "")).toBeUndefined();
       expect(await stateOf(alNoor.id, held ?? "")).toBe("discarded");
       expect(await objectExists(store, storageKeyOf(alNoor.id, held ?? ""))).toBe(true);
@@ -406,15 +408,15 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
       await holder.query("rollback");
       holder.release();
     }
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
     expect(await stateOf(alNoor.id, held ?? "")).toBeUndefined();
   });
 
   it("lets two sweeps run at once without deleting a file twice or failing", async () => {
     const ids = await seedWithBytes(alNoor, khalid, { count: 40, state: "discarded" });
     const results = await Promise.all([
-      sweepFiles(db, store, { batchSize: 7 }),
-      sweepFiles(db, store, { batchSize: 7 }),
+      sweepFiles(db, store, { ...sweepOptions, batchSize: 7 }),
+      sweepFiles(db, store, { ...sweepOptions, batchSize: 7 }),
     ]);
     expect(results.reduce((sum, r) => sum + r.discarded, 0)).toBeGreaterThanOrEqual(40);
     expect((await filesOf(pool, alNoor.id)).filter((f) => ids.includes(f.id))).toEqual([]);
@@ -438,7 +440,7 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
         await store.delete(keys);
       },
     };
-    const sweep = sweepFiles(db, pausing);
+    const sweep = sweepFiles(db, pausing, sweepOptions);
     await atStore;
     // The sweep holds the row lock while it deletes the bytes; the attach queues behind it.
     const attach = refusal(withTx(db, (tx) => attachFiles(tx, alNoor.id, khalid, [id ?? ""])));
@@ -457,7 +459,7 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
     await withTx(db, async (tx) => {
       await attachFiles(tx, alNoor.id, khalid, [id ?? ""]);
       // The row is attached but uncommitted: the sweep must neither wait for it nor delete it.
-      await sweepFiles(db, store);
+      await sweepFiles(db, store, sweepOptions);
     });
     expect(await stateOf(alNoor.id, id ?? "")).toBe("attached");
     expect(await objectExists(store, storageKeyOf(alNoor.id, id ?? ""))).toBe(true);
@@ -472,12 +474,12 @@ describe("sweepFiles (R5.5.12, 4.3 Cleanup)", () => {
         "update files set state = 'pending', content_type = 'application/pdf', sha256 = 'x' where id = $1",
         [id],
       );
-      await sweepFiles(db, store);
+      await sweepFiles(db, store, sweepOptions);
       await holder.query("commit");
     } finally {
       holder.release();
     }
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
     expect(await stateOf(alNoor.id, id ?? "")).toBe("pending");
     expect(await objectExists(store, storageKeyOf(alNoor.id, id ?? ""))).toBe(true);
   });
@@ -496,14 +498,14 @@ describe("usage counts what the sweep has not deleted yet (R5.5.18)", () => {
         ).rows[0].n,
       );
     expect(await sum()).toBe(1000);
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
     expect(await sum()).toBe(0);
   });
 });
 
 describe("the sweep job on the scheduler (4.3 When it runs, Observability)", () => {
   function startSweeps(options: { store?: FileStoreType; logger: Logger; intervalMs: number }) {
-    const job = createFileSweepJob({ store: options.store ?? store });
+    const job = createFileSweepJob({ store: options.store ?? store, settings: sweepOptions });
     return startScheduler({
       jobs: [{ ...job, intervalMs: options.intervalMs }],
       db,
@@ -547,7 +549,7 @@ describe("the sweep job on the scheduler (4.3 When it runs, Observability)", () 
     });
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(await stateOf(alNoor.id, third ?? "")).toBe("discarded");
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
   });
 
   it("never starts a second run while one is still going", async () => {
@@ -568,7 +570,7 @@ describe("the sweep job on the scheduler (4.3 When it runs, Observability)", () 
     await new Promise((resolve) => setTimeout(resolve, 700));
     await schedule.stop();
     expect(overlapped).toBe(false);
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
   });
 
   it("logs a failed run as an error and keeps going", async () => {
@@ -588,7 +590,7 @@ describe("the sweep job on the scheduler (4.3 When it runs, Observability)", () 
       level: 50,
       job: "files.sweep",
     });
-    await sweepFiles(db, store);
+    await sweepFiles(db, store, sweepOptions);
   });
 
   it("warns when a row is more than an hour past due, which means sweeps are failing", async () => {

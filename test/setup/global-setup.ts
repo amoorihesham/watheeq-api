@@ -50,6 +50,7 @@ async function startObjectStore(): Promise<StorageSettingsType> {
     accessKey,
     secretKey,
     forcePathStyle: true,
+    uploadQueueSize: 2,
   };
   await createBucket(settings);
   await warmUp(settings);

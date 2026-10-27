@@ -1,10 +1,7 @@
+import type { NotificationsCleanupJobConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { JobType } from "@/scheduler/index.js";
-import {
-  CLEANUP_BATCH_SIZE,
-  CLEANUP_INTERVAL_MS,
-  RETENTION_DAYS,
-} from "../notifications.constants.js";
+import { RETENTION_DAYS } from "../notifications.constants.js";
 import { createNotificationsRepository } from "../notifications.repository.js";
 
 const repo = createNotificationsRepository();
@@ -15,7 +12,7 @@ const repo = createNotificationsRepository();
  */
 export async function deleteOldReadNotifications(
   db: Db,
-  { batchSize = CLEANUP_BATCH_SIZE, signal }: { batchSize?: number; signal?: AbortSignal } = {},
+  { batchSize, signal }: { batchSize: number; signal?: AbortSignal },
 ): Promise<{ deleted: number }> {
   let deleted = 0;
   while (!signal?.aborted) {
@@ -28,10 +25,14 @@ export async function deleteOldReadNotifications(
   return { deleted };
 }
 
-export function createNotificationsCleanupJob(): JobType {
+export function createNotificationsCleanupJob(
+  settings: NotificationsCleanupJobConfigType,
+): JobType {
   return {
     name: "notifications.cleanup",
-    intervalMs: CLEANUP_INTERVAL_MS,
-    run: ({ db, signal }) => deleteOldReadNotifications(db, { signal }),
+    intervalMs: settings.intervalMs,
+    settings,
+    run: ({ db, signal }) =>
+      deleteOldReadNotifications(db, { batchSize: settings.batchSize, signal }),
   };
 }

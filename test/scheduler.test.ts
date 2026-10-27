@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "../src/db/pool.js";
+import { buildJobs } from "../src/jobs.js";
 import {
   type JobContextType,
   type JobType,
@@ -8,13 +9,15 @@ import {
   selectJobs,
   startScheduler,
 } from "../src/scheduler/index.js";
+import type { FileStoreType } from "../src/storage/index.js";
+import { testConfig } from "./helpers/config.js";
 import { captureLogs } from "./helpers/log-capture.js";
 
 // Phase 7 spec, 4.3 "The scheduler": the scheduler needs no database of its own, only the one it hands to jobs.
 const db = {} as Db;
 
 function job(overrides: Partial<JobType> & Pick<JobType, "run">): JobType {
-  return { name: "test.job", intervalMs: 1000, ...overrides };
+  return { name: "test.job", intervalMs: 1000, settings: {}, ...overrides };
 }
 
 // Runs still waiting for the test to end them; released after each test so `stop` can finish.
@@ -75,6 +78,25 @@ describe("startScheduler", () => {
     expect(run).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(1000);
     expect(run).toHaveBeenCalledTimes(3);
+  });
+
+  it("runs a job built from a configured short interval again after that interval (R9.4)", async () => {
+    const run = vi.fn(async () => ({}));
+    const configured = buildJobs({
+      fileStore: {} as FileStoreType,
+      jobs: testConfig({ JOB_SUBSCRIPTIONS_NOTICES_INTERVAL_MS: "2000" }).jobs,
+    }).find((entry) => entry.name === "subscriptions.notices");
+    expect(configured?.intervalMs).toBe(2000);
+    scheduler = startScheduler({
+      jobs: configured ? [{ ...configured, run }] : [],
+      db,
+      logger: captureLogs().logger,
+    });
+    expect(run).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(run).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(run).toHaveBeenCalledTimes(2);
   });
 
   it("hands each run its database, a signal, and a run ID of the form job:<name>:<uuid>", async () => {

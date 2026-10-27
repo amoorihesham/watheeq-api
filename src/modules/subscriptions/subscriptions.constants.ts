@@ -6,8 +6,7 @@ export const SUBSCRIPTION_STATES = ["active", "grace", "read_only"] as const;
 // "Today" is the calendar date in Saudi Arabia, taken from the database clock so every instance agrees (R1.7).
 export const SUBSCRIPTION_TIME_ZONE = "Asia/Riyadh";
 
-// The hourly check (Phase 7 spec, 4.3): "ends soon" starts this many days before the end date.
-export const NOTICES_INTERVAL_MS = 60 * 60 * 1000;
+// The notices check (Phase 7 spec, 4.3): "ends soon" starts this many days before the end date.
 export const ENDING_SOON_DAYS = 14;
 
 /** The notification each remembered warning sends. */

@@ -1,12 +1,12 @@
+import type { TokenCleanupJobConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { JobType } from "@/scheduler/index.js";
-import { TOKEN_CLEANUP_BATCH_SIZE, TOKEN_CLEANUP_INTERVAL_MS } from "../auth.constants.js";
 import { createAuthRepository } from "../auth.repository.js";
 
 const repo = createAuthRepository();
 
 interface TokenCleanupOptionsType {
-  batchSize?: number;
+  batchSize: number;
   signal?: AbortSignal;
 }
 
@@ -17,7 +17,7 @@ interface TokenCleanupOptionsType {
  */
 export async function deleteExpiredTokens(
   db: Db,
-  { batchSize = TOKEN_CLEANUP_BATCH_SIZE, signal }: TokenCleanupOptionsType = {},
+  { batchSize, signal }: TokenCleanupOptionsType,
 ): Promise<{ refreshTokens: number; passwordTokens: number }> {
   async function drain(deleteBatch: (limit: number) => Promise<unknown[]>): Promise<number> {
     let deleted = 0;
@@ -36,10 +36,11 @@ export async function deleteExpiredTokens(
   };
 }
 
-export function createTokenCleanupJob(): JobType {
+export function createTokenCleanupJob(settings: TokenCleanupJobConfigType): JobType {
   return {
     name: "auth.token_cleanup",
-    intervalMs: TOKEN_CLEANUP_INTERVAL_MS,
-    run: ({ db, signal }) => deleteExpiredTokens(db, { signal }),
+    intervalMs: settings.intervalMs,
+    settings,
+    run: ({ db, signal }) => deleteExpiredTokens(db, { batchSize: settings.batchSize, signal }),
   };
 }

@@ -3,6 +3,7 @@ import type pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createDb, type Db } from "../src/db/pool.js";
 import { createTokenCleanupJob, deleteExpiredTokens } from "../src/modules/auth/index.js";
+import { testConfig } from "./helpers/config.js";
 import { createIsolatedDb, type IsolatedDbType, seedUser } from "./helpers/db.js";
 import { captureLogs } from "./helpers/log-capture.js";
 
@@ -55,6 +56,8 @@ async function remaining(table: "refresh_tokens" | "password_tokens"): Promise<s
   return rows.map((row) => row.id);
 }
 
+const jobSettings = testConfig().jobs;
+
 describe("deleteExpiredTokens", () => {
   it("deletes expired refresh tokens, revoked or not, and keeps the rest", async () => {
     const expiredLive = await seedRefreshToken("expired", false);
@@ -62,7 +65,7 @@ describe("deleteExpiredTokens", () => {
     const validRevoked = await seedRefreshToken("valid", true);
     const validLive = await seedRefreshToken("valid", false);
 
-    const counts = await deleteExpiredTokens(db);
+    const counts = await deleteExpiredTokens(db, { batchSize: jobSettings.tokenCleanup.batchSize });
 
     expect(counts).toEqual({ refreshTokens: 2, passwordTokens: 0 });
     const kept = await remaining("refresh_tokens");
@@ -77,7 +80,7 @@ describe("deleteExpiredTokens", () => {
     const validUsed = await seedPasswordToken("valid", true);
     const validUnused = await seedPasswordToken("valid", false);
 
-    const counts = await deleteExpiredTokens(db);
+    const counts = await deleteExpiredTokens(db, { batchSize: jobSettings.tokenCleanup.batchSize });
 
     expect(counts).toEqual({ refreshTokens: 0, passwordTokens: 2 });
     const kept = await remaining("password_tokens");
@@ -126,7 +129,9 @@ describe("deleteExpiredTokens", () => {
   it("does nothing, and reports zeros, when nothing has expired", async () => {
     await seedRefreshToken("valid", false);
     await seedPasswordToken("valid", false);
-    expect(await deleteExpiredTokens(db)).toEqual({ refreshTokens: 0, passwordTokens: 0 });
+    expect(
+      await deleteExpiredTokens(db, { batchSize: jobSettings.tokenCleanup.batchSize }),
+    ).toEqual({ refreshTokens: 0, passwordTokens: 0 });
   });
 });
 
@@ -134,7 +139,7 @@ describe("the auth.token_cleanup job", () => {
   it("runs daily and returns the counts", async () => {
     await seedRefreshToken("expired", false);
     await seedPasswordToken("expired", false);
-    const job = createTokenCleanupJob();
+    const job = createTokenCleanupJob(jobSettings.tokenCleanup);
     expect(job.name).toBe("auth.token_cleanup");
     expect(job.intervalMs).toBe(24 * 60 * 60 * 1000);
     const counts = await job.run({

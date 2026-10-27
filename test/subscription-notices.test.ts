@@ -6,6 +6,7 @@ import {
   checkSubscriptionNotices,
   createSubscriptionNoticesJob,
 } from "../src/modules/subscriptions/index.js";
+import { testConfig } from "./helpers/config.js";
 import {
   createIsolatedDb,
   type IsolatedDbType,
@@ -184,11 +185,13 @@ describe("only the current notice (section 5)", () => {
 
 describe("the subscriptions.notices job", () => {
   it("is an hourly job in the list of jobs, and reads the database date when none is given", async () => {
-    const job = createSubscriptionNoticesJob();
+    const job = createSubscriptionNoticesJob(testConfig().jobs.subscriptionNotices);
     expect(job).toMatchObject({ name: "subscriptions.notices", intervalMs: 60 * 60 * 1000 });
-    expect(buildJobs({ fileStore: connectToTestStore() }).map((entry) => entry.name)).toContain(
-      "subscriptions.notices",
-    );
+    expect(
+      buildJobs({ fileStore: connectToTestStore(), jobs: testConfig().jobs }).map(
+        (entry) => entry.name,
+      ),
+    ).toContain("subscriptions.notices");
     // Ends 2026-12-31: far from the real date this suite runs on or past it, either way it must not throw.
     const counts = await job.run({
       db,

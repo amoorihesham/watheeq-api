@@ -6,6 +6,7 @@ import {
   createNotificationsCleanupJob,
   deleteOldReadNotifications,
 } from "../src/modules/notifications/index.js";
+import { testConfig } from "./helpers/config.js";
 import { createIsolatedDb, type IsolatedDbType, seedTenant } from "./helpers/db.js";
 import { captureLogs } from "./helpers/log-capture.js";
 import { connectToTestStore } from "./helpers/storage.js";
@@ -54,6 +55,8 @@ beforeEach(async () => {
   await pool.query("delete from notifications");
 });
 
+const jobSettings = testConfig().jobs;
+
 describe("deleteOldReadNotifications (R7.16)", () => {
   it("deletes notifications read more than 90 days ago and keeps the rest", async () => {
     const old = await seed(91);
@@ -63,7 +66,11 @@ describe("deleteOldReadNotifications (R7.16)", () => {
     const unreadOld = await seed(null, 400);
     const unreadNew = await seed(null, 1);
 
-    expect(await deleteOldReadNotifications(db)).toEqual({ deleted: 2 });
+    expect(
+      await deleteOldReadNotifications(db, {
+        batchSize: jobSettings.notificationsCleanup.batchSize,
+      }),
+    ).toEqual({ deleted: 2 });
 
     const kept = await remaining();
     expect(kept.sort()).toEqual([recent, justRead, unreadOld, unreadNew].sort());
@@ -101,18 +108,22 @@ describe("deleteOldReadNotifications (R7.16)", () => {
 
   it("does nothing when nothing is old enough", async () => {
     await seed(5);
-    expect(await deleteOldReadNotifications(db)).toEqual({ deleted: 0 });
+    expect(
+      await deleteOldReadNotifications(db, {
+        batchSize: jobSettings.notificationsCleanup.batchSize,
+      }),
+    ).toEqual({ deleted: 0 });
   });
 });
 
 describe("the notifications.cleanup job", () => {
   it("is a daily job in the list of jobs, and returns the counts", async () => {
     await seed(120);
-    const job = createNotificationsCleanupJob();
+    const job = createNotificationsCleanupJob(jobSettings.notificationsCleanup);
     expect(job).toMatchObject({ name: "notifications.cleanup", intervalMs: 24 * 60 * 60 * 1000 });
-    expect(buildJobs({ fileStore: connectToTestStore() }).map((entry) => entry.name)).toContain(
-      "notifications.cleanup",
-    );
+    expect(
+      buildJobs({ fileStore: connectToTestStore(), jobs: jobSettings }).map((entry) => entry.name),
+    ).toContain("notifications.cleanup");
     expect(
       await job.run({
         db,

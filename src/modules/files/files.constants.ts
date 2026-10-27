@@ -41,10 +41,6 @@ export const CONTENT_TYPE_BY_KIND = {
   txt: "text/plain",
 } as const;
 
-export const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
-export const SWEEP_BATCH_SIZE = 100;
-export const SWEEP_BUDGET_MS = 2 * 60 * 1000;
-
 // The storage warning is sent at this share of the limit and re-armed once usage is seen below the second one.
 export const STORAGE_WARNING_PERCENT = 90;
 export const STORAGE_REARM_PERCENT = 80;

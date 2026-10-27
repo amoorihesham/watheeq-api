@@ -9,7 +9,10 @@ describe("GET /health", () => {
   const logger = createLogger("silent");
   const upPool = connectToTestDb(logger);
   // Port 1 is reserved and nothing listens on it, so connections are refused.
-  const downPool = createPool({ url: "postgres://watheeq:watheeq@127.0.0.1:1/watheeq" }, logger);
+  const downPool = createPool(
+    { url: "postgres://watheeq:watheeq@127.0.0.1:1/watheeq", timeoutMs: 2000 },
+    logger,
+  );
 
   afterAll(async () => {
     await Promise.all([upPool.end(), downPool.end()]);

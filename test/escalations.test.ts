@@ -13,6 +13,7 @@ import {
   vendorAnswers,
 } from "./helpers/al-noor.js";
 import { testApp } from "./helpers/app.js";
+import { testConfig } from "./helpers/config.js";
 import { createIsolatedDb, type IsolatedDbType, seedRole } from "./helpers/db.js";
 import { captureLogs, type LogCapture } from "./helpers/log-capture.js";
 import { connectToTestStore } from "./helpers/storage.js";
@@ -21,6 +22,7 @@ import { connectToTestStore } from "./helpers/storage.js";
 // The check works on every tenant's open requests, so this file runs in a database of its own.
 
 const RUN_ID = "job:requests.escalations:test";
+const jobSettings = testConfig().jobs;
 const NONE = { r0: 0, r1: 0, r2: 0, skippedLocked: 0, failed: 0 };
 
 let isolated: IsolatedDbType;
@@ -150,7 +152,13 @@ const closeAllOpen = async () => {
 };
 
 const check = (now: string, extra: Partial<Parameters<typeof checkEscalations>[1]> = {}) =>
-  checkEscalations(db, { logger: capture.logger, runId: RUN_ID, now: at(now), ...extra });
+  checkEscalations(db, {
+    logger: capture.logger,
+    runId: RUN_ID,
+    budgetMs: jobSettings.escalations.budgetMs,
+    now: at(now),
+    ...extra,
+  });
 
 const nameOf = (userId: string) =>
   Object.entries(alNoor.ids).find(([, value]) => value === userId)?.[0];
@@ -225,11 +233,11 @@ beforeEach(async () => {
 
 describe("the requests.escalations job (R7.1)", () => {
   it("is a one-minute job in the list of jobs, and a run on a quiet database does nothing", async () => {
-    const job = createEscalationsJob();
+    const job = createEscalationsJob(jobSettings.escalations);
     expect(job).toMatchObject({ name: "requests.escalations", intervalMs: 60_000 });
-    expect(buildJobs({ fileStore: connectToTestStore() }).map((entry) => entry.name)).toContain(
-      "requests.escalations",
-    );
+    expect(
+      buildJobs({ fileStore: connectToTestStore(), jobs: jobSettings }).map((entry) => entry.name),
+    ).toContain("requests.escalations");
     expect(
       await job.run({
         db,
@@ -242,7 +250,13 @@ describe("the requests.escalations job (R7.1)", () => {
 
   it("reads the database clock when no moment is given", async () => {
     const requestId = await submit(alNoor, "khalid", alNoor.priorities.high, "Fresh request");
-    expect(await checkEscalations(db, { logger: capture.logger, runId: RUN_ID })).toEqual(NONE);
+    expect(
+      await checkEscalations(db, {
+        logger: capture.logger,
+        runId: RUN_ID,
+        budgetMs: jobSettings.escalations.budgetMs,
+      }),
+    ).toEqual(NONE);
     expect(await firings(requestId)).toEqual([]);
   });
 });
