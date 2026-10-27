@@ -69,6 +69,7 @@ describe("request schemas", () => {
     "listPrioritiesQuerySchema",
     "listRequestsQuerySchema",
     "listNotificationsQuerySchema",
+    "uploadQuerySchema",
     "dayViewQueryFields",
   ];
 

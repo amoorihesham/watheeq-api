@@ -8,7 +8,7 @@ import {
 } from "@/db/schema/index.js";
 import { formFieldResponseSchema } from "@/modules/services/services.responses.js";
 
-const person = z.strictObject({ id: z.string(), name: z.string() });
+const person = z.strictObject({ id: z.string(), name: z.string() }).meta({ id: "RequestPerson" });
 
 /** The SLA: live while in progress, the frozen record once closed (R6.22, R6.23). */
 export const slaResponseSchema = z.strictObject({
@@ -25,33 +25,37 @@ export const activeStageResponseSchema = z.strictObject({
   waitingOn: z.array(person),
 });
 
-export const requestSummaryResponseSchema = z.strictObject({
-  id: z.string(),
-  number: z.string(),
-  title: z.string(),
-  state: z.enum(requestStates.enumValues),
-  service: z.strictObject({ id: z.string(), name: z.string() }),
-  priority: z.strictObject({ name: z.string(), days: z.number() }),
-  requester: person,
-  handler: person.nullable(),
-  submittedAt: z.date(),
-  acceptedAt: z.date().nullable(),
-  closedAt: z.date().nullable(),
-  deadline: z.date().nullable(),
-  activeStage: activeStageResponseSchema.nullable(),
-});
+export const requestSummaryResponseSchema = z
+  .strictObject({
+    id: z.string(),
+    number: z.string(),
+    title: z.string(),
+    state: z.enum(requestStates.enumValues),
+    service: z.strictObject({ id: z.string(), name: z.string() }),
+    priority: z.strictObject({ name: z.string(), days: z.number() }),
+    requester: person,
+    handler: person.nullable(),
+    submittedAt: z.date(),
+    acceptedAt: z.date().nullable(),
+    closedAt: z.date().nullable(),
+    deadline: z.date().nullable(),
+    activeStage: activeStageResponseSchema.nullable(),
+  })
+  .meta({ id: "RequestSummary" });
 
-export const requestFileResponseSchema = z.strictObject({
-  id: z.string(),
-  name: z.string(),
-  contentType: z.string(),
-  sizeBytes: z.number(),
-  sha256: z.string(),
-  fieldId: z.string().nullable(),
-  informationRequestId: z.string().nullable(),
-  attachedBy: person,
-  attachedAt: z.date(),
-});
+export const requestFileResponseSchema = z
+  .strictObject({
+    id: z.string(),
+    name: z.string(),
+    contentType: z.string(),
+    sizeBytes: z.number(),
+    sha256: z.string(),
+    fieldId: z.string().nullable(),
+    informationRequestId: z.string().nullable(),
+    attachedBy: person,
+    attachedAt: z.date(),
+  })
+  .meta({ id: "RequestFile" });
 
 /** A file named in a form answer; once removed only its ID is known, and the rest is `null` (R6.25). */
 const answerFileResponseSchema = z.strictObject({
@@ -108,25 +112,29 @@ const escalationFiringResponseSchema = z.strictObject({
   firedAt: z.date(),
 });
 
-export const requestResponseSchema = requestSummaryResponseSchema.extend({
-  answers: z.array(answerResponseSchema),
-  files: z.array(requestFileResponseSchema),
-  informationRequests: z.array(informationRequestResponseSchema),
-  stages: z.array(stageRunResponseSchema),
-  sla: slaResponseSchema.nullable(),
-  escalations: z.array(escalationFiringResponseSchema),
-  allowedActions: z.array(z.string()),
-});
+export const requestResponseSchema = requestSummaryResponseSchema
+  .extend({
+    answers: z.array(answerResponseSchema),
+    files: z.array(requestFileResponseSchema),
+    informationRequests: z.array(informationRequestResponseSchema),
+    stages: z.array(stageRunResponseSchema),
+    sla: slaResponseSchema.nullable(),
+    escalations: z.array(escalationFiringResponseSchema),
+    allowedActions: z.array(z.string()),
+  })
+  .meta({ id: "Request" });
 
 /** What the submit screen needs: the services with their forms, and the priorities to choose from. */
-export const catalogResponseSchema = z.strictObject({
-  services: z.array(
-    z.strictObject({
-      id: z.string(),
-      name: z.string(),
-      description: z.string().nullable(),
-      form: z.strictObject({ revision: z.number(), fields: z.array(formFieldResponseSchema) }),
-    }),
-  ),
-  priorities: z.array(z.strictObject({ id: z.string(), name: z.string(), days: z.number() })),
-});
+export const catalogResponseSchema = z
+  .strictObject({
+    services: z.array(
+      z.strictObject({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().nullable(),
+        form: z.strictObject({ revision: z.number(), fields: z.array(formFieldResponseSchema) }),
+      }),
+    ),
+    priorities: z.array(z.strictObject({ id: z.string(), name: z.string(), days: z.number() })),
+  })
+  .meta({ id: "RequestCatalog" });

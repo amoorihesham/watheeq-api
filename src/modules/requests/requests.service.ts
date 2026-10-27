@@ -5,7 +5,6 @@ import { withTx } from "@/db/tx.js";
 import { AppError, type DetailCode, type ErrorDetail } from "@/http/errors.js";
 import { listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { validate } from "@/http/validate.js";
 import { loadCalendar } from "@/modules/calendar/index.js";
 import { isEscalationConfigured } from "@/modules/escalation/index.js";
 import {
@@ -23,21 +22,6 @@ import {
 import type { FileStoreType } from "@/storage/index.js";
 import { MAX_REQUEST_FILES, NUMBER_PREFIX } from "./requests.constants.js";
 import { REQUEST_SORT_KEYS } from "./requests.repository.js";
-import {
-  acceptRequestSchema,
-  answerInformationRequestSchema,
-  askInformationRequestSchema,
-  attachFilesRequestSchema,
-  changeHandlerRequestSchema,
-  changePriorityRequestSchema,
-  completeStageRequestSchema,
-  listRequestsQuerySchema,
-  narrowStageRequestSchema,
-  reasonRequestSchema,
-  refreshStageRequestSchema,
-  requestIdSchema,
-  submitRequestSchema,
-} from "./requests.schemas.js";
 import type {
   AcceptRequestType,
   ActiveStageType,
@@ -49,8 +33,10 @@ import type {
   ChangeHandlerRequestType,
   ChangePriorityRequestType,
   CompleteStageRequestType,
+  EscalateStageRequestType,
   InformationRequestListRowType,
   InformationRequestType,
+  ListRequestsQueryType,
   NarrowStageRequestType,
   NewRequestFileType,
   ReasonRequestType,
@@ -64,6 +50,7 @@ import type {
   RequestSummaryType,
   RequestsRepositoryType,
   RequestType,
+  ReturnStageRequestType,
   ServiceRowType,
   SlaType,
   StageAssigneeRowType,
@@ -95,23 +82,6 @@ import { visibleRequests } from "./shared/visibility.js";
 
 const REVIEW = [{ key: "request.review", scope: "organization" }] as const;
 const REASSIGN = [{ key: "request.reassign", scope: "organization" }] as const;
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingRequestId(requestId: string): string {
-  if (!requestIdSchema.safeParse(requestId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return requestId;
-}
-
-/** The same for a file or information request ID in a path. */
-function existingChildId(fileId: string): string {
-  const parsed = requestIdSchema.safeParse(fileId);
-  if (!parsed.success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return parsed.data;
-}
 
 const invalid = (path: string, code: DetailCode) =>
   new AppError("VALIDATION_FAILED", [{ path, code }]);
@@ -625,10 +595,9 @@ export function createRequestsService({
     submit(
       tenantId: string,
       callerId: string,
-      input: SubmitRequestType,
+      body: SubmitRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const body = validate(submitRequestSchema, input);
       return withTx(db, async (tx) => {
         if (!(await isEscalationConfigured(tx, tenantId))) {
           throw new AppError("ESCALATION_NOT_CONFIGURED");
@@ -705,9 +674,8 @@ export function createRequestsService({
     async list(
       tenantId: string,
       callerId: string,
-      input: unknown,
+      query: ListRequestsQueryType,
     ): Promise<PageType<RequestSummaryType>> {
-      const query = validate(listRequestsQuerySchema, input);
       const visible = visibleRequests(tenantId, callerId);
       const page = await listPage({
         db,
@@ -743,13 +711,8 @@ export function createRequestsService({
       };
     },
 
-    async get(tenantId: string, callerId: string, requestId: string): Promise<RequestType> {
-      const [row] = await repo.findById(
-        db,
-        tenantId,
-        existingRequestId(requestId),
-        visibleRequests(tenantId, callerId),
-      );
+    async get(tenantId: string, callerId: string, id: string): Promise<RequestType> {
+      const [row] = await repo.findById(db, tenantId, id, visibleRequests(tenantId, callerId));
       if (!row) {
         throw new AppError("NOT_FOUND");
       }
@@ -760,12 +723,10 @@ export function createRequestsService({
     changePriority(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      input: ChangePriorityRequestType,
+      id: string,
+      body: ChangePriorityRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const body = validate(changePriorityRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertGrantsHeld(tx, tenantId, callerId, REVIEW);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -812,12 +773,10 @@ export function createRequestsService({
     accept(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      input: AcceptRequestType,
+      id: string,
+      body: AcceptRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const body = validate(acceptRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertGrantsHeld(tx, tenantId, callerId, REVIEW);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -896,12 +855,10 @@ export function createRequestsService({
     reject(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      input: ReasonRequestType,
+      id: string,
+      body: ReasonRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertGrantsHeld(tx, tenantId, callerId, REVIEW);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -933,12 +890,10 @@ export function createRequestsService({
     withdraw(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      input: ReasonRequestType,
+      id: string,
+      body: ReasonRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -968,14 +923,11 @@ export function createRequestsService({
     completeStage(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      runId: string,
-      input: CompleteStageRequestType,
+      id: string,
+      run: string,
+      body: CompleteStageRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const run = existingRequestId(runId);
-      const body = validate(completeStageRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -1017,14 +969,11 @@ export function createRequestsService({
     returnStage(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      runId: string,
-      input: ReasonRequestType,
+      id: string,
+      run: string,
+      body: ReturnStageRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const run = existingRequestId(runId);
-      const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -1067,14 +1016,11 @@ export function createRequestsService({
     narrowStage(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      runId: string,
-      input: NarrowStageRequestType,
+      id: string,
+      run: string,
+      body: NarrowStageRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const run = existingRequestId(runId);
-      const body = validate(narrowStageRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -1116,14 +1062,11 @@ export function createRequestsService({
     escalateStage(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      runId: string,
-      input: ReasonRequestType,
+      id: string,
+      run: string,
+      body: EscalateStageRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const run = existingRequestId(runId);
-      const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -1173,14 +1116,11 @@ export function createRequestsService({
     refreshStage(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      runId: string,
-      input: RefreshStageRequestType,
+      id: string,
+      run: string,
+      body: RefreshStageRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const run = existingRequestId(runId);
-      const body = validate(refreshStageRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -1224,12 +1164,10 @@ export function createRequestsService({
     changeHandler(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      input: ChangeHandlerRequestType,
+      id: string,
+      body: ChangeHandlerRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const body = validate(changeHandlerRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertGrantsHeld(tx, tenantId, callerId, REASSIGN);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -1296,16 +1234,15 @@ export function createRequestsService({
         return reload(tx, tenantId, id, callerId);
       });
     },
+
     /** Attaches the caller's pending uploads to an open request (R6.24). */
     attachFiles(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      input: AttachFilesRequestType,
+      id: string,
+      body: AttachFilesRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const body = validate(attachFilesRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -1339,18 +1276,15 @@ export function createRequestsService({
     removeFile(
       tenantId: string,
       callerId: string,
-      requestId: string,
+      id: string,
       fileId: string,
-      input: ReasonRequestType,
+      body: ReasonRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const fileKey = existingChildId(fileId);
-      const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
-        const [file] = await repo.findFile(tx, tenantId, id, fileKey);
+        const [file] = await repo.findFile(tx, tenantId, id, fileId);
         if (!file) {
           throw new AppError("NOT_FOUND");
         }
@@ -1380,13 +1314,11 @@ export function createRequestsService({
     async openFile(
       tenantId: string,
       callerId: string,
-      requestId: string,
+      id: string,
       fileId: string,
     ): Promise<{ file: FileDownloadType; body: Readable }> {
-      const id = existingRequestId(requestId);
-      const fileKey = existingChildId(fileId);
       const [request] = await repo.findById(db, tenantId, id, visibleRequests(tenantId, callerId));
-      const [file] = request ? await repo.findFile(db, tenantId, id, fileKey) : [];
+      const [file] = request ? await repo.findFile(db, tenantId, id, fileId) : [];
       if (!file) {
         throw new AppError("NOT_FOUND");
       }
@@ -1403,12 +1335,10 @@ export function createRequestsService({
     askInformation(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      input: AskInformationRequestType,
+      id: string,
+      body: AskInformationRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const body = validate(askInformationRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
@@ -1455,18 +1385,15 @@ export function createRequestsService({
     answerInformation(
       tenantId: string,
       callerId: string,
-      requestId: string,
+      id: string,
       informationId: string,
-      input: AnswerInformationRequestType,
+      body: AnswerInformationRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const infoKey = existingChildId(informationId);
-      const body = validate(answerInformationRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
-        const [question] = await repo.findInformation(tx, tenantId, id, infoKey);
+        const [question] = await repo.findInformation(tx, tenantId, id, informationId);
         if (!question) {
           throw new AppError("NOT_FOUND");
         }
@@ -1525,16 +1452,14 @@ export function createRequestsService({
     cancelInformation(
       tenantId: string,
       callerId: string,
-      requestId: string,
+      id: string,
       informationId: string,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const infoKey = existingChildId(informationId);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);
-        const [question] = await repo.findInformation(tx, tenantId, id, infoKey);
+        const [question] = await repo.findInformation(tx, tenantId, id, informationId);
         if (!question) {
           throw new AppError("NOT_FOUND");
         }
@@ -1570,12 +1495,10 @@ export function createRequestsService({
     closeNoResponse(
       tenantId: string,
       callerId: string,
-      requestId: string,
-      input: ReasonRequestType,
+      id: string,
+      body: ReasonRequestType,
       context: AuditContextType,
     ): Promise<RequestType> {
-      const id = existingRequestId(requestId);
-      const body = validate(reasonRequestSchema, input);
       return withTx(db, async (tx) => {
         await assertActiveCaller(tx, tenantId, callerId);
         const request = await lockRequest(tx, tenantId, callerId, id);

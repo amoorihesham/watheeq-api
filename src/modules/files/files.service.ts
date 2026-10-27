@@ -19,7 +19,6 @@ import {
   STORAGE_REARM_PERCENT,
   STORAGE_WARNING_PERCENT,
 } from "./files.constants.js";
-import { fileIdSchema } from "./files.schemas.js";
 import type {
   FileDownloadType,
   FileRowType,
@@ -32,15 +31,6 @@ import { storageKeyOf } from "./shared/keys.js";
 import { cleanFileName } from "./shared/names.js";
 
 const subscriptionsRepo = createSubscriptionsRepository();
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingFileId(fileId: string): string {
-  const parsed = fileIdSchema.safeParse(fileId);
-  if (!parsed.success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return parsed.data;
-}
 
 /**
  * The storage warning (Phase 7 spec, 4.3), inside the reservation's transaction, which holds the tenant's upload
@@ -179,7 +169,7 @@ export function createFilesService({
 
     /** The caller's own pending upload; anyone else's, or a file in another state, is 404 (R5.5.9, R5.5.16). */
     async get(tenantId: string, userId: string, fileId: string): Promise<FileType> {
-      const [row] = await repo.findPendingOf(db, tenantId, userId, existingFileId(fileId));
+      const [row] = await repo.findPendingOf(db, tenantId, userId, fileId);
       if (!row) {
         throw new AppError("NOT_FOUND");
       }
@@ -191,7 +181,7 @@ export function createFilesService({
       userId: string,
       fileId: string,
     ): Promise<{ file: FileDownloadType; body: Readable }> {
-      const [row] = await repo.findPendingOf(db, tenantId, userId, existingFileId(fileId));
+      const [row] = await repo.findPendingOf(db, tenantId, userId, fileId);
       if (!row) {
         throw new AppError("NOT_FOUND");
       }
@@ -204,7 +194,7 @@ export function createFilesService({
 
     /** Marks the caller's pending upload `discarded`: it disappears at once and the sweep deletes bytes and row. */
     async discard(tenantId: string, userId: string, fileId: string): Promise<void> {
-      const rows = await repo.discardPendingOf(db, tenantId, userId, existingFileId(fileId));
+      const rows = await repo.discardPendingOf(db, tenantId, userId, fileId);
       if (rows.length === 0) {
         throw new AppError("NOT_FOUND");
       }

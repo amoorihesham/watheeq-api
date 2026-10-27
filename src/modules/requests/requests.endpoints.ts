@@ -1,0 +1,230 @@
+import { z } from "zod";
+import { defineApi, defineEndpoint } from "@/http/endpoint.js";
+import { idSchema } from "@/http/validate.js";
+import {
+  catalogResponseSchema,
+  requestResponseSchema,
+  requestSummaryResponseSchema,
+} from "./requests.responses.js";
+import {
+  acceptRequestSchema,
+  answerInformationRequestSchema,
+  askInformationRequestSchema,
+  attachFilesRequestSchema,
+  changeHandlerRequestSchema,
+  changePriorityRequestSchema,
+  completeStageRequestSchema,
+  escalateStageRequestSchema,
+  listRequestsQuerySchema,
+  narrowStageRequestSchema,
+  reasonRequestSchema,
+  refreshStageRequestSchema,
+  returnStageRequestSchema,
+  submitRequestSchema,
+} from "./requests.schemas.js";
+
+const requestParams = z.strictObject({ requestId: idSchema });
+const stageParams = z.strictObject({ requestId: idSchema, runId: idSchema });
+const informationParams = z.strictObject({ requestId: idSchema, infoId: idSchema });
+const fileParams = z.strictObject({ requestId: idSchema, fileId: idSchema });
+
+const requestAction = { kind: "data", status: 200, schema: requestResponseSchema } as const;
+
+/**
+ * Routes for parties (the requester, the handler, the stage assignees) and the reads declare no permission: being
+ * the party, or seeing the request under R6.7, is the authorization, checked in the database for each request
+ * (D31, a recorded exception to T24). `/catalog` is declared before `/:requestId` so it is not read as an ID.
+ */
+export const requestsApi = defineApi({
+  tag: "requests",
+  prefix: "/requests",
+  realm: "tenant",
+  endpoints: {
+    catalog: defineEndpoint({
+      method: "get",
+      path: "/catalog",
+      summary: "The services with their forms and the priorities a request can be submitted with",
+      permission: { tenant: "request.submit" },
+      response: { kind: "data", status: 200, schema: catalogResponseSchema },
+    }),
+    submit: defineEndpoint({
+      method: "post",
+      path: "/",
+      summary: "Submit a request with the service's form answers and files",
+      permission: { tenant: "request.submit" },
+      activeSubscription: true,
+      body: submitRequestSchema,
+      response: { kind: "data", status: 201, schema: requestResponseSchema },
+      errors: ["ESCALATION_NOT_CONFIGURED", "TOO_MANY_FILES"],
+    }),
+    list: defineEndpoint({
+      method: "get",
+      path: "/",
+      summary: "The requests the caller can see, newest submission first",
+      query: listRequestsQuerySchema,
+      response: { kind: "page", schema: requestSummaryResponseSchema },
+    }),
+    get: defineEndpoint({
+      method: "get",
+      path: "/:requestId",
+      summary: "One request the caller can see",
+      params: requestParams,
+      response: requestAction,
+    }),
+    changePriority: defineEndpoint({
+      method: "put",
+      path: "/:requestId/priority",
+      summary: "Change the priority of a request in review",
+      permission: { tenant: "request.review" },
+      params: requestParams,
+      body: changePriorityRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "PERMISSION_NOT_HELD"],
+    }),
+    accept: defineEndpoint({
+      method: "post",
+      path: "/:requestId/accept",
+      summary: "Accept a request in review with a handler and a workflow",
+      permission: { tenant: "request.review" },
+      params: requestParams,
+      body: acceptRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "PERMISSION_NOT_HELD"],
+    }),
+    reject: defineEndpoint({
+      method: "post",
+      path: "/:requestId/reject",
+      summary: "Reject a request in review with a reason",
+      permission: { tenant: "request.review" },
+      params: requestParams,
+      body: reasonRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "PERMISSION_NOT_HELD"],
+    }),
+    withdraw: defineEndpoint({
+      method: "post",
+      path: "/:requestId/withdraw",
+      summary: "The requester withdraws a request in review",
+      params: requestParams,
+      body: reasonRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE"],
+    }),
+    changeHandler: defineEndpoint({
+      method: "put",
+      path: "/:requestId/handler",
+      summary: "Change the handler of a request in progress",
+      permission: { tenant: "request.reassign" },
+      params: requestParams,
+      body: changeHandlerRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "PERMISSION_NOT_HELD"],
+    }),
+    completeStage: defineEndpoint({
+      method: "post",
+      path: "/:requestId/stages/:runId/complete",
+      summary: "An assignee completes the active stage",
+      params: stageParams,
+      body: completeStageRequestSchema,
+      response: requestAction,
+      errors: ["STAGE_NOT_ACTIVE"],
+    }),
+    returnStage: defineEndpoint({
+      method: "post",
+      path: "/:requestId/stages/:runId/return",
+      summary: "An assignee returns the request to the nearest earlier stage that ran",
+      params: stageParams,
+      body: returnStageRequestSchema,
+      response: requestAction,
+      errors: ["STAGE_NOT_ACTIVE", "NO_EARLIER_STAGE"],
+    }),
+    narrowStage: defineEndpoint({
+      method: "post",
+      path: "/:requestId/stages/:runId/narrow",
+      summary:
+        "The handler narrows the active stage to some of its assignees, where the stage allows",
+      params: stageParams,
+      body: narrowStageRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "STAGE_NOT_ACTIVE"],
+    }),
+    escalateStage: defineEndpoint({
+      method: "post",
+      path: "/:requestId/stages/:runId/escalate",
+      summary: "The handler escalates the active stage to the next level, where the stage allows",
+      params: stageParams,
+      body: escalateStageRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "STAGE_NOT_ACTIVE", "NO_HIGHER_LEVEL"],
+    }),
+    refreshStage: defineEndpoint({
+      method: "post",
+      path: "/:requestId/stages/:runId/refresh",
+      summary: "The handler re-resolves the assignees of the active or held stage",
+      params: stageParams,
+      body: refreshStageRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "STAGE_NOT_ACTIVE"],
+    }),
+    askInformation: defineEndpoint({
+      method: "post",
+      path: "/:requestId/information-requests",
+      summary: "Ask the requester a question; returns the request",
+      params: requestParams,
+      body: askInformationRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "INFORMATION_REQUEST_OPEN"],
+    }),
+    answerInformation: defineEndpoint({
+      method: "post",
+      path: "/:requestId/information-requests/:infoId/answer",
+      summary: "The requester answers an open information request, with files if needed",
+      params: informationParams,
+      body: answerInformationRequestSchema,
+      response: requestAction,
+      errors: ["NO_OPEN_INFORMATION_REQUEST", "TOO_MANY_FILES"],
+    }),
+    cancelInformation: defineEndpoint({
+      method: "post",
+      path: "/:requestId/information-requests/:infoId/cancel",
+      summary: "The asker or the handler cancels an open information request",
+      params: informationParams,
+      response: requestAction,
+      errors: ["NO_OPEN_INFORMATION_REQUEST"],
+    }),
+    closeNoResponse: defineEndpoint({
+      method: "post",
+      path: "/:requestId/close-no-response",
+      summary: "The handler closes a request in progress whose information request got no answer",
+      params: requestParams,
+      body: reasonRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "NO_OPEN_INFORMATION_REQUEST"],
+    }),
+    attachFiles: defineEndpoint({
+      method: "post",
+      path: "/:requestId/files",
+      summary: "Attach the caller's pending uploads to an open request",
+      params: requestParams,
+      body: attachFilesRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE", "TOO_MANY_FILES"],
+    }),
+    removeFile: defineEndpoint({
+      method: "post",
+      path: "/:requestId/files/:fileId/remove",
+      summary: "Remove an attached file from an open request, with a reason",
+      params: fileParams,
+      body: reasonRequestSchema,
+      response: requestAction,
+      errors: ["INVALID_REQUEST_STATE"],
+    }),
+    fileContent: defineEndpoint({
+      method: "get",
+      path: "/:requestId/files/:fileId/content",
+      summary: "Download a file attached to a request the caller can see",
+      params: fileParams,
+      response: { kind: "download" },
+    }),
+  },
+});

@@ -8,7 +8,10 @@ import type {
   notificationResponseSchema,
   unreadCountResponseSchema,
 } from "./notifications.responses.js";
-import type { listNotificationsQuerySchema } from "./notifications.schemas.js";
+import type {
+  listNotificationsQuerySchema,
+  readAllRequestSchema,
+} from "./notifications.schemas.js";
 import type { createNotificationsService } from "./notifications.service.js";
 
 export type NotificationKindType = (typeof notificationKinds.enumValues)[number];
@@ -35,6 +38,7 @@ export interface NewNotificationType {
 export type NotificationType = z.output<typeof notificationResponseSchema>;
 export type UnreadCountResponseType = z.output<typeof unreadCountResponseSchema>;
 export type ListNotificationsQueryType = z.output<typeof listNotificationsQuerySchema>;
+export type ReadAllNotificationsRequestType = z.output<typeof readAllRequestSchema>;
 
 export interface NotificationsRouterDepsType {
   db: Db;

@@ -1,11 +1,8 @@
-import type { Request, RequestHandler } from "express";
+import type { Request } from "express";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { AppError } from "@/http/errors.js";
-import { sendData, sendNoContent, sendPage } from "@/http/respond.js";
 import { principalOf } from "@/modules/auth/index.js";
-import {
-  notificationResponseSchema,
-  unreadCountResponseSchema,
-} from "./notifications.responses.js";
+import type { notificationsApi } from "./notifications.endpoints.js";
 import type { NotificationsServiceType } from "./notifications.types.js";
 
 /** These routes skip `subscriptionGuard` (P7.7), so the tenant comes from the token. */
@@ -20,24 +17,22 @@ const callerOf = (req: Request) => principalOf(req).id;
 
 export function createNotificationsController({ service }: { service: NotificationsServiceType }) {
   return {
-    list: (async (req, res) => {
-      const page = await service.list(tenantOf(req), callerOf(req), req.query);
-      sendPage(res, notificationResponseSchema, page);
-    }) satisfies RequestHandler,
+    list: (async ({ query }, req) =>
+      service.list(tenantOf(req), callerOf(req), query)) satisfies HandlerOf<
+      typeof notificationsApi.endpoints.list
+    >,
 
-    unreadCount: (async (req, res) => {
-      const body = await service.unreadCount(tenantOf(req), callerOf(req));
-      sendData(res, 200, unreadCountResponseSchema, body);
-    }) satisfies RequestHandler,
+    unreadCount: (async (_input, req) =>
+      service.unreadCount(tenantOf(req), callerOf(req))) satisfies HandlerOf<
+      typeof notificationsApi.endpoints.unreadCount
+    >,
 
-    markRead: (async (req, res) => {
-      await service.markRead(tenantOf(req), callerOf(req), String(req.params.id));
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    markRead: (async ({ params }, req) => {
+      await service.markRead(tenantOf(req), callerOf(req), params.id);
+    }) satisfies HandlerOf<typeof notificationsApi.endpoints.markRead>,
 
-    markAllRead: (async (req, res) => {
-      await service.markAllRead(tenantOf(req), callerOf(req), req.body);
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    markAllRead: (async ({ body }, req) => {
+      await service.markAllRead(tenantOf(req), callerOf(req), body);
+    }) satisfies HandlerOf<typeof notificationsApi.endpoints.markAllRead>,
   };
 }

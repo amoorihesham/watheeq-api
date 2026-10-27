@@ -14,15 +14,18 @@ import { authApi } from "./modules/auth/auth.endpoints.js";
 import { createAuthRouter } from "./modules/auth/index.js";
 import { createCalendarRouter } from "./modules/calendar/index.js";
 import { createEscalationRouter } from "./modules/escalation/index.js";
+import { filesApi } from "./modules/files/files.endpoints.js";
 import { createFilesRouter } from "./modules/files/index.js";
 import { healthApi } from "./modules/health/health.endpoints.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { createNotificationsRouter } from "./modules/notifications/index.js";
+import { notificationsApi } from "./modules/notifications/notifications.endpoints.js";
 import { createOrgRouter } from "./modules/org/index.js";
 import { createPlansRouter, createTenantsRouter } from "./modules/platform/index.js";
 import { createPositionsRouter } from "./modules/positions/index.js";
 import { createPrioritiesRouter } from "./modules/priorities/index.js";
 import { createRequestsRouter } from "./modules/requests/index.js";
+import { requestsApi } from "./modules/requests/requests.endpoints.js";
 import { createPermissionsRouter, createRolesRouter } from "./modules/roles/index.js";
 import { createServicesRouter } from "./modules/services/index.js";
 import { createSubscriptionsRouter } from "./modules/subscriptions/index.js";
@@ -58,7 +61,7 @@ export function buildApp(deps: AppDeps): express.Express {
   const emailSender = deps.emailSender ?? createSmtpSender(config.email);
   const store = deps.fileStore ?? createS3Store(config.storage);
   // /files carries raw bytes, so it is mounted before the JSON-only body rule.
-  app.use("/files", createFilesRouter({ db, auth, store }));
+  app.use(filesApi.prefix, createFilesRouter({ db, auth, store }));
   app.use(jsonBody());
   app.use(authApi.prefix, createAuthRouter({ db, auth, links, emailSender }));
   app.use("/operator/plans", createPlansRouter({ db, auth }));
@@ -74,8 +77,8 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use("/services", createServicesRouter({ db, auth }));
   app.use("/priorities", createPrioritiesRouter({ db, auth }));
   app.use("/escalation", createEscalationRouter({ db, auth }));
-  app.use("/requests", createRequestsRouter({ db, auth, store }));
-  app.use("/notifications", createNotificationsRouter({ db, auth }));
+  app.use(requestsApi.prefix, createRequestsRouter({ db, auth, store }));
+  app.use(notificationsApi.prefix, createNotificationsRouter({ db, auth }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

@@ -9,4 +9,6 @@ export const listNotificationsQuerySchema = z.object({
   ...pageQuery,
 });
 
-export const readAllRequestSchema = z.strictObject({ upTo: idSchema });
+export const readAllRequestSchema = z
+  .strictObject({ upTo: idSchema })
+  .meta({ id: "ReadAllNotificationsRequest" });

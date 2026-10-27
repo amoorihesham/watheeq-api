@@ -31,10 +31,12 @@ import type {
   changeHandlerRequestSchema,
   changePriorityRequestSchema,
   completeStageRequestSchema,
+  escalateStageRequestSchema,
   listRequestsQuerySchema,
   narrowStageRequestSchema,
   reasonRequestSchema,
   refreshStageRequestSchema,
+  returnStageRequestSchema,
   submitRequestSchema,
 } from "./requests.schemas.js";
 import type { createRequestsService } from "./requests.service.js";
@@ -145,17 +147,19 @@ export interface MemberUnitRowType {
   unitId: string | null;
 }
 
-export type SubmitRequestType = z.input<typeof submitRequestSchema>;
-export type ChangePriorityRequestType = z.input<typeof changePriorityRequestSchema>;
-export type AcceptRequestType = z.input<typeof acceptRequestSchema>;
-export type ReasonRequestType = z.input<typeof reasonRequestSchema>;
-export type CompleteStageRequestType = z.input<typeof completeStageRequestSchema>;
-export type RefreshStageRequestType = z.input<typeof refreshStageRequestSchema>;
-export type ChangeHandlerRequestType = z.input<typeof changeHandlerRequestSchema>;
-export type NarrowStageRequestType = z.input<typeof narrowStageRequestSchema>;
-export type AskInformationRequestType = z.input<typeof askInformationRequestSchema>;
-export type AnswerInformationRequestType = z.input<typeof answerInformationRequestSchema>;
-export type AttachFilesRequestType = z.input<typeof attachFilesRequestSchema>;
+export type SubmitRequestType = z.output<typeof submitRequestSchema>;
+export type ChangePriorityRequestType = z.output<typeof changePriorityRequestSchema>;
+export type AcceptRequestType = z.output<typeof acceptRequestSchema>;
+export type ReasonRequestType = z.output<typeof reasonRequestSchema>;
+export type CompleteStageRequestType = z.output<typeof completeStageRequestSchema>;
+export type ReturnStageRequestType = z.output<typeof returnStageRequestSchema>;
+export type EscalateStageRequestType = z.output<typeof escalateStageRequestSchema>;
+export type RefreshStageRequestType = z.output<typeof refreshStageRequestSchema>;
+export type ChangeHandlerRequestType = z.output<typeof changeHandlerRequestSchema>;
+export type NarrowStageRequestType = z.output<typeof narrowStageRequestSchema>;
+export type AskInformationRequestType = z.output<typeof askInformationRequestSchema>;
+export type AnswerInformationRequestType = z.output<typeof answerInformationRequestSchema>;
+export type AttachFilesRequestType = z.output<typeof attachFilesRequestSchema>;
 export type ListRequestsQueryType = z.output<typeof listRequestsQuerySchema>;
 
 export type SlaType = z.output<typeof slaResponseSchema>;

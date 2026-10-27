@@ -4,11 +4,11 @@ import { notifications } from "@/db/schema/index.js";
 import { AppError } from "@/http/errors.js";
 import { listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { idSchema, validate } from "@/http/validate.js";
-import { listNotificationsQuerySchema, readAllRequestSchema } from "./notifications.schemas.js";
 import type {
+  ListNotificationsQueryType,
   NotificationsRepositoryType,
   NotificationType,
+  ReadAllNotificationsRequestType,
   UnreadCountResponseType,
 } from "./notifications.types.js";
 
@@ -42,9 +42,8 @@ export function createNotificationsService({
     async list(
       tenantId: string,
       userId: string,
-      input: unknown,
+      query: ListNotificationsQueryType,
     ): Promise<PageType<NotificationType>> {
-      const query = validate(listNotificationsQuerySchema, input);
       const page = await listPage({
         db,
         list: "notifications",
@@ -68,18 +67,17 @@ export function createNotificationsService({
 
     /** Another user's notification, another tenant's, and a malformed ID all answer 404, so IDs reveal nothing. */
     async markRead(tenantId: string, userId: string, notificationId: string): Promise<void> {
-      const id = idSchema.safeParse(notificationId);
-      if (!id.success) {
-        throw new AppError("NOT_FOUND");
-      }
-      const updated = await repo.markRead(db, tenantId, userId, id.data);
+      const updated = await repo.markRead(db, tenantId, userId, notificationId);
       if (updated.length === 0) {
         throw new AppError("NOT_FOUND");
       }
     },
 
-    async markAllRead(tenantId: string, userId: string, input: unknown): Promise<void> {
-      const { upTo } = validate(readAllRequestSchema, input);
+    async markAllRead(
+      tenantId: string,
+      userId: string,
+      { upTo }: ReadAllNotificationsRequestType,
+    ): Promise<void> {
       if (!(await repo.exists(db, tenantId, userId, upTo))) {
         throw unknownNotification("upTo");
       }

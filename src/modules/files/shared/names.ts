@@ -10,10 +10,7 @@ const invalidName = () =>
  * normalized to NFC, so `../../etc/passwd.txt` becomes `passwd.txt`; an extension is required, and the kind it
  * names must be allowed. The name is only ever a label: the storage key never uses it.
  */
-export function cleanFileName(raw: unknown): { name: string; kind: FileKindType } {
-  if (typeof raw !== "string") {
-    throw invalidName();
-  }
+export function cleanFileName(raw: string): { name: string; kind: FileKindType } {
   const lastPart = raw.normalize("NFC").split(/[/\\]/).at(-1) ?? "";
   const name = lastPart.replace(/\p{Cc}/gu, "").trim();
   const dot = name.lastIndexOf(".");

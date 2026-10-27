@@ -10,53 +10,72 @@ import {
   REQUEST_VIEWS,
 } from "./requests.constants.js";
 
-export const requestIdSchema = idSchema;
-
 const reason = z.string().trim().min(1).max(MAX_REASON_LENGTH);
 
-export const submitRequestSchema = z.strictObject({
-  serviceId: idSchema,
-  priorityId: idSchema,
-  title: z.string().trim().min(1).max(MAX_TITLE_LENGTH),
-  answers: z.record(z.string(), z.unknown()),
-  fileIds: z.array(z.string()).optional(),
-});
+export const submitRequestSchema = z
+  .strictObject({
+    serviceId: idSchema,
+    priorityId: idSchema,
+    title: z.string().trim().min(1).max(MAX_TITLE_LENGTH),
+    answers: z.record(z.string(), z.unknown()),
+    fileIds: z.array(z.string()).optional(),
+  })
+  .meta({ id: "SubmitRequest" });
 
-export const attachFilesRequestSchema = z.strictObject({ fileIds: z.array(z.string()).min(1) });
+export const attachFilesRequestSchema = z
+  .strictObject({ fileIds: z.array(z.string()).min(1) })
+  .meta({ id: "AttachFilesRequest" });
 
-export const askInformationRequestSchema = z.strictObject({
-  question: z.string().trim().min(1).max(MAX_QUESTION_LENGTH),
-});
-export const answerInformationRequestSchema = z.strictObject({
-  answer: z.string().trim().min(1).max(MAX_ANSWER_LENGTH),
-  fileIds: z.array(z.string()).optional(),
-});
+export const askInformationRequestSchema = z
+  .strictObject({ question: z.string().trim().min(1).max(MAX_QUESTION_LENGTH) })
+  .meta({ id: "AskInformationRequest" });
+export const answerInformationRequestSchema = z
+  .strictObject({
+    answer: z.string().trim().min(1).max(MAX_ANSWER_LENGTH),
+    fileIds: z.array(z.string()).optional(),
+  })
+  .meta({ id: "AnswerInformationRequest" });
 
-export const changePriorityRequestSchema = z.strictObject({ priorityId: idSchema, reason });
-export const acceptRequestSchema = z.strictObject({ handlerId: idSchema, workflowId: idSchema });
-export const reasonRequestSchema = z.strictObject({ reason });
-export const completeStageRequestSchema = z.strictObject({
-  comment: optionalText(MAX_REASON_LENGTH).optional(),
-});
-export const refreshStageRequestSchema = z.strictObject({
-  reason: optionalText(MAX_REASON_LENGTH).optional(),
-});
-export const changeHandlerRequestSchema = z.strictObject({ handlerId: idSchema, reason });
-export const narrowStageRequestSchema = z.strictObject({
-  userIds: z
-    .array(idSchema)
-    .min(1)
-    .superRefine((ids, ctx) => {
-      const seen = new Set<string>();
-      ids.forEach((id, index) => {
-        if (seen.has(id)) {
-          ctx.addIssue({ code: "custom", path: [index], params: { code: "duplicate_user" } });
-        }
-        seen.add(id);
-      });
-    }),
-  reason,
-});
+export const changePriorityRequestSchema = z
+  .strictObject({ priorityId: idSchema, reason })
+  .meta({ id: "ChangePriorityRequest" });
+export const acceptRequestSchema = z
+  .strictObject({ handlerId: idSchema, workflowId: idSchema })
+  .meta({ id: "AcceptRequest" });
+/** The body of every action that only needs a reason: reject, withdraw, remove a file, close as no response. */
+export const reasonRequestSchema = z.strictObject({ reason }).meta({ id: "ReasonRequest" });
+export const completeStageRequestSchema = z
+  .strictObject({ comment: optionalText(MAX_REASON_LENGTH).optional() })
+  .meta({ id: "CompleteStageRequest" });
+export const returnStageRequestSchema = z
+  .strictObject({ reason })
+  .meta({ id: "ReturnStageRequest" });
+export const escalateStageRequestSchema = z
+  .strictObject({ reason })
+  .meta({ id: "EscalateStageRequest" });
+export const refreshStageRequestSchema = z
+  .strictObject({ reason: optionalText(MAX_REASON_LENGTH).optional() })
+  .meta({ id: "RefreshStageRequest" });
+export const changeHandlerRequestSchema = z
+  .strictObject({ handlerId: idSchema, reason })
+  .meta({ id: "ChangeHandlerRequest" });
+export const narrowStageRequestSchema = z
+  .strictObject({
+    userIds: z
+      .array(idSchema)
+      .min(1)
+      .superRefine((ids, ctx) => {
+        const seen = new Set<string>();
+        ids.forEach((id, index) => {
+          if (seen.has(id)) {
+            ctx.addIssue({ code: "custom", path: [index], params: { code: "duplicate_user" } });
+          }
+          seen.add(id);
+        });
+      }),
+    reason,
+  })
+  .meta({ id: "NarrowStageRequest" });
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listRequestsQuerySchema = z.object({

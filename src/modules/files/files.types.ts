@@ -56,8 +56,8 @@ export interface SweepOptionsType {
 export interface UploadInputType {
   tenantId: string;
   userId: string;
-  /** The raw `name` query parameter. */
-  name: unknown;
+  /** The `name` query parameter; empty when it was missing or repeated. */
+  name: string;
   /** The validated `Content-Length`. */
   declaredSize: number;
   body: Readable;

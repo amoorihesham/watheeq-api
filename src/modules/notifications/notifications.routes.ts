@@ -1,25 +1,15 @@
-import { Router } from "express";
-import { noStore } from "@/middleware/no-store.js";
-import { authenticate, requireRole } from "@/modules/auth/index.js";
+import type { Router } from "express";
+import { buildRouter } from "@/http/endpoint.js";
 import { createNotificationsController } from "./notifications.controller.js";
+import { notificationsApi } from "./notifications.endpoints.js";
 import { createNotificationsRepository } from "./notifications.repository.js";
 import { createNotificationsService } from "./notifications.service.js";
 import type { NotificationsRouterDepsType } from "./notifications.types.js";
 
-/**
- * Mounted at `/notifications`; the module's composition root. No `subscriptionGuard` and no permission: every
- * user has an inbox, and marking read writes only the caller's own `read_at`, so it works in Read-only. This is
- * the recorded exception to T16 (P7.7).
- */
+/** The module's composition root: the `/notifications` router built from its declarations. */
 export function createNotificationsRouter({ db, auth }: NotificationsRouterDepsType): Router {
   const controller = createNotificationsController({
     service: createNotificationsService({ db, repo: createNotificationsRepository() }),
   });
-  const router = Router();
-  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"));
-  router.get("/", controller.list);
-  router.get("/unread-count", controller.unreadCount);
-  router.post("/read-all", controller.markAllRead);
-  router.post("/:id/read", controller.markRead);
-  return router;
+  return buildRouter(notificationsApi, controller, { db, jwtSecret: auth.jwtSecret });
 }
