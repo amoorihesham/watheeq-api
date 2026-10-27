@@ -7,13 +7,13 @@ import type { AuthRouterDepsType, AuthSettingsType } from "./auth.types.js";
 import { authenticate } from "./shared/middlewares.js";
 
 /** The auth module's composition root: builds repository, service, and controller, and returns the `/auth` router. */
-export function createAuthRouter({ db, config, emailSender }: AuthRouterDepsType): Router {
+export function createAuthRouter({ db, auth, links, emailSender }: AuthRouterDepsType): Router {
   const settings: AuthSettingsType = {
-    jwtSecret: config.JWT_SECRET,
-    accessTokenTtlSeconds: config.ACCESS_TOKEN_TTL_SECONDS,
-    refreshTokenTtlSeconds: config.REFRESH_TOKEN_TTL_SECONDS,
-    appBaseUrl: config.APP_BASE_URL,
-    passwordResetTtlSeconds: config.PASSWORD_RESET_TTL_SECONDS,
+    jwtSecret: auth.jwtSecret,
+    accessTokenTtlSeconds: auth.accessTokenTtlSeconds,
+    refreshTokenTtlSeconds: auth.refreshTokenTtlSeconds,
+    appBaseUrl: links.appBaseUrl,
+    passwordResetTtlSeconds: links.passwordResetTtlSeconds,
   };
   const service = createAuthService({ db, repo: createAuthRepository(), settings, emailSender });
   const controller = createAuthController({ service, settings });

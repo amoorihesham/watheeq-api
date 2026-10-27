@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { ORG_UNIT_KINDS } from "./org.constants.js";
 import type { createOrgController } from "./org.controller.js";
@@ -28,7 +28,7 @@ export type OrgTreeResponseType = z.output<typeof orgTreeResponseSchema>;
 
 export interface OrgRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
 }
 
 export type OrgRepositoryType = ReturnType<typeof createOrgRepository>;

@@ -1,3 +1,5 @@
+import type { EmailConfigType } from "@/config/config.js";
+
 export interface EmailMessageType {
   to: string;
   subject: string;
@@ -9,11 +11,4 @@ export interface EmailSenderType {
   send(message: EmailMessageType): Promise<void>;
 }
 
-export interface SmtpSettingsType {
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string | undefined;
-  password: string | undefined;
-  from: string;
-}
+export type SmtpSettingsType = EmailConfigType;

@@ -9,12 +9,12 @@ import { createWorkflowsService } from "./workflows.service.js";
 import type { WorkflowsRouterDepsType } from "./workflows.types.js";
 
 /** Mounted at `/workflows`; the module's composition root. */
-export function createWorkflowsRouter({ db, config }: WorkflowsRouterDepsType): Router {
+export function createWorkflowsRouter({ db, auth }: WorkflowsRouterDepsType): Router {
   const controller = createWorkflowsController({
     service: createWorkflowsService({ db, repo: createWorkflowsRepository() }),
   });
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   router.get("/", requireTenantPermission("workflow.view"), controller.list);
   router.get("/:workflowId", requireTenantPermission("workflow.view"), controller.get);
   router.get(

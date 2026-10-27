@@ -12,12 +12,12 @@ import type { FilesRouterDepsType } from "./files.types.js";
  * (Q9, a recorded exception to T24), so no tenant permission is declared; every query is limited to the caller's
  * own pending uploads.
  */
-export function createFilesRouter({ db, config, store }: FilesRouterDepsType): Router {
+export function createFilesRouter({ db, auth, store }: FilesRouterDepsType): Router {
   const controller = createFilesController({
     service: createFilesService({ db, repo: createFilesRepository(), store }),
   });
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   router.post("/", controller.upload);
   router.get("/:fileId", controller.get);
   router.get("/:fileId/content", controller.content);

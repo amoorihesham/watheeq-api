@@ -9,12 +9,12 @@ import { createPositionsService } from "./positions.service.js";
 import type { PositionsRouterDepsType } from "./positions.types.js";
 
 /** Mounted at `/positions`; the module's composition root. */
-export function createPositionsRouter({ db, config }: PositionsRouterDepsType): Router {
+export function createPositionsRouter({ db, auth }: PositionsRouterDepsType): Router {
   const controller = createPositionsController({
     service: createPositionsService({ db, repo: createPositionsRepository() }),
   });
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   router.get("/", requireTenantPermission("position.view"), controller.list);
   router.get("/:positionId", requireTenantPermission("position.view"), controller.get);
   router.post("/", requireTenantPermission("position.manage"), controller.create);

@@ -11,12 +11,12 @@ import type { NotificationsRouterDepsType } from "./notifications.types.js";
  * user has an inbox, and marking read writes only the caller's own `read_at`, so it works in Read-only. This is
  * the recorded exception to T16 (P7.7).
  */
-export function createNotificationsRouter({ db, config }: NotificationsRouterDepsType): Router {
+export function createNotificationsRouter({ db, auth }: NotificationsRouterDepsType): Router {
   const controller = createNotificationsController({
     service: createNotificationsService({ db, repo: createNotificationsRepository() }),
   });
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"));
   router.get("/", controller.list);
   router.get("/unread-count", controller.unreadCount);
   router.post("/read-all", controller.markAllRead);

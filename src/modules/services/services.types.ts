@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { createServicesController } from "./services.controller.js";
 import type { createServicesRepository } from "./services.repository.js";
@@ -48,7 +48,7 @@ export type ServiceType = z.output<typeof serviceResponseSchema>;
 
 export interface ServicesRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
 }
 
 export type ServicesRepositoryType = ReturnType<typeof createServicesRepository>;

@@ -13,12 +13,12 @@ import type { RequestsRouterDepsType } from "./requests.types.js";
  * stage assignees) and the reads declare no permission: being the party, or seeing the request under R6.7, is the
  * authorization, checked in the database for each request (D31, a recorded exception to T24).
  */
-export function createRequestsRouter({ db, config, store }: RequestsRouterDepsType): Router {
+export function createRequestsRouter({ db, auth, store }: RequestsRouterDepsType): Router {
   const controller = createRequestsController({
     service: createRequestsService({ db, repo: createRequestsRepository(), store }),
   });
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   router.get("/catalog", requireTenantPermission("request.submit"), controller.catalog);
   router.post(
     "/",

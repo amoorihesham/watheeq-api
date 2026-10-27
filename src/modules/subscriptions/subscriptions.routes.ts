@@ -10,12 +10,12 @@ import { createSubscriptionsService } from "./subscriptions.service.js";
 import type { SubscriptionsRouterDepsType } from "./subscriptions.types.js";
 
 /** The subscriptions module's composition root; mounted at `/subscription`. */
-export function createSubscriptionsRouter({ db, config }: SubscriptionsRouterDepsType): Router {
+export function createSubscriptionsRouter({ db, auth }: SubscriptionsRouterDepsType): Router {
   const service = createSubscriptionsService({ db, repo: createSubscriptionsRepository() });
   const controller = createSubscriptionsController({ service });
 
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   router.get("/", requireTenantPermission("subscription.view"), controller.get);
   return router;
 }

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType, LinksConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { EmailSenderType } from "@/email/index.js";
 import type { createTenantsController } from "./tenants.controller.js";
@@ -40,7 +40,8 @@ export interface TenantsSettingsType {
 
 export interface TenantsRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
+  links: LinksConfigType;
   emailSender: EmailSenderType;
 }
 

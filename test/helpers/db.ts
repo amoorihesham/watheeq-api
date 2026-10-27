@@ -8,7 +8,7 @@ import { DEFAULT_WEEK } from "../../src/modules/calendar/index.js";
 
 /** A pool connected to the test database, as the application connects. */
 export function connectToTestDb(logger: Logger = createLogger("silent")): pg.Pool {
-  return createPool(inject("databaseUrl"), logger);
+  return createPool({ url: inject("databaseUrl") }, logger);
 }
 
 export interface IsolatedDbType {
@@ -28,7 +28,7 @@ export async function createIsolatedDb(): Promise<IsolatedDbType> {
   const url = new URL(inject("databaseUrl"));
   url.pathname = `/${name}`;
   await runMigrations(url.toString());
-  const pool = createPool(url.toString(), createLogger("silent"));
+  const pool = createPool({ url: url.toString() }, createLogger("silent"));
   return {
     pool,
     async drop() {

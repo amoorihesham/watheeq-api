@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { createPrioritiesController } from "./priorities.controller.js";
 import type { createPrioritiesRepository } from "./priorities.repository.js";
@@ -28,7 +28,7 @@ export type PriorityType = z.output<typeof priorityResponseSchema>;
 
 export interface PrioritiesRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
 }
 
 export type PrioritiesRepositoryType = ReturnType<typeof createPrioritiesRepository>;

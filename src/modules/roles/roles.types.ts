@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { PermissionScopeType } from "@/modules/tenant-access/index.js";
 import type { createRolesController } from "./roles.controller.js";
@@ -41,7 +41,7 @@ export type ListPermissionsQueryType = z.output<typeof listPermissionsQuerySchem
 
 export interface RolesRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
 }
 
 export type RolesRepositoryType = ReturnType<typeof createRolesRepository>;

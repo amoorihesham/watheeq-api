@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { ASSIGNEE_BUILTINS } from "./positions.constants.js";
 import type { createPositionsController } from "./positions.controller.js";
@@ -87,7 +87,7 @@ export interface ResolveOptionsType {
 
 export interface PositionsRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
 }
 
 export type PositionsRepositoryType = ReturnType<typeof createPositionsRepository>;

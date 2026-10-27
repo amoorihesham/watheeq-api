@@ -9,12 +9,12 @@ import { createEscalationService } from "./escalation.service.js";
 import type { EscalationRouterDepsType } from "./escalation.types.js";
 
 /** Mounted at `/escalation`; the module's composition root. */
-export function createEscalationRouter({ db, config }: EscalationRouterDepsType): Router {
+export function createEscalationRouter({ db, auth }: EscalationRouterDepsType): Router {
   const controller = createEscalationController({
     service: createEscalationService({ db, repo: createEscalationRepository() }),
   });
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   router.get("/", requireTenantPermission("escalation.view"), controller.get);
   router.put("/", requireTenantPermission("escalation.manage"), controller.put);
   return router;

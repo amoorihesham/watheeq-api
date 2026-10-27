@@ -6,24 +6,12 @@ import {
   type S3ClientConfig,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import type { Config } from "@/config/config.js";
 import {
   MAX_KEYS_PER_DELETE,
   UPLOAD_PART_SIZE_BYTES,
   UPLOAD_QUEUE_SIZE,
 } from "./storage.constants.js";
 import type { FileStoreType, StorageSettingsType } from "./storage.types.js";
-
-export function storageSettingsOf(config: Config): StorageSettingsType {
-  return {
-    endpoint: config.STORAGE_ENDPOINT,
-    region: config.STORAGE_REGION,
-    bucket: config.STORAGE_BUCKET,
-    accessKey: config.STORAGE_ACCESS_KEY,
-    secretKey: config.STORAGE_SECRET_KEY,
-    forcePathStyle: config.STORAGE_FORCE_PATH_STYLE,
-  };
-}
 
 export function s3ClientConfigOf(settings: StorageSettingsType): S3ClientConfig {
   return {

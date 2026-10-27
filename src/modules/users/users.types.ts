@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType, LinksConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { EmailSenderType } from "@/email/index.js";
 import type { OrgUnitKindType } from "@/modules/org/index.js";
@@ -70,7 +70,8 @@ export interface UsersSettingsType {
 
 export interface UsersRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
+  links: LinksConfigType;
   emailSender: EmailSenderType;
 }
 

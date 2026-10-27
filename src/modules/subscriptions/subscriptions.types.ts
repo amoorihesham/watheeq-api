@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { subscriptions, tenantNoticeKinds } from "@/db/schema/index.js";
 import type { SUBSCRIPTION_STATES } from "./subscriptions.constants.js";
@@ -45,7 +45,7 @@ export interface SubscriptionContextType {
 
 export interface SubscriptionsRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
 }
 
 export type SubscriptionsRepositoryType = ReturnType<typeof createSubscriptionsRepository>;

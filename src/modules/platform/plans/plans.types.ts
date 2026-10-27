@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { PAYMENT_PERIODS } from "./plans.constants.js";
 import type { createPlansController } from "./plans.controller.js";
@@ -26,7 +26,7 @@ export type ListPlansQueryType = z.output<typeof listPlansQuerySchema>;
 
 export interface PlansRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
 }
 
 export type PlansRepositoryType = ReturnType<typeof createPlansRepository>;

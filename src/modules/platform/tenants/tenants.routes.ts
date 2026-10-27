@@ -8,20 +8,25 @@ import { createTenantsService } from "./tenants.service.js";
 import type { TenantsRouterDepsType } from "./tenants.types.js";
 
 /** The tenants module's composition root; mounted at `/operator/tenants`. */
-export function createTenantsRouter({ db, config, emailSender }: TenantsRouterDepsType): Router {
+export function createTenantsRouter({
+  db,
+  auth,
+  links,
+  emailSender,
+}: TenantsRouterDepsType): Router {
   const service = createTenantsService({
     db,
     repo: createTenantsRepository(),
     emailSender,
     settings: {
-      appBaseUrl: config.APP_BASE_URL,
-      verificationTokenTtlSeconds: config.VERIFICATION_TOKEN_TTL_SECONDS,
+      appBaseUrl: links.appBaseUrl,
+      verificationTokenTtlSeconds: links.invitationTtlSeconds,
     },
   });
   const controller = createTenantsController({ service });
 
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("operator"));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("operator"));
   router.post("/", requirePlatformPermission("platform.tenant.create"), controller.create);
   router.get("/", requirePlatformPermission("platform.tenant.view"), controller.list);
   router.get("/:tenantId", requirePlatformPermission("platform.tenant.view"), controller.get);

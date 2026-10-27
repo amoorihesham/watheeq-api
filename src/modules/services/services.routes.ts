@@ -9,12 +9,12 @@ import { createServicesService } from "./services.service.js";
 import type { ServicesRouterDepsType } from "./services.types.js";
 
 /** Mounted at `/services`; the module's composition root. */
-export function createServicesRouter({ db, config }: ServicesRouterDepsType): Router {
+export function createServicesRouter({ db, auth }: ServicesRouterDepsType): Router {
   const controller = createServicesController({
     service: createServicesService({ db, repo: createServicesRepository() }),
   });
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   router.get("/", requireTenantPermission("service.view"), controller.list);
   router.get("/:serviceId", requireTenantPermission("service.view"), controller.get);
   router.post("/", requireTenantPermission("service.manage"), controller.create);

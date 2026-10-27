@@ -1,4 +1,5 @@
 import type { Readable } from "node:stream";
+import type { StorageConfigType } from "@/config/config.js";
 
 /** Where the bytes of uploaded files live. Modules depend on this; the S3 implementation and test doubles satisfy it. */
 export interface FileStoreType {
@@ -10,11 +11,4 @@ export interface FileStoreType {
   delete(keys: string[]): Promise<void>;
 }
 
-export interface StorageSettingsType {
-  endpoint: string;
-  region: string;
-  bucket: string;
-  accessKey: string;
-  secretKey: string;
-  forcePathStyle: boolean;
-}
+export type StorageSettingsType = StorageConfigType;

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { createEscalationController } from "./escalation.controller.js";
@@ -50,7 +50,7 @@ export type EscalationResponseType = z.output<typeof escalationResponseSchema>;
 
 export interface EscalationRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
 }
 
 export type EscalationRepositoryType = ReturnType<typeof createEscalationRepository>;

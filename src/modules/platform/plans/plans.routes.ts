@@ -8,12 +8,12 @@ import { createPlansService } from "./plans.service.js";
 import type { PlansRouterDepsType } from "./plans.types.js";
 
 /** The plans module's composition root; mounted at `/operator/plans`. */
-export function createPlansRouter({ db, config }: PlansRouterDepsType): Router {
+export function createPlansRouter({ db, auth }: PlansRouterDepsType): Router {
   const service = createPlansService({ db, repo: createPlansRepository() });
   const controller = createPlansController({ service });
 
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("operator"));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("operator"));
   router.post("/", requirePlatformPermission("platform.plan.create"), controller.create);
   router.get("/", requirePlatformPermission("platform.plan.view"), controller.list);
   router.get("/:planId", requirePlatformPermission("platform.plan.view"), controller.get);

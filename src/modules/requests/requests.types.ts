@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type {
   informationRequests,
@@ -172,7 +172,7 @@ export type CatalogType = z.output<typeof catalogResponseSchema>;
 
 export interface RequestsRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
   store: FileStoreType;
 }
 

@@ -15,9 +15,9 @@ function composeController({ db }: RolesRouterDepsType) {
   });
 }
 
-function tenantRouter({ db, config }: RolesRouterDepsType): Router {
+function tenantRouter({ db, auth }: RolesRouterDepsType): Router {
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   return router;
 }
 

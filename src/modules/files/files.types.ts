@@ -1,6 +1,6 @@
 import type { Readable } from "node:stream";
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { files } from "@/db/schema/index.js";
 import type { FileStoreType } from "@/storage/index.js";
@@ -71,7 +71,7 @@ export interface FileDownloadType {
 
 export interface FilesRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
   store: FileStoreType;
 }
 

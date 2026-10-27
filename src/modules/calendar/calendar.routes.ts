@@ -9,12 +9,12 @@ import { createCalendarService } from "./calendar.service.js";
 import type { CalendarRouterDepsType } from "./calendar.types.js";
 
 /** Mounted at `/calendar`; the module's composition root. */
-export function createCalendarRouter({ db, config }: CalendarRouterDepsType): Router {
+export function createCalendarRouter({ db, auth }: CalendarRouterDepsType): Router {
   const controller = createCalendarController({
     service: createCalendarService({ db, repo: createCalendarRepository() }),
   });
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   router.get("/", requireTenantPermission("calendar.view"), controller.get);
   router.get("/days", requireTenantPermission("calendar.view"), controller.days);
   router.put(

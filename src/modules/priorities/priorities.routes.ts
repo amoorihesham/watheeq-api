@@ -9,12 +9,12 @@ import { createPrioritiesService } from "./priorities.service.js";
 import type { PrioritiesRouterDepsType } from "./priorities.types.js";
 
 /** Mounted at `/priorities`; the module's composition root. */
-export function createPrioritiesRouter({ db, config }: PrioritiesRouterDepsType): Router {
+export function createPrioritiesRouter({ db, auth }: PrioritiesRouterDepsType): Router {
   const controller = createPrioritiesController({
     service: createPrioritiesService({ db, repo: createPrioritiesRepository() }),
   });
   const router = Router();
-  router.use(noStore, authenticate(config.JWT_SECRET), requireRole("user"), subscriptionGuard(db));
+  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
   router.get("/", requireTenantPermission("priority.view"), controller.list);
   router.post("/", requireTenantPermission("priority.manage"), controller.create);
   router.put("/order", requireTenantPermission("priority.manage"), controller.reorder);

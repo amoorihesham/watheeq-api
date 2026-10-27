@@ -20,28 +20,63 @@ describe("parseConfig", () => {
     expect(result).toEqual({
       ok: true,
       config: {
-        NODE_ENV: "development",
-        PORT: 3000,
-        DATABASE_URL: valid.DATABASE_URL,
-        JWT_SECRET: valid.JWT_SECRET,
-        ACCESS_TOKEN_TTL_SECONDS: 1800,
-        REFRESH_TOKEN_TTL_SECONDS: 604800,
-        SMTP_HOST: "localhost",
-        SMTP_PORT: 1025,
-        SMTP_SECURE: false,
-        EMAIL_FROM: valid.EMAIL_FROM,
-        APP_BASE_URL: valid.APP_BASE_URL,
-        VERIFICATION_TOKEN_TTL_SECONDS: 259200,
-        PASSWORD_RESET_TTL_SECONDS: 3600,
-        STORAGE_ENDPOINT: valid.STORAGE_ENDPOINT,
-        STORAGE_REGION: "us-east-1",
-        STORAGE_BUCKET: valid.STORAGE_BUCKET,
-        STORAGE_ACCESS_KEY: valid.STORAGE_ACCESS_KEY,
-        STORAGE_SECRET_KEY: valid.STORAGE_SECRET_KEY,
-        STORAGE_FORCE_PATH_STYLE: false,
-        JOBS: "all",
-        LOG_LEVEL: "info",
+        server: { env: "development", port: 3000, logLevel: "info" },
+        database: { url: valid.DATABASE_URL },
+        auth: {
+          jwtSecret: valid.JWT_SECRET,
+          accessTokenTtlSeconds: 1800,
+          refreshTokenTtlSeconds: 604800,
+        },
+        links: {
+          appBaseUrl: valid.APP_BASE_URL,
+          invitationTtlSeconds: 259200,
+          passwordResetTtlSeconds: 3600,
+        },
+        email: {
+          host: "localhost",
+          port: 1025,
+          secure: false,
+          user: undefined,
+          password: undefined,
+          from: valid.EMAIL_FROM,
+        },
+        storage: {
+          endpoint: valid.STORAGE_ENDPOINT,
+          region: "us-east-1",
+          bucket: valid.STORAGE_BUCKET,
+          accessKey: valid.STORAGE_ACCESS_KEY,
+          secretKey: valid.STORAGE_SECRET_KEY,
+          forcePathStyle: false,
+        },
+        jobs: { enabled: "all" },
       },
+    });
+  });
+
+  it("maps every variable to its group when all are set", () => {
+    const result = parseConfig({
+      ...valid,
+      NODE_ENV: "production",
+      PORT: "8080",
+      LOG_LEVEL: "warn",
+      ACCESS_TOKEN_TTL_SECONDS: "900",
+      REFRESH_TOKEN_TTL_SECONDS: "3600",
+      SMTP_SECURE: "true",
+      SMTP_USER: "mailer",
+      SMTP_PASSWORD: "mail-pass",
+      VERIFICATION_TOKEN_TTL_SECONDS: "7200",
+      PASSWORD_RESET_TTL_SECONDS: "600",
+      STORAGE_REGION: "me-south-1",
+      STORAGE_FORCE_PATH_STYLE: "true",
+      JOBS: "files.sweep",
+    });
+    expect(result.ok && result.config).toMatchObject({
+      server: { env: "production", port: 8080, logLevel: "warn" },
+      auth: { accessTokenTtlSeconds: 900, refreshTokenTtlSeconds: 3600 },
+      links: { invitationTtlSeconds: 7200, passwordResetTtlSeconds: 600 },
+      email: { secure: true, user: "mailer", password: "mail-pass" },
+      storage: { region: "me-south-1", forcePathStyle: true },
+      jobs: { enabled: ["files.sweep"] },
     });
   });
 
@@ -54,7 +89,7 @@ describe("parseConfig", () => {
 
   it("reads token lifetimes and rejects ones under a minute", () => {
     const ok = parseConfig({ ...valid, ACCESS_TOKEN_TTL_SECONDS: "900" });
-    expect(ok.ok && ok.config.ACCESS_TOKEN_TTL_SECONDS).toBe(900);
+    expect(ok.ok && ok.config.auth.accessTokenTtlSeconds).toBe(900);
     expect(parseConfig({ ...valid, REFRESH_TOKEN_TTL_SECONDS: "59" })).toEqual({
       ok: false,
       message: "Invalid configuration: REFRESH_TOKEN_TTL_SECONDS (too_small)",
@@ -63,9 +98,9 @@ describe("parseConfig", () => {
 
   it("reads SMTP_SECURE as a boolean, and only from 'true' or 'false'", () => {
     const on = parseConfig({ ...valid, SMTP_SECURE: "true" });
-    expect(on.ok && on.config.SMTP_SECURE).toBe(true);
+    expect(on.ok && on.config.email.secure).toBe(true);
     const off = parseConfig({ ...valid, SMTP_SECURE: "false" });
-    expect(off.ok && off.config.SMTP_SECURE).toBe(false);
+    expect(off.ok && off.config.email.secure).toBe(false);
     expect(parseConfig({ ...valid, SMTP_SECURE: "yes" }).ok).toBe(false);
   });
 
@@ -78,7 +113,7 @@ describe("parseConfig", () => {
 
   it("reads STORAGE_FORCE_PATH_STYLE as a boolean, and only from 'true' or 'false'", () => {
     const on = parseConfig({ ...valid, STORAGE_FORCE_PATH_STYLE: "true" });
-    expect(on.ok && on.config.STORAGE_FORCE_PATH_STYLE).toBe(true);
+    expect(on.ok && on.config.storage.forcePathStyle).toBe(true);
     expect(parseConfig({ ...valid, STORAGE_FORCE_PATH_STYLE: "1" }).ok).toBe(false);
   });
 
@@ -92,7 +127,7 @@ describe("parseConfig", () => {
   it("reads JOBS as all, none, or a list of job names", () => {
     const read = (JOBS: string) => {
       const result = parseConfig({ ...valid, JOBS });
-      return result.ok ? result.config.JOBS : result.message;
+      return result.ok ? result.config.jobs.enabled : result.message;
     };
     expect(read("none")).toBe("none");
     expect(read("files.sweep")).toEqual(["files.sweep"]);
@@ -113,7 +148,7 @@ describe("parseConfig", () => {
 
   it("coerces PORT to a number", () => {
     const result = parseConfig({ ...valid, PORT: "8080" });
-    expect(result.ok && result.config.PORT).toBe(8080);
+    expect(result.ok && result.config.server.port).toBe(8080);
   });
 
   it("names a missing key", () => {

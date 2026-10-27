@@ -3,7 +3,7 @@ import express from "express";
 import type pg from "pg";
 import type { Config } from "./config/config.js";
 import { createDb } from "./db/pool.js";
-import { createSmtpSender, type EmailSenderType, smtpSettingsOf } from "./email/index.js";
+import { createSmtpSender, type EmailSenderType } from "./email/index.js";
 import { setContractChecks } from "./http/checks.js";
 import type { Logger } from "./logging/logger.js";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -26,7 +26,7 @@ import { createServicesRouter } from "./modules/services/index.js";
 import { createSubscriptionsRouter } from "./modules/subscriptions/index.js";
 import { createUsersRouter } from "./modules/users/index.js";
 import { createWorkflowsRouter } from "./modules/workflows/index.js";
-import { createS3Store, type FileStoreType, storageSettingsOf } from "./storage/index.js";
+import { createS3Store, type FileStoreType } from "./storage/index.js";
 
 export interface AppDeps {
   pool: pg.Pool;
@@ -42,7 +42,7 @@ export interface AppDeps {
 
 /** Builds the shared middleware and mounts each module's router; every module composes its own layers (T14). */
 export function buildApp(deps: AppDeps): express.Express {
-  setContractChecks(deps.config.NODE_ENV !== "production");
+  setContractChecks(deps.config.server.env !== "production");
   const app = express();
   app.disable("x-powered-by");
   app.use(requestLogger(deps.logger));
@@ -52,27 +52,28 @@ export function buildApp(deps: AppDeps): express.Express {
 
   const db = createDb(deps.pool);
   const { config } = deps;
-  const emailSender = deps.emailSender ?? createSmtpSender(smtpSettingsOf(config));
-  const store = deps.fileStore ?? createS3Store(storageSettingsOf(config));
+  const { auth, links } = config;
+  const emailSender = deps.emailSender ?? createSmtpSender(config.email);
+  const store = deps.fileStore ?? createS3Store(config.storage);
   // /files carries raw bytes, so it is mounted before the JSON-only body rule.
-  app.use("/files", createFilesRouter({ db, config, store }));
+  app.use("/files", createFilesRouter({ db, auth, store }));
   app.use(jsonBody());
-  app.use("/auth", createAuthRouter({ db, config, emailSender }));
-  app.use("/operator/plans", createPlansRouter({ db, config }));
-  app.use("/operator/tenants", createTenantsRouter({ db, config, emailSender }));
-  app.use("/subscription", createSubscriptionsRouter({ db, config }));
-  app.use("/org-units", createOrgRouter({ db, config }));
-  app.use("/users", createUsersRouter({ db, config, emailSender }));
-  app.use("/roles", createRolesRouter({ db, config }));
-  app.use("/permissions", createPermissionsRouter({ db, config }));
-  app.use("/calendar", createCalendarRouter({ db, config }));
-  app.use("/positions", createPositionsRouter({ db, config }));
-  app.use("/workflows", createWorkflowsRouter({ db, config }));
-  app.use("/services", createServicesRouter({ db, config }));
-  app.use("/priorities", createPrioritiesRouter({ db, config }));
-  app.use("/escalation", createEscalationRouter({ db, config }));
-  app.use("/requests", createRequestsRouter({ db, config, store }));
-  app.use("/notifications", createNotificationsRouter({ db, config }));
+  app.use("/auth", createAuthRouter({ db, auth, links, emailSender }));
+  app.use("/operator/plans", createPlansRouter({ db, auth }));
+  app.use("/operator/tenants", createTenantsRouter({ db, auth, links, emailSender }));
+  app.use("/subscription", createSubscriptionsRouter({ db, auth }));
+  app.use("/org-units", createOrgRouter({ db, auth }));
+  app.use("/users", createUsersRouter({ db, auth, links, emailSender }));
+  app.use("/roles", createRolesRouter({ db, auth }));
+  app.use("/permissions", createPermissionsRouter({ db, auth }));
+  app.use("/calendar", createCalendarRouter({ db, auth }));
+  app.use("/positions", createPositionsRouter({ db, auth }));
+  app.use("/workflows", createWorkflowsRouter({ db, auth }));
+  app.use("/services", createServicesRouter({ db, auth }));
+  app.use("/priorities", createPrioritiesRouter({ db, auth }));
+  app.use("/escalation", createEscalationRouter({ db, auth }));
+  app.use("/requests", createRequestsRouter({ db, auth, store }));
+  app.use("/notifications", createNotificationsRouter({ db, auth }));
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);

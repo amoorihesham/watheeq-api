@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseJobsSetting } from "../scheduler/select.js";
 
-const configSchema = z.object({
+const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z
@@ -56,7 +56,47 @@ const configSchema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
+const configSchema = envSchema.transform((env) => ({
+  server: { env: env.NODE_ENV, port: env.PORT, logLevel: env.LOG_LEVEL },
+  database: { url: env.DATABASE_URL },
+  auth: {
+    jwtSecret: env.JWT_SECRET,
+    accessTokenTtlSeconds: env.ACCESS_TOKEN_TTL_SECONDS,
+    refreshTokenTtlSeconds: env.REFRESH_TOKEN_TTL_SECONDS,
+  },
+  // Both auth (password reset) and the invitation flows (tenants, users) build emailed links.
+  links: {
+    appBaseUrl: env.APP_BASE_URL,
+    invitationTtlSeconds: env.VERIFICATION_TOKEN_TTL_SECONDS,
+    passwordResetTtlSeconds: env.PASSWORD_RESET_TTL_SECONDS,
+  },
+  email: {
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
+    user: env.SMTP_USER,
+    password: env.SMTP_PASSWORD,
+    from: env.EMAIL_FROM,
+  },
+  storage: {
+    endpoint: env.STORAGE_ENDPOINT,
+    region: env.STORAGE_REGION,
+    bucket: env.STORAGE_BUCKET,
+    accessKey: env.STORAGE_ACCESS_KEY,
+    secretKey: env.STORAGE_SECRET_KEY,
+    forcePathStyle: env.STORAGE_FORCE_PATH_STYLE,
+  },
+  jobs: { enabled: env.JOBS },
+}));
+
+/** The settings grouped by who uses them; a module is handed only its groups, never the whole object. */
 export type Config = z.infer<typeof configSchema>;
+
+export type DatabaseConfigType = Config["database"];
+export type AuthConfigType = Config["auth"];
+export type LinksConfigType = Config["links"];
+export type EmailConfigType = Config["email"];
+export type StorageConfigType = Config["storage"];
 
 export type ConfigResult = { ok: true; config: Config } | { ok: false; message: string };
 

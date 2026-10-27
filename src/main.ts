@@ -4,7 +4,7 @@ import { createDb, createPool } from "./db/pool.js";
 import { buildJobs } from "./jobs.js";
 import { createLogger } from "./logging/logger.js";
 import { type SchedulerType, selectJobs, startScheduler } from "./scheduler/index.js";
-import { createS3Store, storageSettingsOf } from "./storage/index.js";
+import { createS3Store } from "./storage/index.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -15,23 +15,23 @@ if (!parsed.ok) {
 }
 
 const config = parsed.config;
-const logger = createLogger(config.LOG_LEVEL);
+const logger = createLogger(config.server.logLevel);
 
-const fileStore = createS3Store(storageSettingsOf(config));
+const fileStore = createS3Store(config.storage);
 
 // Names in JOBS are checked here, before anything listens, because config does not know the job names.
 let jobs: ReturnType<typeof selectJobs>;
 try {
-  jobs = selectJobs(config.JOBS, buildJobs({ fileStore }));
+  jobs = selectJobs(config.jobs.enabled, buildJobs({ fileStore }));
 } catch (err) {
   logger.fatal({ err }, "invalid JOBS setting");
   process.exit(1);
 }
 
-const pool = createPool(config.DATABASE_URL, logger);
+const pool = createPool(config.database, logger);
 let scheduler: SchedulerType | undefined;
-const server = buildApp({ pool, logger, config, fileStore }).listen(config.PORT, () => {
-  logger.info({ port: config.PORT, env: config.NODE_ENV }, "listening");
+const server = buildApp({ pool, logger, config, fileStore }).listen(config.server.port, () => {
+  logger.info({ port: config.server.port, env: config.server.env }, "listening");
   scheduler = startScheduler({ jobs, db: createDb(pool), logger });
   logger.info({ jobs: jobs.map((job) => job.name) }, "scheduler started");
 });

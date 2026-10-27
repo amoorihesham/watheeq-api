@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Config } from "@/config/config.js";
+import type { AuthConfigType } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { STAGE_FALLBACKS } from "./workflows.constants.js";
@@ -76,7 +76,7 @@ export type WorkflowType = z.output<typeof workflowResponseSchema>;
 
 export interface WorkflowsRouterDepsType {
   db: Db;
-  config: Config;
+  auth: AuthConfigType;
 }
 
 export type WorkflowsRepositoryType = ReturnType<typeof createWorkflowsRepository>;
