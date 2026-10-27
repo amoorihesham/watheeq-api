@@ -2,47 +2,33 @@
 
 The endpoints of [phase-5.5-service-forms-attachments.md](phase-5.5-service-forms-attachments.md), moved out of its section 4.2.
 Section numbers and requirement IDs below refer to that spec.
+This is the implemented form: an index of the endpoints.
+Request and response shapes, statuses, and the errors of each endpoint are in `docs/api/openapi.json`.
 
 Tenant routes run `authenticate()`, `requireRole('user')`, and the subscription guard (T16).
 
-| Method | Path                          | Permission                  | Request                                                                                                    | Responses                                                                                                                                                                                        |
-| ------ | ----------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/services/:id`               | `service.view`              |                                                                                                            | 200 the service, including `form: {revision, fields}`; 404                                                                                                                                       |
-| PUT    | `/services/:id/form`          | `service.manage`            | `{baseRevision, fields:[field]}`                                                                           | 200 the service, as `GET /services/:id`; 400; 404; 409 `VERSION_CHANGED` at `baseRevision`, `RESOURCE_RETIRED`                                                                                   |
-| POST   | `/files`                      | active member (Q9)          | query `name=<name>`; the file's bytes, `Content-Type: application/octet-stream`, `Content-Length` required | 201 the file; 400 `invalid_name`, `empty_file`, `length_mismatch`; 409 `UPLOAD_QUOTA_REACHED`, `STORAGE_LIMIT_REACHED`; 411 `LENGTH_REQUIRED`; 413 `FILE_TOO_LARGE`; 415 `FILE_TYPE_NOT_ALLOWED` |
-| POST   | `/operator/plans`             | `platform.plan.create`      | (changed) `storageLimitGb` required on create                                                              | as Phase 1                                                                                                                                                                                       |
-| PATCH  | `/operator/plans/:planId`     | `platform.plan.update`      | (changed) `storageLimitGb` allowed on update                                                               | as Phase 1                                                                                                                                                                                       |
-| GET    | `/subscription`               | as Phase 1                  |                                                                                                            | (changed) `subscription.storageLimitGb`; `usage.storage: {usedBytes, limitBytes, overLimit}`                                                                                                     |
-| GET    | `/operator/tenants/:tenantId` | as Phase 1                  |                                                                                                            | (changed) `subscription.storageLimitGb`; `usage.storage: {usedBytes, limitBytes, overLimit}`                                                                                                     |
-| GET    | `/files/:id`                  | the uploader, while pending |                                                                                                            | 200 the file; 404                                                                                                                                                                                |
-| GET    | `/files/:id/content`          | the uploader, while pending |                                                                                                            | 200 the bytes as a download; 404                                                                                                                                                                 |
-| DELETE | `/files/:id`                  | the uploader, while pending |                                                                                                            | 204; 404                                                                                                                                                                                         |
+| Method | Path                          | Who                         | Purpose                                                                                     | Spec refs                      |
+| ------ | ----------------------------- | --------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------ |
+| GET    | `/services/:id`               | `service.view`              | (changed) The service now includes its form, `{revision, fields}`                           | R5.5.1, R5.5.2, R5.5.3         |
+| PUT    | `/services/:id/form`          | `service.manage`            | Save the whole form against the revision it was based on                                    | R5.5.4, R5.5.5, R5.5.6         |
+| POST   | `/files`                      | active member (Q9)          | Upload a file as raw bytes with its name in the query string; it stays pending              | R5.5.9, R5.5.10, R5.5.11       |
+| POST   | `/operator/plans`             | `platform.plan.create`      | (changed) `storageLimitGb` is required on create                                            | R5.5.17                        |
+| PATCH  | `/operator/plans/:planId`     | `platform.plan.update`      | (changed) `storageLimitGb` is allowed on update                                             | R5.5.17                        |
+| GET    | `/subscription`               | as Phase 1                  | (changed) Adds the storage limit and `usage.storage`                                        | R5.5.18, R5.5.20, R5.5.21      |
+| GET    | `/operator/tenants/:tenantId` | as Phase 1                  | (changed) Adds the storage limit and `usage.storage`                                        | R5.5.21                        |
+| GET    | `/files/:id`                  | the uploader, while pending | The file's metadata                                                                         | R5.5.9                         |
+| GET    | `/files/:id/content`          | the uploader, while pending | The file's bytes as a download, with the detected type                                      | R5.5.9, R5.5.13                |
+| DELETE | `/files/:id`                  | the uploader, while pending | Discard the upload                                                                          | R5.5.9, R5.5.12                |
 
-Shapes:
+## Rules a schema does not state
 
-- **Field:** in a response every field is `{id, type, label, helpText, required, min, max, integer, options, maxFiles}`: every setting of every type, `null` where the field's type has none, and `helpText` `null` when blank (Phase 8, R8.4).
-  In a request `id` is omitted for a new field or option; every setting of the type is required (`min` and `max` may be null); a setting of another type may be sent as `null`, so a field can be sent back as it was read, and a non-null one is `unknown_field` (T25).
-- **File:** `{id, name, contentType, size, sha256, expiresAt}`.
+- `POST /files` needs `Content-Length` (411 without it) and `Content-Type: application/octet-stream`; the file name travels in the query string, percent-encoded, so Arabic names need no special header encoding.
+- `GET /files/:id` for a file that is not the caller's pending upload is 404, whoever owns it, so a file ID reveals nothing; Phase 6 adds the routes for attached files.
+- `DELETE` marks the upload `discarded`, so it disappears at once and the sweep deletes its bytes and row; a discarded upload was never part of any record.
+- A field in a request omits `id` for a new field or option, and every setting of its type is required (`min` and `max` may be null); a setting of another type may be sent as `null`, so a field can be sent back as it was read, and a non-null one is `unknown_field` (T25).
+- A stale `baseRevision` is 409 `VERSION_CHANGED`.
 
-`GET /files/:id` for a file that is not the caller's pending upload is 404, whoever owns it, so a file ID reveals nothing; Phase 6 adds the routes for attached files.
-`DELETE` marks the upload `discarded`, so it disappears at once and the sweep deletes its bytes and row; a discarded upload was never part of any record.
-The file name travels in the query string, percent-encoded, so Arabic names need no special header encoding.
-
-## New error codes
-
-| HTTP | Code                    | When                                                                      |
-| ---- | ----------------------- | ------------------------------------------------------------------------- |
-| 409  | `SERVICE_FORM_CHANGED`  | `baseRevision` is not the current revision.                               |
-| 409  | `UPLOAD_QUOTA_REACHED`  | The uploader already has 20 pending uploads.                              |
-| 409  | `STORAGE_LIMIT_REACHED` | Usage plus the declared size would pass the subscription's storage limit. |
-| 411  | `LENGTH_REQUIRED`       | An upload without `Content-Length` (for example a chunked body).          |
-| 413  | `FILE_TOO_LARGE`        | `Content-Length` over 25 MB.                                              |
-| 415  | `FILE_TYPE_NOT_ALLOWED` | The detected type is not allowed, or does not match the extension.        |
-
-Validation detail codes: `duplicate_label`, `duplicate_option` (a repeated option label or option ID within one field), `duplicate_field_id`, `unknown_field_id`, `unknown_option_id`, `type_changed`, `min_above_max`, `invalid_name`, `empty_file` (`Content-Length: 0`, at `body`), `length_mismatch` (the body ended before or ran past `Content-Length`).
-Answer detail codes (returned by Phase 6 at `answers.<field ID>`): `required`, `wrong_type`, `too_long`, `below_minimum`, `above_maximum`, `not_integer`, `invalid_date`, `unknown_option`, `duplicate_option`, `too_many_files`, `unknown_field`.
-
-Answer rules (approved 2026-10-25):
+Answer rules (approved 2026-10-25), used by Phase 6 at `answers.<field ID>`:
 
 - `validateAnswers` returns details with the full path `answers.<field ID>`, so Phase 6 passes them through unchanged.
 - An answer is unanswered when it is missing, null, blank text, or an empty list; a required field then gets `required`, and an optional one is skipped. `false` and `0` are answers.

@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { createLogger } from "../../src/logging/logger.js";
 import { testApp } from "../helpers/app.js";
 import { connectToTestDb } from "../helpers/db.js";
-import { apiDocs, tableRows } from "./markdown-tables.js";
+import { apiDocs, specStatus, tableRows } from "./markdown-tables.js";
 import { normalize, routesOfApp } from "./route-walker.js";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
@@ -62,5 +62,17 @@ describe("routes and the .API.md tables (C5)", () => {
 
   it("writes every row as a method and a full path without a query string", () => {
     expect(routesOfDocs().malformed).toEqual([]);
+  });
+});
+
+describe("which .API.md tables C5 reads (Phase 10, Q15)", () => {
+  it("skips the table of a Draft spec and reads the table of an Implemented one", () => {
+    const files = apiDocs("test/fixtures/specs").map((doc) => doc.path);
+    expect(files).toEqual(["test/fixtures/specs/phase-y-done/phase-y-done.API.md"]);
+  });
+
+  it("reads the status row of a spec", () => {
+    expect(specStatus("| **Status** | In Implementation |\n")).toBe("In Implementation");
+    expect(specStatus("no table")).toBeUndefined();
   });
 });

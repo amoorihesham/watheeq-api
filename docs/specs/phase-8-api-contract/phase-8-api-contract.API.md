@@ -2,63 +2,46 @@
 
 The endpoints of [phase-8-api-contract.md](phase-8-api-contract.md), moved out of its section 4.2.
 Section numbers and requirement IDs below refer to that spec.
+This is the implemented form: an index of the endpoints.
+Request and response shapes, statuses, and the errors of each endpoint are in `docs/api/openapi.json`.
 
-Every endpoint changes to the shapes of section 4.2: success bodies inside `data`, lists as `{data, page}`, errors with `details` always present.
-This file lists only the endpoints whose contract changes beyond that; each phase's `.API.md` is rewritten to the new shapes by the step that migrates its module (Q20).
+Every endpoint changed to the shapes of section 4.2: success bodies inside `data`, lists as `{data, page}`, errors with `details` always present.
+This file lists only the endpoints whose contract changed beyond that, each with its change in Purpose; the endpoint itself belongs to the phase that designed it.
 
 ## Lists
 
-Every list gains `cursor` and `limit` (1-100, default 25) and answers `{data: [item], page: {nextCursor, total}}` in the order of 4.2.3.
+Every list gained `cursor` and `limit` (1-100, default 25) and answers `{data: [item], page: {nextCursor, total}}` (R8.5-R8.9).
 
-| Method | Path                | Who                            | Request (beyond `cursor`, `limit`)                                                                                       | Responses                                                                             |
-| ------ | ------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| GET    | `/operator/plans`   | `platform.plan.view`           | none                                                                                                                     | 200 a page of plans                                                                   |
-| GET    | `/operator/tenants` | `platform.tenant.view`         | none                                                                                                                     | 200 a page of tenant details `{tenant, subscription, usage}` (Q18)                                 |
-| GET    | `/users`            | `user.view`                    | `unitId` (ID, `none`, `all`), `managers`, `roleId` (ID, `all`), `status` (default `active`), `q`; `offset` is removed    | 200 a page of users                                                                   |
-| GET    | `/roles`            | `role.view`                    | none                                                                                                                     | 200 a page of roles                                                                   |
-| GET    | `/permissions`      | `role.view`                    | none                                                                                                                     | 200 a page of catalog entries `{key, scopes}`                                         |
-| GET    | `/positions`        | `position.view`                | `unitId` (ID, `all`), `retired` (default `false`); `includeRetired` is removed                                           | 200 a page of positions                                                               |
-| GET    | `/priorities`       | `priority.view`                | `retired` (default `false`); `includeRetired` is removed                                                                 | 200 a page of priorities                                                              |
-| GET    | `/services`         | `service.view`                 | `retired` (default `false`); `includeRetired` is removed                                                                 | 200 a page of services                                                                |
-| GET    | `/workflows`        | `workflow.view`                | `retired` (default `false`); `includeRetired` is removed                                                                 | 200 a page of workflow summaries                                                      |
-| GET    | `/requests`         | anyone; rows by visibility     | `view`, `state` (a state, `all`), `serviceId` (ID, `all`); `offset` is removed; the ID order becomes descending           | 200 a page of request summaries                                                       |
-| GET    | `/notifications`    | any user                       | `unread` (`true`, `false` = read only, `all` = default); `before` is removed                                             | 200 a page of notifications (`hasMore` is replaced by `page.nextCursor`)             |
+| Method | Path                | Who                        | Purpose                                                                                     | Spec refs    |
+| ------ | ------------------- | -------------------------- | ------------------------------------------------------------------------------------------- | ------------ |
+| GET    | `/operator/plans`   | `platform.plan.view`       | (changed) A page of plans                                                                   | R8.5, R8.6   |
+| GET    | `/operator/tenants` | `platform.tenant.view`     | (changed) A page of tenant details `{tenant, subscription, usage}`                          | R8.5, Q18    |
+| GET    | `/users`            | `user.view`                | (changed) A page of users; `offset` is removed                                              | R8.5, R8.9   |
+| GET    | `/roles`            | `role.view`                | (changed) A page of roles                                                                   | R8.5         |
+| GET    | `/permissions`      | `role.view`                | (changed) A page of catalog entries                                                         | R8.5         |
+| GET    | `/positions`        | `position.view`            | (changed) A page of positions; `includeRetired` becomes `retired`                           | R8.5, R8.9   |
+| GET    | `/priorities`       | `priority.view`            | (changed) A page of priorities; `includeRetired` becomes `retired`                          | R8.5, R8.9   |
+| GET    | `/services`         | `service.view`             | (changed) A page of services; `includeRetired` becomes `retired`                            | R8.5, R8.9   |
+| GET    | `/workflows`        | `workflow.view`            | (changed) A page of workflow summaries; `includeRetired` becomes `retired`                  | R8.5, R8.9   |
+| GET    | `/requests`         | anyone; rows by visibility | (changed) A page of request summaries; `offset` is removed; the ID order becomes descending | R8.5, R8.6   |
+| GET    | `/notifications`    | any user                   | (changed) A page of notifications; `before` is removed and `hasMore` becomes `page.nextCursor` | R8.5, R8.6 |
 
 ## Other endpoints
 
-| Method | Path                                         | Who                              | Request   | Responses                                                                                                                                  |
-| ------ | -------------------------------------------- | -------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/health`                                    | anyone                           |           | 200 `{status: "ok", db: "up"}`; 503 `SERVICE_UNAVAILABLE`                                                                                  |
-| POST   | `/auth/login`                                | anyone                           | unchanged | 200 the session, as `GET /auth/me`: `{user, subscription}` (Q17)                                                                          |
-| POST   | `/auth/refresh`                              | refresh cookie                   | unchanged | 200 the session, as `GET /auth/me` (Q17)                                                                                                    |
-| POST   | `/operator/tenants`                          | `platform.tenant.create`         | unchanged | 201 the tenant detail `{tenant, subscription, usage}` (no longer `admin`); 409 `TAKEN` at `slug` or `admin.email` (Q18)                                  |
-| GET    | `/operator/tenants/:tenantId`                | `platform.tenant.view`           |           | 200 the tenant detail `{tenant, subscription, usage}`, unchanged (Q18)                                                          |
-| PUT    | `/operator/tenants/:tenantId/subscription`   | `platform.subscription.update`   | unchanged | 200 the tenant detail `{tenant, subscription, usage}` (was `{subscription, usage}`) (Q18)                                                                                                                 |
-| PUT    | `/priorities/order`                          | `priority.manage`                | unchanged | 204 (Q19)                                                                                                                                   |
-| GET    | `/escalation`                                | `escalation.view`                |           | 200 `{configured, settings}`, `settings` `null` until saved                                                                                |
-| GET    | `/calendar/days`                             | `calendar.view`                  | unchanged | 200 `{from, to, days}`; a day's `start`, `end`, and `season` are `null` when absent                                                        |
-| GET    | `/requests/:requestId`                       | visibility                       |           | 200 the request; every answer has `files` (`null` for non-file fields); a removed file has `name`, `contentType`, `sizeBytes` as `null` |
-| POST   | `/requests/:requestId/information-requests`  | handler or stage assignee        | unchanged | 200 the request (was 201: no new resource with its own URL)                                                                                 |
-| PUT    | `/services/:serviceId/form`                  | `service.manage`                 | fields as read | 200 the service; every field is `{id, type, label, helpText, required, min, max, integer, options, maxFiles}`, `null` where the type has none; a field may be sent back as read (Q22) |
-| PUT    | `/calendar/hours/:effectiveFrom`             | `calendar.manage`                | a week    | 200 the hours version; every weekday is `{mode, start, end}` in the request and the response (Q23)                                          |
+| Method | Path                                        | Who                            | Purpose                                                                                           | Spec refs  |
+| ------ | ------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------- | ---------- |
+| GET    | `/health`                                   | public                         | (changed) 503 `SERVICE_UNAVAILABLE` when the database is unreachable                              | R8.12      |
+| POST   | `/auth/login`                               | public                         | (changed) Answers the session, as `GET /auth/me`                                                  | R8.2, Q17  |
+| POST   | `/auth/refresh`                             | refresh cookie                 | (changed) Answers the session, as `GET /auth/me`                                                  | R8.2, Q17  |
+| POST   | `/operator/tenants`                         | `platform.tenant.create`       | (changed) Answers the tenant detail, no longer `admin`                                            | R8.2, Q18  |
+| GET    | `/operator/tenants/:tenantId`               | `platform.tenant.view`         | (changed) Answers the tenant detail                                                               | R8.2, Q18  |
+| PUT    | `/operator/tenants/:tenantId/subscription`  | `platform.subscription.update` | (changed) Answers the tenant detail, was `{subscription, usage}`                                  | R8.2, Q18  |
+| PUT    | `/priorities/order`                         | `priority.manage`              | (changed) Answers 204                                                                             | R8.3, Q19  |
+| GET    | `/escalation`                               | `escalation.view`              | (changed) `settings` is `null` until saved                                                        | R8.4       |
+| GET    | `/calendar/days`                            | `calendar.view`                | (changed) A day's `start`, `end`, and `season` are `null` when absent                             | R8.4       |
+| GET    | `/requests/:requestId`                      | visibility                     | (changed) Every answer has `files`, `null` for non-file fields; a removed file's details are `null` | R8.4     |
+| POST   | `/requests/:requestId/information-requests` | the handler or a stage assignee | (changed) Answers 200, was 201: no new resource with its own URL                                  | R8.3       |
+| PUT    | `/services/:serviceId/form`                 | `service.manage`               | (changed) Every field has every key, `null` where its type has none; a field may be sent as read  | R8.4, Q22  |
+| PUT    | `/calendar/hours/:effectiveFrom`            | `calendar.manage`              | (changed) Every weekday is `{mode, start, end}` in the request and the response                   | R8.4, Q23  |
 
-Unique-value conflicts on `POST` and `PATCH` of plans, tenants, org units, users, roles, positions, workflows, services, and priorities answer 409 `TAKEN` at the field.
-`PUT /workflows/:workflowId` and `PUT /services/:serviceId/form` answer 409 `VERSION_CHANGED` at `baseVersion` and `baseRevision`.
-`POST /roles`, `PATCH /roles/:roleId`, and `PUT /users/:userId/role` answer `PERMISSION_NOT_HELD` with each detail at the body entry that asked for the missing permission; refusals that no input caused (the route's own permission, deactivating a user whose role is above the actor's) have no details.
-
-## Validation
-
-| Detail code      | Path                 | When                                                                                       |
-| ---------------- | -------------------- | ------------------------------------------------------------------------------------------ |
-| `invalid_cursor` | `cursor`             | The cursor is broken, altered, or from another list or other filters.                     |
-| `invalid_value`  | the filter           | A filter value the list does not accept (`unread=maybe`).                                  |
-| `invalid_json`   | `""`                 | The body is not valid JSON (it had no details).                                            |
-| `taken`          | the field            | With `TAKEN`.                                                                              |
-
-## New error codes
-
-| Code                  | Status | When                                                                                                                       |
-| --------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `TAKEN`               | 409    | A unique value is already used; replaces `EMAIL_TAKEN`, `SLUG_TAKEN`, and the seven `*_NAME_TAKEN` codes.                  |
-| `VERSION_CHANGED`     | 409    | The resource changed since the client read it; replaces `WORKFLOW_VERSION_CHANGED` and `SERVICE_FORM_CHANGED`.             |
-| `SERVICE_UNAVAILABLE` | 503    | `/health` cannot reach the database.                                                                                       |
+Unique-value conflicts answer 409 `TAKEN` at the field, and `PUT /workflows/:workflowId` and `PUT /services/:serviceId/form` answer 409 `VERSION_CHANGED`; the codes are in `docs/api/errors.md` (R8.11).

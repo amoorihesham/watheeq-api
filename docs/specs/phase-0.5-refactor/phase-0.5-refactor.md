@@ -49,7 +49,7 @@ See [phase-0.5-refactor.API.md](phase-0.5-refactor.API.md).
 | ---------- | ---- | -------- |
 | Routes     | Paths, HTTP methods, which middleware and controller handler apply | Contain logic |
 | Controller | Reading the request (body, cookies, the authenticated user through `principalOf(req)`), calling one service function, writing the response (status, cookies, JSON) | Query the database, open transactions, contain business rules |
-| Service    | Validating its input with the feature's zod schemas, business rules and flow, transaction boundaries (`withTx`), calling `writeAuditEntry()` | Read `req` or write `res` |
+| Service    | Business rules and flow on input that is already validated and typed, transaction boundaries (`withTx`), calling `writeAuditEntry()` | Read `req` or write `res` |
 | Repository | Single queries against Drizzle, mapping rows, translating PostgreSQL errors | Open transactions, contain business rules |
 
 - Each layer is a factory function closing over its dependencies, for example `createAuthService({ db, repo, settings })`. The module's `<feature>.routes.ts` composes them (repository, then service, then controller) and returns the router; `app.ts` only mounts each module's router. Example: `app.use("/auth", createAuthRouter({ db, config }))`.
@@ -67,6 +67,7 @@ src/
   types/                 global type declarations, one file per augmented library (express.ts)
   modules/<feature>/
     <feature>.routes.ts    composes the module's layers and returns its router
+    <feature>.endpoints.ts the module's endpoint declarations: one `defineApi` group per router
     <feature>.controller.ts, .service.ts, .repository.ts
     <feature>.constants.ts every constant of the feature (cookie names, length limits, hashing parameters)
     <feature>.schemas.ts   every zod schema of the feature
@@ -81,6 +82,7 @@ test/helpers/            pools, seeding, app building
 These apply to every feature module, starting with `modules/auth/`, which is the reference example.
 
 - **Constants** live only in `<feature>.constants.ts`, never inline in a layer. Settings a deployment can change live only in `src/config/`; `<feature>.constants.ts` holds fixed values. Example: `MIN_PASSWORD_LENGTH` and `ACCESS_COOKIE` in `auth.constants.ts`.
+- **Endpoint declarations** live only in `<feature>.endpoints.ts`: one `defineApi` group per router, each endpoint declaring its method, path, permission, input schemas, response, and extra error codes (Phase 10). The router builder validates request input (path parameters, query, body) from these declarations, so a service receives typed input and does not validate it. The router and `docs/api/openapi.json` are both built from the declarations.
 - **zod schemas** live only in `<feature>.schemas.ts`, and are shared by every caller that validates the same input. Example: `createOperatorSchema` is used by the service for both the CLI and, later, the API.
 - **Global declarations** (`declare global`, module augmentation) live only in `src/types/`, one file per augmented library, never inside a module. Example: `src/types/express.ts` adds `req.auth: AuthUserType`, importing the type from the module that owns it. The files are `.ts`, not `.d.ts`, because `skipLibCheck` skips every `.d.ts` file, so a broken import there would silently turn the augmented property into `any`.
 - **Type names** end in `Type`. HTTP bodies are `<Action>RequestType` and `<Action>ResponseType` (`LoginRequestType`, `LoginResponseType`, `MeResponseType`); everything else follows the same suffix (`AccountType`, `AuthSettingsType`, `AuthServiceType`). Infrastructure folders (`db`, `http`, `config`, `logging`) keep their existing names (`Db`, `Tx`, `Config`, `AppError`).
@@ -91,7 +93,7 @@ These apply to every feature module, starting with `modules/auth/`, which is the
   - An unmapped database error becomes `500 INTERNAL`, never a leaked message.
   - Non-HTTP entry points (the CLI) call the same `fromDatabaseError`.
   - The one exception is a repository whose failure is the answer itself: `health.repository.ts` turns an unreachable database into `false`, because 503 is the endpoint's expected result, not an error.
-- **Services validate with `validate(schema, input)`** and throw `AppError`; they catch only when a failure must be turned into a different business outcome.
+- **Services throw `AppError`** and catch only when a failure must be turned into a different business outcome. Input that does not come through the router builder, such as the CLI's, is validated with `validate(schema, input)` before the service is called.
 
 Dependency rules:
 

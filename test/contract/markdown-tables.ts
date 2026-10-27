@@ -28,16 +28,37 @@ export function tableRows(text: string): string[][] {
   return rows;
 }
 
-/** The text of `.API.md` files of every phase folder under `docs/specs`. */
+const IMPLEMENTED_STATUSES = ["In Implementation", "Implemented"];
+
+/** The value of the `| **Status** |` row of a phase spec, or undefined when there is none. */
+export function specStatus(specText: string): string | undefined {
+  const row = specText.split("\n").find((line) => /^\|\s*\*\*Status\*\*\s*\|/.test(line));
+  return row === undefined ? undefined : cellsOf(row)[1];
+}
+
+/** Only specs in implementation or implemented have mounted routes for their tables to match (Phase 10, Q15). */
+export function hasMountedRoutes(specText: string): boolean {
+  return IMPLEMENTED_STATUSES.includes(specStatus(specText) ?? "");
+}
+
+/** The text of `.API.md` files of every phase folder under `docs/specs` whose sibling spec is In Implementation or Implemented. */
 export function apiDocs(root = "docs/specs"): { path: string; text: string }[] {
   return readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .flatMap((folder) =>
-      readdirSync(join(root, folder.name))
+    .flatMap((folder) => {
+      const names = readdirSync(join(root, folder.name));
+      const spec = names.find((name) => name.endsWith(".md") && !name.endsWith(".API.md"));
+      if (
+        spec === undefined ||
+        !hasMountedRoutes(readFileSync(join(root, folder.name, spec), "utf8"))
+      ) {
+        return [];
+      }
+      return names
         .filter((name) => name.endsWith(".API.md"))
         .map((name) => {
           const path = join(root, folder.name, name);
           return { path, text: readFileSync(path, "utf8") };
-        }),
-    );
+        });
+    });
 }

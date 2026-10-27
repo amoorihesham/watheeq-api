@@ -56,7 +56,7 @@ GET /users?status=active&limit=25&cursor=eyJ2Ijox...
 - A cursor used with other filters, on another list, or altered or broken is 400 `VALIDATION_FAILED` with the detail `{path: "cursor", code: "invalid_cursor"}`.
   A client restarts the list from the first page.
   Example: Faisal is on page 2 of `GET /requests?view=review_queue` and the app sends the same cursor with `view=handling`; the answer is `invalid_cursor`, so the app restarts the tab instead of missing requests.
-- Each list has one fixed order, declared with its sort keys in its `.API.md`, ending with the ID as the tie-breaker.
+- Each list has one fixed order, listed with its sort keys in section 4.2.3 of the Phase 8 spec, ending with the ID as the tie-breaker.
   A page continues strictly after the last item of the previous page, so a new, removed, or tied item never causes a repeat or a skip.
   There is no client-chosen sorting.
 - `total` is the number of items that match the filters, not the items left, counted in the same database snapshot as the page.
@@ -71,7 +71,7 @@ One rule applies to every filter of every list.
 | ---- | ------- |
 | `field=value` | Keep the items whose field has that value |
 | `field=all` | No filter on that field |
-| `field=none` | Keep the items where the field is empty (only where the `.API.md` says so) |
+| `field=none` | Keep the items where the field is empty (only where the filter's description in `openapi.json` says so) |
 | field left out | The default documented for that list |
 
 - `q` (text search) and `view` (a named list relative to the caller, such as `review_queue`) are the only parameters that are not field filters.
