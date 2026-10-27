@@ -38,7 +38,8 @@
   Its main decisions are T52-T56 in `TECHNICAL_DECISIONS.md`, with T11 rewritten. Migration `0023` adds an index for the request list. The response shapes changed for every endpoint, so any client written before must follow `docs/api/`.
 - **Phase 9 (centralized configuration) implemented** (`docs/specs/phase-9-config/phase-9-config.md`): one loader in `src/config/` for the server, the CLIs, and the tests, returning grouped settings so each module receives only what it uses; job intervals, batch sizes, budgets, and the database, shutdown, and upload-queue settings are overridable environment variables with the old values as defaults; feature constants live in `<feature>.constants.ts`.
   Its main decisions are T57-T59 in `TECHNICAL_DECISIONS.md`. Environment variable names are unchanged, so existing `.env` files keep working; `.env.example` lists every key, the optional overrides commented with their defaults.
-- **Next action:** the owner decides the next phase. A local staging setup was named as a later phase; it must avoid the ports of other local projects, and it brings secrets read from files (`TECHNICAL_DECISIONS.md`, Deferred Hardening).
+- **Phase 10 (OpenAPI document and API reference) in implementation** (`docs/specs/phase-10-openapi/phase-10-openapi.md`): every endpoint declared once as data, with the router, input validation, response, and an OpenAPI 3.1 document built from it; `docs/api/openapi.json` committed with a drift test; a Scalar reference at `/docs` outside production; implemented phases' `.API.md` trimmed to an index. It reverses Phase 8 Q1. Spec approved 2026-10-27.
+- **Next action:** implement Phase 10 (steps 10.1-10.5 by two agents), then one review and report. A local staging setup follows as its own phase; it must avoid the ports of other local projects, it brings secrets read from files (`TECHNICAL_DECISIONS.md`, Deferred Hardening), and it will host `/docs`.
 
 ---
 
@@ -60,6 +61,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | Implemented                             |
 | 8   | API contract                    | One response, list, and error shape; cursor paging; filters; `docs/api/`; contract checks   | 0-7        | Implemented                             |
 | 9   | Centralized configuration       | One config loader, grouped settings per module, overridable job settings, `.constants.ts`   | 8          | Implemented                             |
+| 10  | OpenAPI & API reference         | Endpoint declarations, validation from them, generated `openapi.json`, Scalar at `/docs`     | 9          | In Implementation                       |
 
 Audit is cross-cutting: built in Phase 0, used by every later phase.
 
