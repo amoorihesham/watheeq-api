@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                                                                                                                                                                                                                                                           |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status**             | In Implementation                                                                                                                                                                                                                                                                                               |
+| **Status**             | Implemented                                                                                                                                                                                                                                                                                                     |
 | **Approved by / date** | _Amr - 27/10/2026 - 15:28 pm_                                                                                                                                                                                                                                                                                   |
 | **Depends on**         | Phase 0 (`phase-0-foundations.md`) for the config loader, 0.5 (`phase-0.5-refactor.md`) for the per-module file rules, Phase 7 (`phase-7-escalation-notifications.md`) for the jobs and `JOBS`, Phase 8 (`phase-8-api-contract.md`), which must be merged first because both phases touch every module's wiring |
 | **Related decisions**  | Technical T12, T14, T19, T40, T47-T49; Phase 5.5 P5.5.9                                                                                                                                                                                                                                                         |
@@ -39,7 +39,7 @@ The owner wants this centralized now, as a consistency step before the staging s
 
 | ID    | Requirement                                                                                                                                                                                   | Example                                                                                                                                                                    |
 | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R9.1  | Every entry point validates its settings through a parser in `src/config/`. In `src/`, `process.env` is read only in `main.ts` and `src/cli/*.ts`, and only as the argument of such a parser. | _`DATABASE_URL=mysql://u:p@host/db pnpm db:migrate` exits 1 with `Invalid configuration: DATABASE_URL (custom)` before it opens a connection, exactly as the server does._ |
+| R9.1  | Every entry point validates its settings through a parser in `src/config/`. In `src/`, `process.env` is read only in `main.ts` and `src/cli/*.ts`, and only as the argument of a `src/config/` function (the two parsers and `unknownJobKeys`). | _`DATABASE_URL=mysql://u:p@host/db pnpm db:migrate` exits 1 with `Invalid configuration: DATABASE_URL (custom)` before it opens a connection, exactly as the server does._ |
 | R9.2  | The loader returns a grouped, typed `Config` (4.2); the environment variable names do not change.                                                                                             | _A developer's existing `.env` from Phase 8 starts the server with no edit._                                                                                               |
 | R9.3  | Each router, job factory, and infrastructure factory receives only the groups it uses; no module receives the whole `Config`.                                                                 | _`createWorkflowsRouter` takes `{ db, auth }`; it cannot reach `storage.secretKey`, and `tsc` fails if it tries._                                                          |
 | R9.4  | The operational settings of 4.3 are read from the central config, default to today's values, and can be overridden by environment variable within the listed bounds.                          | _On staging, `JOB_FILES_SWEEP_INTERVAL_MS=60000` and a restart make the file sweep run every minute instead of every 15 minutes, with no code change._                     |
@@ -60,7 +60,7 @@ No changes.
 ### 4.2 Configuration shape and loading
 
 `src/config/config.ts` keeps one zod schema over the flat environment variables (the names stay), then one transform builds the groups.
-The group types are inferred from the schema; `SmtpSettingsType` and `StorageSettingsType` become the `email` and `storage` groups, so `smtpSettingsOf` and `storageSettingsOf` are removed.
+The group types are inferred from the schema and exported as `<Group>ConfigType` (`AuthConfigType`, `StorageConfigType`, `FileSweepJobConfigType`, ...), so a module names its group without the whole `Config`; `SmtpSettingsType` and `StorageSettingsType` become the `email` and `storage` groups, so `smtpSettingsOf` and `storageSettingsOf` are removed.
 
 ```ts
 // Shape only; names of the groups and fields are part of this spec.
@@ -108,8 +108,8 @@ The operational settings of 4.3 fill the remaining fields.
 
 Parsers:
 
-- `parseConfig(env)` returns the whole `Config`, for the server and the test helpers. Its result and failure message keep today's form (`{ ok, config }` or `{ ok: false, message }`, keys and reason codes only).
-- `parseCliConfig(env)` returns `{ database, operatorPassword? }`, for both CLIs. It shares the `DATABASE_URL` and `DATABASE_TIMEOUT_MS` field schemas with `parseConfig`, so the two cannot drift, and it does not require SMTP or storage settings to run a migration.
+- `parseConfig(env)` returns the whole `Config`, for the server and the test helpers. A failure names "Required" only for a key that is missing (an `invalid_type` issue on an unset key); any other issue gives its code, so a default budget that conflicts with a lowered interval reads `(custom)`, not `(Required)`. Its result and failure message keep today's form (`{ ok, config }` or `{ ok: false, message }`, keys and reason codes only).
+- `parseCliConfig(env)` returns `{ database: { url }, operatorPassword? }`, for both CLIs. It shares the `DATABASE_URL` field schema with `parseConfig` (one `databaseFields` object both schemas spread), so the two cannot drift, and it does not require SMTP or storage settings to run a migration. `DATABASE_TIMEOUT_MS` is not shared: the CLIs have no connection timeout, and adding the 2-second default would change how migrations behave. An empty `OPERATOR_PASSWORD=` is a configuration error, not a prompt.
 - An empty string is a value, not "unset": `PORT=` fails as today. A setting is left to its default only by leaving it out.
 
 Settings are read once, when the process starts. The values are copied into the objects built at startup (the pool, the S3 client, the routers, the scheduler's timers), so a change takes effect on the next restart (Q4).
@@ -135,6 +135,7 @@ Each environment name of a job setting is `JOB_` plus the job's name in upper ca
 | `STORAGE_UPLOAD_QUEUE_SIZE`             | `storage.uploadQueueSize`              | 2                 | 1 to 10                       | `storage.config.ts`                 |
 
 - `DATABASE_TIMEOUT_MS` keeps today's double role: the pool's connection timeout and the `/health` check's timeout.
+- The budget rule runs only when every value is valid on its own, so a bad interval is reported once. Since the minimum interval and the minimum budget are both 1,000 ms, the escalation and sweep intervals effectively start at 1,001 ms; this is accepted rather than special-cased.
 - The rule "budget below interval" (R9.5) keeps each run inside its own cycle. Example: with a 60-second escalation interval and a 90-second budget, one slow run could hold back R1 and R2 firings for a run and a half, and the escalation check would no longer be "every minute" in practice (Phase 7, 4.3).
 - What stays a constant: values that are a fact of an external system (`MAX_KEYS_PER_DELETE`, `UPLOAD_PART_SIZE_BYTES`, the S3 limits) or a product rule with a spec ID (`PENDING_LIFETIME_HOURS`, `RETENTION_DAYS`, `ENDING_SOON_DAYS`, `STORAGE_WARNING_PERCENT`, `ABANDONED_AFTER_HOURS`, `OVERDUE_AFTER_HOURS`). Changing one of those is a product decision and goes through a spec.
 
@@ -145,7 +146,7 @@ Each environment name of a job setting is `JOB_` plus the job's name in upper ca
 1. `parseConfig(process.env)`; on failure, log the message at fatal and exit 1 (unchanged).
 2. Warn about unknown `JOB_*` keys (R9.7).
 3. Build the logger, the store, the jobs, the pool, and the app from their groups.
-4. The `scheduler started` line logs each selected job's name and settings (R9.8).
+4. The `scheduler started` line logs `jobs` as a list of `{ name, ...settings }`, one per selected job (R9.8). Each `JobType` carries its effective `settings` (interval, and batch size or budget where it has them), so the log cannot drift from what the job uses.
 
 **Wiring.** Each module still composes its own layers (T14); only the arguments change:
 
@@ -165,6 +166,8 @@ app.use(
   }),
 );
 ```
+
+`createPool(database, logger)` takes the `database` group. The auth module keeps its own flat settings object, built in `auth.routes.ts` from the `auth` and `links` groups.
 
 ```ts
 // Before (jobs.ts): each job reads its module's constants
@@ -267,8 +270,10 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P9.4 | Unknown `JOB_*` keys are warned about, not fatal; the effective operational settings are logged at startup, secrets never.                                                                                                             | An operator sees a typo and the values in force without risking a secret in the logs.                                               |
 | P9.5 | Settings are read once at startup; a change takes effect on restart.                                                                                                                                                                   | Standard for a stateless API; live reload would need every consumer to re-read, timers to be rebuilt, and instances to agree.       |
 | P9.6 | Secrets from files and secret managers are deferred to the staging phase.                                                                                                                                                              | Keeps this phase to centralizing; the loader makes the addition local.                                                              |
+| P9.7 | The CLIs share only `DATABASE_URL` with the server schema; an empty `OPERATOR_PASSWORD` is an error. | Owner approval of the implementation report (2026-10-27): no connection-timeout change for migrations; an empty password variable is a mistake, not a request to be prompted. |
+| P9.8 | Group types are exported as `<Group>ConfigType`; `createPool` takes the `database` group; each `JobType` carries its `settings`, logged as `{ name, ...settings }`. | Owner approval of the implementation report (2026-10-27). |
 
-Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented, and update T14 (`<feature>.constants.ts`) and the Phase 0.5 per-module file rules.
+Promoted to `TECHNICAL_DECISIONS.md` as T57-T59; T14 and the Phase 0.5 per-module file rules now name `<feature>.constants.ts`.
 
 ## 11. Change Log
 
@@ -276,3 +281,4 @@ Promote these to `TECHNICAL_DECISIONS.md` when the phase is implemented, and upd
 | ---------- | -------------- | ------------------------------------------------ |
 | 2026-10-27 | Initial draft. | Pre-spec discussion with the owner (Q1, Q2, Q4). |
 | 2026-10-27 | Q3, Q5, and Q6 resolved as proposed. | Owner approved the draft. |
+| 2026-10-27 | Implemented and verified (steps 9.1-9.4). Folded in the approved implementation choices: CLIs share only `DATABASE_URL`, empty `OPERATOR_PASSWORD` is an error, "Required" only for missing keys, the budget check after the other values, the 1,001 ms effective minimum, `<Group>ConfigType` names, `createPool` on its group, job `settings` in the startup log, and R9.1 allowing `unknownJobKeys` (P9.7, P9.8). | Owner approval of the implementation report. |

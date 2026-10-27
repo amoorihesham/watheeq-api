@@ -36,8 +36,9 @@
 - **Phase 8 (API contract) implemented** (`docs/specs/phase-8-api-contract/phase-8-api-contract.md`): every endpoint answers `{data}` (lists `{data, page: {nextCursor, total}}`) or `{error: {code, requestId, details}}`, writes return what their reads return, every key is always present, lists are paged by cursor with one server-side order and one filter rule, and `docs/api/` states the HTTP contract once for the frontend.
   Responses go only through the respond helpers, which check every response against its schema outside production, and contract tests tie error codes to `docs/api/errors.md` and routes to the phase `.API.md` tables.
   Its main decisions are T52-T56 in `TECHNICAL_DECISIONS.md`, with T11 rewritten. Migration `0023` adds an index for the request list. The response shapes changed for every endpoint, so any client written before must follow `docs/api/`.
-- **Phase 9 (centralized configuration) in implementation** (`docs/specs/phase-9-config/phase-9-config.md`): one loader in `src/config/` for the server, the CLIs, and the tests, returning grouped settings so each module receives only what it uses; job intervals, batch sizes, budgets, and timeouts become overridable settings with today's values as defaults; `<feature>.config.ts` files become `<feature>.constants.ts`. Spec approved 2026-10-27.
-- **Next action:** implement Phase 9 (steps 9.1-9.4 by two agents), then one review and report. A local staging setup follows as its own phase; it must avoid the ports of other local projects.
+- **Phase 9 (centralized configuration) implemented** (`docs/specs/phase-9-config/phase-9-config.md`): one loader in `src/config/` for the server, the CLIs, and the tests, returning grouped settings so each module receives only what it uses; job intervals, batch sizes, budgets, and the database, shutdown, and upload-queue settings are overridable environment variables with the old values as defaults; feature constants live in `<feature>.constants.ts`.
+  Its main decisions are T57-T59 in `TECHNICAL_DECISIONS.md`. Environment variable names are unchanged, so existing `.env` files keep working; `.env.example` lists every key, the optional overrides commented with their defaults.
+- **Next action:** the owner decides the next phase. A local staging setup was named as a later phase; it must avoid the ports of other local projects, and it brings secrets read from files (`TECHNICAL_DECISIONS.md`, Deferred Hardening).
 
 ---
 
@@ -58,7 +59,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure, attachments             | 5.5        | Implemented                             |
 | 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | Implemented                             |
 | 8   | API contract                    | One response, list, and error shape; cursor paging; filters; `docs/api/`; contract checks   | 0-7        | Implemented                             |
-| 9   | Centralized configuration       | One config loader, grouped settings per module, overridable job settings, `.constants.ts`   | 8          | In Implementation                       |
+| 9   | Centralized configuration       | One config loader, grouped settings per module, overridable job settings, `.constants.ts`   | 8          | Implemented                             |
 
 Audit is cross-cutting: built in Phase 0, used by every later phase.
 
