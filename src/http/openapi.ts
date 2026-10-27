@@ -54,12 +54,12 @@ const UNREPRESENTABLE = new Set([
 
 const INFO_DESCRIPTION = `The Watheeq legal affairs API.
 
-Success, list, and error shapes, authentication, and access are described once in the API guide, not per operation:
+Success, list, and error shapes, authentication, and access are described once in the API guide in the backend repository (\`docs/api/\`), not per operation:
 
-- [Conventions](docs/api/conventions.md): response and list shapes, cursors, filters, and the Read-only state.
-- [Errors](docs/api/errors.md): every error code and detail code.
-- [Authentication](docs/api/auth.md): the access and refresh cookies.
-- [Access](docs/api/access.md): who can call what.`;
+- \`conventions.md\`: response and list shapes, cursors, filters, and the Read-only state.
+- \`errors.md\`: every error code and detail code.
+- \`auth.md\`: the access and refresh cookies.
+- \`access.md\`: who can call what.`;
 
 /** Turns every `$ref` into a component reference; `toJSONSchema` writes definitions under `$defs`. */
 function rewriteRefs(node: unknown): unknown {

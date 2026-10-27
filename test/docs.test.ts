@@ -29,6 +29,16 @@ describe("the API reference outside production (R10.10)", () => {
     expect(res.text).toContain('src="/docs/scalar.js"');
   });
 
+  it("turns off the page's features that send the document to Scalar's servers", async () => {
+    const res = await request(outside).get("/docs");
+    const config = /createApiReference\('#app', (\{[\s\S]*?\n\s*\})\)/.exec(res.text)?.[1];
+    expect(JSON.parse(config ?? "{}")).toMatchObject({
+      agent: { disabled: true },
+      mcp: { disabled: true },
+      telemetry: false,
+    });
+  });
+
   it("serves the script the page loads", async () => {
     const res = await request(outside).get("/docs/scalar.js").buffer(true);
     expect(res.status).toBe(200);

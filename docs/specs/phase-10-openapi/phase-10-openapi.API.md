@@ -3,7 +3,7 @@
 The endpoints of [phase-10-openapi.md](phase-10-openapi.md), moved out of its section 4.2.
 Section numbers and requirement IDs below refer to that spec.
 
-Both endpoints exist only when `NODE_ENV` is not `production`; in production they are 404 `NOT_FOUND` like any unknown route (R10.10).
+These endpoints exist only when `NODE_ENV` is not `production`; in production they are 404 `NOT_FOUND` like any unknown route (R10.10).
 They are not part of the generated document.
 
 | Method | Path                | Who    | Request | Responses                                                                          |

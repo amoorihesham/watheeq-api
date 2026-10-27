@@ -3,7 +3,7 @@
   "info": {
     "title": "Watheeq API",
     "version": "1.0.0",
-    "description": "The Watheeq legal affairs API.\n\nSuccess, list, and error shapes, authentication, and access are described once in the API guide, not per operation:\n\n- [Conventions](docs/api/conventions.md): response and list shapes, cursors, filters, and the Read-only state.\n- [Errors](docs/api/errors.md): every error code and detail code.\n- [Authentication](docs/api/auth.md): the access and refresh cookies.\n- [Access](docs/api/access.md): who can call what."
+    "description": "The Watheeq legal affairs API.\n\nSuccess, list, and error shapes, authentication, and access are described once in the API guide in the backend repository (`docs/api/`), not per operation:\n\n- `conventions.md`: response and list shapes, cursors, filters, and the Read-only state.\n- `errors.md`: every error code and detail code.\n- `auth.md`: the access and refresh cookies.\n- `access.md`: who can call what."
   },
   "tags": [
     {
