@@ -3,20 +3,11 @@ import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import type { EmailSenderType } from "@/email/index.js";
 import { AppError } from "@/http/errors.js";
-import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
 import { toSubscriptionStatus } from "@/modules/subscriptions/index.js";
 import { grantedPermissions } from "@/modules/tenant-access/index.js";
 import { DUMMY_PASSWORD_HASH } from "./auth.constants.js";
 import { createAuthRepository } from "./auth.repository.js";
-import {
-  changePasswordRequestSchema,
-  createOperatorRequestSchema,
-  loginRequestSchema,
-  passwordResetRequestSchema,
-  resetPasswordRequestSchema,
-  verifyEmailRequestSchema,
-} from "./auth.schemas.js";
 import type {
   AccountType,
   AuthRepositoryType,
@@ -97,7 +88,7 @@ export function createAuthService({
   return {
     /** Every failure is the same INVALID_CREDENTIALS, so the response does not reveal which emails exist. */
     async login(input: LoginRequestType): Promise<AuthSessionType> {
-      const { email, password } = validate(loginRequestSchema, input);
+      const { email, password } = input;
       const [account] = await repo.findAccountByEmail(db, email);
       // An unverified Tenant Admin has no password yet, and is answered exactly like an unknown email (P1.17).
       if (!account?.passwordHash || !account.emailVerifiedAt) {
@@ -143,7 +134,7 @@ export function createAuthService({
      * Unknown, used, expired, and replaced links all give VERIFICATION_INVALID.
      */
     async verifyEmail(input: VerifyEmailRequestType, requestId: string): Promise<void> {
-      const { token, password } = validate(verifyEmailRequestSchema, input);
+      const { token, password } = input;
       const passwordHash = await hashPassword(password);
       await withTx(db, async (tx) => {
         const [link] = await repo.consumePasswordToken(tx, hashToken(token), "invitation");
@@ -176,7 +167,7 @@ export function createAuthService({
       refreshToken: string | undefined,
       requestId: string,
     ): Promise<void> {
-      const { currentPassword, newPassword } = validate(changePasswordRequestSchema, input);
+      const { currentPassword, newPassword } = input;
       const [account] = await repo.findAccountById(db, user.id);
       if (
         !account?.passwordHash ||
@@ -200,12 +191,12 @@ export function createAuthService({
     },
 
     /**
-     * Validates the request now and returns the rest as work to run after responding (P2.7): the 204 goes out
-     * before the account is even looked up, so neither the response nor its timing reveals whether it exists.
+     * Returns the work to run after responding (P2.7): the 204 goes out before the account is even looked up, so
+     * neither the response nor its timing reveals whether it exists.
      * Only an active user who has set a password gets an email; an invited user uses their invitation (R2.17).
      */
     requestPasswordReset(input: PasswordResetRequestType, log: Logger): () => Promise<void> {
-      const { email } = validate(passwordResetRequestSchema, input);
+      const { email } = input;
       return async () => {
         try {
           const [account] = await repo.findAccountByEmail(db, email);
@@ -225,7 +216,7 @@ export function createAuthService({
 
     /** Uses a reset link: sets the new password and signs out every session (R2.17). */
     async resetPassword(input: ResetPasswordRequestType, requestId: string): Promise<void> {
-      const { token, password } = validate(resetPasswordRequestSchema, input);
+      const { token, password } = input;
       const passwordHash = await hashPassword(password);
       await withTx(db, async (tx) => {
         const [link] = await repo.consumePasswordToken(tx, hashToken(token), "reset");
@@ -261,14 +252,15 @@ export function createAuthService({
 }
 
 /**
- * Inserts an operator account. Used only by the `operator:create` CLI; no HTTP endpoint creates operators (T13).
+ * Inserts an operator account. Used only by the `operator:create` CLI, which validates its input first; no HTTP
+ * endpoint creates operators (T13).
  * A taken email surfaces as the database's unique violation, translated centrally to EMAIL_TAKEN.
  */
 export async function createOperator(
   db: Db,
   input: CreateOperatorRequestType,
 ): Promise<UserSummaryType> {
-  const { email, userName, password } = validate(createOperatorRequestSchema, input);
+  const { email, userName, password } = input;
   const [operator] = await createAuthRepository().insertUser(db, {
     email,
     userName,

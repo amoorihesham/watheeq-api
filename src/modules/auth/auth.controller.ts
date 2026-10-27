@@ -1,8 +1,7 @@
-import type { RequestHandler } from "express";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { AppError } from "@/http/errors.js";
-import { sendData, sendNoContent } from "@/http/respond.js";
 import { REFRESH_COOKIE } from "./auth.constants.js";
-import { sessionResponseSchema } from "./auth.responses.js";
+import type { authApi } from "./auth.endpoints.js";
 import type { AuthServiceType, AuthSettingsType } from "./auth.types.js";
 import { clearAuthCookies, setAuthCookies } from "./shared/cookies.js";
 import { principalOf } from "./shared/middlewares.js";
@@ -20,67 +19,56 @@ export function createAuthController({
   settings: AuthSettingsType;
 }) {
   return {
-    login: (async (req, res) => {
-      const session = await service.login(req.body);
+    login: (async ({ body }, req, res) => {
+      const session = await service.login(body);
       setAuthCookies(res, session.tokens, settings);
       req.log.info({ userId: session.user.id }, "user logged in");
-      sendData(res, 200, sessionResponseSchema, {
-        user: session.user,
-        subscription: session.subscription,
-      });
-    }) satisfies RequestHandler,
+      return { user: session.user, subscription: session.subscription };
+    }) satisfies HandlerOf<typeof authApi.endpoints.login>,
 
-    refresh: (async (req, res) => {
+    refresh: (async (_input, req, res) => {
       const session = await service.refresh(refreshCookieOf(req.cookies));
       if (!session) {
         clearAuthCookies(res);
         throw new AppError("UNAUTHENTICATED");
       }
       setAuthCookies(res, session.tokens, settings);
-      sendData(res, 200, sessionResponseSchema, {
-        user: session.user,
-        subscription: session.subscription,
-      });
-    }) satisfies RequestHandler,
+      return { user: session.user, subscription: session.subscription };
+    }) satisfies HandlerOf<typeof authApi.endpoints.refresh>,
 
-    logout: (async (req, res) => {
+    logout: (async (_input, req, res) => {
       await service.logout(refreshCookieOf(req.cookies));
       clearAuthCookies(res);
       req.log.info("user logged out");
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    }) satisfies HandlerOf<typeof authApi.endpoints.logout>,
 
-    verifyEmail: (async (req, res) => {
-      await service.verifyEmail(req.body, String(req.id));
+    verifyEmail: (async ({ body }, req) => {
+      await service.verifyEmail(body, String(req.id));
       req.log.info("email verified");
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    }) satisfies HandlerOf<typeof authApi.endpoints.verifyEmail>,
 
-    changePassword: (async (req, res) => {
+    me: (async (_input, req) => service.me(principalOf(req))) satisfies HandlerOf<
+      typeof authApi.endpoints.me
+    >,
+
+    changePassword: (async ({ body }, req) => {
       await service.changePassword(
         principalOf(req),
-        req.body,
+        body,
         refreshCookieOf(req.cookies),
         String(req.id),
       );
       req.log.info("password changed");
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    }) satisfies HandlerOf<typeof authApi.endpoints.changePassword>,
 
-    requestPasswordReset: (async (req, res) => {
-      const sendLink = service.requestPasswordReset(req.body, req.log);
-      sendNoContent(res);
-      await sendLink();
-    }) satisfies RequestHandler,
+    requestPasswordReset: (async ({ body }, req) => {
+      // The 204 does not wait for the lookup, so neither it nor its timing reveals whether the account exists.
+      void service.requestPasswordReset(body, req.log)();
+    }) satisfies HandlerOf<typeof authApi.endpoints.requestPasswordReset>,
 
-    resetPassword: (async (req, res) => {
-      await service.resetPassword(req.body, String(req.id));
+    resetPassword: (async ({ body }, req) => {
+      await service.resetPassword(body, String(req.id));
       req.log.info("password reset");
-      sendNoContent(res);
-    }) satisfies RequestHandler,
-
-    me: (async (req, res) => {
-      sendData(res, 200, sessionResponseSchema, await service.me(principalOf(req)));
-    }) satisfies RequestHandler,
+    }) satisfies HandlerOf<typeof authApi.endpoints.resetPassword>,
   };
 }

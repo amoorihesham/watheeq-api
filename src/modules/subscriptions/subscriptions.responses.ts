@@ -26,11 +26,13 @@ export const subscriptionViewResponseSchema = z.strictObject({
 });
 
 /** What every tenant user sees about the subscription in `/auth/me`, so the client can explain disabled actions. */
-export const subscriptionStatusResponseSchema = z.strictObject({
-  state: subscriptionState,
-  endDate: z.string(),
-  graceEndsOn: z.string(),
-});
+export const subscriptionStatusResponseSchema = z
+  .strictObject({
+    state: subscriptionState,
+    endDate: z.string(),
+    graceEndsOn: z.string(),
+  })
+  .meta({ id: "SubscriptionStatus" });
 
 export const usageResponseSchema = z.strictObject({
   activeUsers: z.number(),

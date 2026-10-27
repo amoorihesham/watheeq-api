@@ -30,7 +30,8 @@
     "check": "biome check --error-on-warnings .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/cli/migrate.ts",
-    "operator:create": "tsx --env-file-if-exists=.env src/cli/create-operator.ts"
+    "operator:create": "tsx --env-file-if-exists=.env src/cli/create-operator.ts",
+    "openapi": "tsx src/cli/openapi.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",
@@ -49,6 +50,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
+    "@scalar/openapi-parser": "0.29.13",
     "@testcontainers/postgresql": "^12.2.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",

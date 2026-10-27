@@ -10,10 +10,12 @@ import { errorHandler } from "./middleware/error-handler.js";
 import { jsonBody } from "./middleware/json-body.js";
 import { notFoundHandler } from "./middleware/not-found.js";
 import { requestLogger } from "./middleware/request-logger.js";
+import { authApi } from "./modules/auth/auth.endpoints.js";
 import { createAuthRouter } from "./modules/auth/index.js";
 import { createCalendarRouter } from "./modules/calendar/index.js";
 import { createEscalationRouter } from "./modules/escalation/index.js";
 import { createFilesRouter } from "./modules/files/index.js";
+import { healthApi } from "./modules/health/health.endpoints.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { createNotificationsRouter } from "./modules/notifications/index.js";
 import { createOrgRouter } from "./modules/org/index.js";
@@ -47,7 +49,7 @@ export function buildApp(deps: AppDeps): express.Express {
   app.disable("x-powered-by");
   app.use(requestLogger(deps.logger));
   // /health is mounted before body parsing and any future authentication.
-  app.use(createHealthRouter(deps.pool, deps.config.database));
+  app.use(healthApi.prefix, createHealthRouter(deps.pool, deps.config.database));
   app.use(cookieParser());
 
   const db = createDb(deps.pool);
@@ -58,7 +60,7 @@ export function buildApp(deps: AppDeps): express.Express {
   // /files carries raw bytes, so it is mounted before the JSON-only body rule.
   app.use("/files", createFilesRouter({ db, auth, store }));
   app.use(jsonBody());
-  app.use("/auth", createAuthRouter({ db, auth, links, emailSender }));
+  app.use(authApi.prefix, createAuthRouter({ db, auth, links, emailSender }));
   app.use("/operator/plans", createPlansRouter({ db, auth }));
   app.use("/operator/tenants", createTenantsRouter({ db, auth, links, emailSender }));
   app.use("/subscription", createSubscriptionsRouter({ db, auth }));

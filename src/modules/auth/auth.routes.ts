@@ -1,12 +1,12 @@
-import { Router } from "express";
-import { noStore } from "@/middleware/no-store.js";
+import type { Router } from "express";
+import { buildRouter } from "@/http/endpoint.js";
 import { createAuthController } from "./auth.controller.js";
+import { authApi } from "./auth.endpoints.js";
 import { createAuthRepository } from "./auth.repository.js";
 import { createAuthService } from "./auth.service.js";
 import type { AuthRouterDepsType, AuthSettingsType } from "./auth.types.js";
-import { authenticate } from "./shared/middlewares.js";
 
-/** The auth module's composition root: builds repository, service, and controller, and returns the `/auth` router. */
+/** The auth module's composition root: builds repository, service, and controller, and returns the `/auth` router built from its declarations. */
 export function createAuthRouter({ db, auth, links, emailSender }: AuthRouterDepsType): Router {
   const settings: AuthSettingsType = {
     jwtSecret: auth.jwtSecret,
@@ -18,15 +18,5 @@ export function createAuthRouter({ db, auth, links, emailSender }: AuthRouterDep
   const service = createAuthService({ db, repo: createAuthRepository(), settings, emailSender });
   const controller = createAuthController({ service, settings });
 
-  const router = Router();
-  router.use(noStore);
-  router.post("/login", controller.login);
-  router.post("/refresh", controller.refresh);
-  router.post("/logout", controller.logout);
-  router.post("/verify", controller.verifyEmail);
-  router.get("/me", authenticate(settings.jwtSecret), controller.me);
-  router.post("/password", authenticate(settings.jwtSecret), controller.changePassword);
-  router.post("/password-reset/request", controller.requestPasswordReset);
-  router.post("/password-reset", controller.resetPassword);
-  return router;
+  return buildRouter(authApi, controller, { db, jwtSecret: settings.jwtSecret });
 }

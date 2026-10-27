@@ -21,24 +21,36 @@ export const createOperatorRequestSchema = z.strictObject({
 });
 
 // No minimum length at login: the policy applies when a password is set. The cap stops hashing huge inputs.
-export const loginRequestSchema = z.strictObject({
-  email: emailSchema,
-  password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
-});
+export const loginRequestSchema = z
+  .strictObject({
+    email: emailSchema,
+    password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
+  })
+  .meta({ id: "LoginRequest" });
 
-export const verifyEmailRequestSchema = z.strictObject({
+const tokenAndPasswordShape = {
   token: z.string().min(1).max(200),
   password: newPasswordSchema,
-});
+};
 
-export const changePasswordRequestSchema = z.strictObject({
-  currentPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH),
-  newPassword: newPasswordSchema,
-});
+export const verifyEmailRequestSchema = z
+  .strictObject(tokenAndPasswordShape)
+  .meta({ id: "VerifyEmailRequest" });
 
-export const passwordResetRequestSchema = z.strictObject({ email: emailSchema });
+export const changePasswordRequestSchema = z
+  .strictObject({
+    currentPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH),
+    newPassword: newPasswordSchema,
+  })
+  .meta({ id: "ChangePasswordRequest" });
 
-export const resetPasswordRequestSchema = verifyEmailRequestSchema;
+export const passwordResetRequestSchema = z
+  .strictObject({ email: emailSchema })
+  .meta({ id: "PasswordResetRequest" });
+
+export const resetPasswordRequestSchema = z
+  .strictObject(tokenAndPasswordShape)
+  .meta({ id: "ResetPasswordRequest" });
 
 // Token schemas stay lenient: a JWT carries standard claims (iss, iat, exp) these do not list.
 export const tenantClaimSchema = z.object({

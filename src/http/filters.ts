@@ -36,6 +36,13 @@ export const idFilter = ({ none }: { none: boolean }) =>
       }
       ctx.addIssue({ code: "custom", ...INVALID_VALUE });
       return z.NEVER;
+    })
+    // The unknown input and the transform have no JSON Schema type, so the document needs it stated.
+    .meta({
+      type: "string",
+      description: none
+        ? "A UUID, `all`, or `none` for the items where it is empty."
+        : "A UUID or `all`.",
     });
 
 export const MAX_PAGE_SIZE = 100;

@@ -2,11 +2,13 @@ import pg from "pg";
 import { parseCliConfig } from "../config/config.js";
 import { createDb } from "../db/pool.js";
 import { AppError, fromDatabaseError } from "../http/errors.js";
+import { validate } from "../http/validate.js";
 import {
   MAX_PASSWORD_LENGTH,
   MAX_USER_NAME_LENGTH,
   MIN_PASSWORD_LENGTH,
 } from "../modules/auth/auth.constants.js";
+import { createOperatorRequestSchema } from "../modules/auth/auth.schemas.js";
 import { createOperator } from "../modules/auth/auth.service.js";
 
 const parsed = parseCliConfig(process.env);
@@ -88,13 +90,14 @@ async function readPassword(): Promise<string> {
 
 /** Opens a single connection for this one insert and always closes it. */
 async function createWithConnection(databaseUrl: string, rawEmail: string, rawUserName: string) {
+  const input = validate(createOperatorRequestSchema, {
+    email: rawEmail,
+    userName: rawUserName,
+    password: await readPassword(),
+  });
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
   try {
-    return await createOperator(createDb(pool), {
-      email: rawEmail,
-      userName: rawUserName,
-      password: await readPassword(),
-    });
+    return await createOperator(createDb(pool), input);
   } finally {
     await pool.end();
   }
