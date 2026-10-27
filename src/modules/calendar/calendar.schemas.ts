@@ -45,7 +45,8 @@ const dayRule = z
   .transform(
     (day): DayRuleType =>
       day.mode === "custom" ? { start: day.start ?? "", end: day.end ?? "" } : day.mode,
-  );
+  )
+  .meta({ id: "DayRuleRequest" });
 
 /** Normal hours and seasons share this shape (P4.4, P4.5); at least one weekday works (R4.2). */
 export const weekShapeSchema = z

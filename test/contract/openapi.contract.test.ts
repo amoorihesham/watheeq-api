@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { dirname } from "node:path";
 import { validate } from "@scalar/openapi-parser";
 import { afterAll, describe, expect, it } from "vitest";
 import { apis } from "../../src/http/apis.js";
@@ -39,16 +38,8 @@ describe("the OpenAPI document (R10.7)", () => {
 });
 
 describe("routes and declarations (R10.1, R10.2)", () => {
-  // Step 10.4 declares every group; until then only the declared groups are compared.
-  const scopes = apis.flatMap((api) =>
-    api.prefix === "/"
-      ? Object.values(api.endpoints).map((endpoint) => normalize(fullPathOf(api, endpoint)))
-      : [normalize(api.prefix)],
-  );
-  const inScope = (route: string) => {
-    const path = route.split(" ")[1] ?? "";
-    return scopes.some((scope) => path === scope || path.startsWith(`${scope}/`));
-  };
+  // The docs pages are the only routes outside the declarations (R10.1).
+  const undeclared = new Set(["GET /docs", "GET /docs/scalar.js", "GET /openapi.json"]);
 
   const declared = apis
     .flatMap((api) =>
@@ -64,20 +55,19 @@ describe("routes and declarations (R10.1, R10.2)", () => {
           const [method = "", path = ""] = route.split(" ");
           return `${method} ${normalize(path)}`;
         })
-        .filter(inScope),
+        .filter((route) => !undeclared.has(route)),
     ),
   ].sort();
 
-  it("mounts exactly the declared endpoints of the declared groups", () => {
+  it("mounts exactly the declared endpoints", () => {
     expect(declared.length).toBeGreaterThan(0);
     expect(mounted).toEqual(declared);
   });
 
   it("has no routes file that mounts a route by hand", () => {
-    const dirs = new Set(moduleFiles(".endpoints.ts").map((file) => dirname(file.path)));
     const direct = /\brouter\s*\.\s*(get|post|put|patch|delete)\s*\(/;
     const offences = moduleFiles(".routes.ts")
-      .filter((file) => dirs.has(dirname(file.path)) && direct.test(file.text))
+      .filter((file) => direct.test(file.text))
       .map((file) => file.path);
     expect(offences).toEqual([]);
   });

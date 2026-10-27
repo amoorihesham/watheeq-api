@@ -4,7 +4,10 @@ import type pg from "pg";
 import type { Config } from "./config/config.js";
 import { createDb } from "./db/pool.js";
 import { createSmtpSender, type EmailSenderType } from "./email/index.js";
+import { apis } from "./http/apis.js";
 import { setContractChecks } from "./http/checks.js";
+import { createDocsRouter } from "./http/docs.js";
+import { buildOpenApi } from "./http/openapi.js";
 import type { Logger } from "./logging/logger.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { jsonBody } from "./middleware/json-body.js";
@@ -94,6 +97,10 @@ export function buildApp(deps: AppDeps): express.Express {
 
   for (const { prefix, router } of deps.routers ?? []) {
     app.use(prefix, router);
+  }
+
+  if (config.server.env !== "production") {
+    app.use(createDocsRouter(buildOpenApi(apis)));
   }
 
   app.use(notFoundHandler);

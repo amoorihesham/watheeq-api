@@ -12057,6 +12057,78 @@
         ],
         "additionalProperties": false
       },
+      "DayRule": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "default",
+              "off",
+              "custom"
+            ]
+          },
+          "start": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "end": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "start",
+          "end"
+        ],
+        "additionalProperties": false
+      },
+      "DayRuleRequest": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "default",
+              "off",
+              "custom"
+            ]
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "start",
+          "end"
+        ],
+        "additionalProperties": false
+      },
       "Error": {
         "type": "object",
         "properties": {
@@ -15504,221 +15576,25 @@
             "type": "object",
             "properties": {
               "sun": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "end": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRule"
               },
               "mon": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "end": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRule"
               },
               "tue": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "end": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRule"
               },
               "wed": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "end": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRule"
               },
               "thu": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "end": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRule"
               },
               "fri": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "end": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRule"
               },
               "sat": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "end": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRule"
               }
             },
             "required": [
@@ -15755,291 +15631,25 @@
             "type": "object",
             "properties": {
               "sun": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "end": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRuleRequest"
               },
               "mon": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "end": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRuleRequest"
               },
               "tue": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "end": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRuleRequest"
               },
               "wed": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "end": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRuleRequest"
               },
               "thu": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "end": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRuleRequest"
               },
               "fri": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "end": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRuleRequest"
               },
               "sat": {
-                "type": "object",
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "off",
-                      "custom"
-                    ]
-                  },
-                  "start": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "end": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^(?:(?:[01]\\d|2[0-3]):[0-5]\\d|24:00)$"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DayRuleRequest"
               }
             },
             "required": [

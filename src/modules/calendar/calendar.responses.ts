@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { DAY_MODES } from "./calendar.constants.js";
 
-const dayRule = z.strictObject({
-  mode: z.enum(DAY_MODES),
-  start: z.string().nullable(),
-  end: z.string().nullable(),
-});
+const dayRule = z
+  .strictObject({
+    mode: z.enum(DAY_MODES),
+    start: z.string().nullable(),
+    end: z.string().nullable(),
+  })
+  .meta({ id: "DayRule" });
 
 export const weekShapeResponseSchema = z
   .strictObject({
