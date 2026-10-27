@@ -89,7 +89,7 @@ Keeping it in code (as Phase 2's `TENANT_PERMISSIONS` already is) means a new pe
 Roles are tenant data, so they live in tables.
 
 ```ts
-// tenant-access.config.ts
+// tenant-access.constants.ts
 export const PERMISSION_SCOPES = [
   "own",
   "section",
@@ -316,7 +316,7 @@ src/
                                             scope resolver; interim fallback removed
     roles/                                  new
       roles.routes.ts (composes), .controller.ts, .service.ts, .repository.ts
-      roles.config.ts, .schemas.ts, .types.ts
+      roles.constants.ts, .schemas.ts, .types.ts
     users/                                  (changed) roleId, PUT /users/:userId/role, subset checks, scoped user.view
     auth/                                   (changed) login and refresh read the role and its permissions
     platform/tenants/                       (changed) creates the Tenant Admin role with the tenant

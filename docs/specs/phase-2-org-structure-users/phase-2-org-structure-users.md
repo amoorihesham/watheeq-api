@@ -291,10 +291,10 @@ src/
     tenant-access/                          (new, small) requireTenantPermission, tenant permission list, interim fallback
     org/
       org.routes.ts (composes), .controller.ts, .service.ts, .repository.ts
-      org.config.ts, .schemas.ts, .types.ts
+      org.constants.ts, .schemas.ts, .types.ts
     users/
       users.routes.ts (composes), .controller.ts, .service.ts, .repository.ts
-      users.config.ts, .schemas.ts, .types.ts
+      users.constants.ts, .schemas.ts, .types.ts
     auth/                                   (changed) password change and reset; invitation email; onboarding helpers take a purpose
     subscriptions/                          (changed) GET /subscription uses requireTenantPermission('subscription.view')
 ```

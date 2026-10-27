@@ -68,7 +68,7 @@ src/
   modules/<feature>/
     <feature>.routes.ts    composes the module's layers and returns its router
     <feature>.controller.ts, .service.ts, .repository.ts
-    <feature>.config.ts    every constant of the feature (cookie names, length limits, hashing parameters)
+    <feature>.constants.ts every constant of the feature (cookie names, length limits, hashing parameters)
     <feature>.schemas.ts   every zod schema of the feature
     <feature>.types.ts     every type and interface of the feature, including `ReturnType` aliases of its factories
     shared/                helpers and feature-specific middleware
@@ -80,7 +80,7 @@ test/helpers/            pools, seeding, app building
 
 These apply to every feature module, starting with `modules/auth/`, which is the reference example.
 
-- **Constants** live only in `<feature>.config.ts`, never inline in a layer. Environment-driven settings stay in `src/config/`; `<feature>.config.ts` holds fixed values. Example: `MIN_PASSWORD_LENGTH` and `COOKIE_NAME` in `auth.config.ts`.
+- **Constants** live only in `<feature>.constants.ts`, never inline in a layer. Settings a deployment can change live only in `src/config/`; `<feature>.constants.ts` holds fixed values. Example: `MIN_PASSWORD_LENGTH` and `ACCESS_COOKIE` in `auth.constants.ts`.
 - **zod schemas** live only in `<feature>.schemas.ts`, and are shared by every caller that validates the same input. Example: `createOperatorSchema` is used by the service for both the CLI and, later, the API.
 - **Global declarations** (`declare global`, module augmentation) live only in `src/types/`, one file per augmented library, never inside a module. Example: `src/types/express.ts` adds `req.auth: AuthUserType`, importing the type from the module that owns it. The files are `.ts`, not `.d.ts`, because `skipLibCheck` skips every `.d.ts` file, so a broken import there would silently turn the augmented property into `any`.
 - **Type names** end in `Type`. HTTP bodies are `<Action>RequestType` and `<Action>ResponseType` (`LoginRequestType`, `LoginResponseType`, `MeResponseType`); everything else follows the same suffix (`AccountType`, `AuthSettingsType`, `AuthServiceType`). Infrastructure folders (`db`, `http`, `config`, `logging`) keep their existing names (`Db`, `Tx`, `Config`, `AppError`).
@@ -131,7 +131,7 @@ None.
 | 0.5-2 | Services own transactions; repositories take an executor. | Needed to combine repository calls and audit in one transaction (T8). |
 | 0.5-3 | Services throw `AppError`; no separate domain error type. | The status mapping is central (T11); a second type adds a translation layer with no benefit today. |
 | 0.5-4 | Pass-through layers are omitted. | No empty files. |
-| 0.5-5 | Each feature keeps its constants in `<feature>.config.ts`, zod schemas in `<feature>.schemas.ts`, and types in `<feature>.types.ts`. | Owner's direction (2026-10-21): one predictable place for each kind of definition, so later phases follow the same shape. |
+| 0.5-5 | Each feature keeps its constants in `<feature>.constants.ts`, zod schemas in `<feature>.schemas.ts`, and types in `<feature>.types.ts`. | Owner's direction (2026-10-21): one predictable place for each kind of definition, so later phases follow the same shape. |
 | 0.5-6 | Repositories return the query result as is, with no checks, and never catch errors; known database errors are translated centrally by `fromDatabaseError` (unique constraint name to error code), used by the error handler and the CLI. | Owner's direction (2026-10-21): error handling in one place; a repository stays a plain query. |
 | 0.5-7 | Each module's routes file is its composition root; `app.ts` mounts routers and holds no module wiring. | Owner's direction: adding a module touches one line in `app.ts`. |
 | 0.5-8 | Every module type ends in `Type`; request and response bodies are `<Action>RequestType` / `<Action>ResponseType`. | Owner's direction: a type is recognizable at a glance and HTTP contracts are easy to find. |
@@ -151,3 +151,4 @@ Promoted to `TECHNICAL_DECISIONS.md` as T14.
 | 2026-10-21 | Body validation moved from the controller to the service in the layer table, matching the per-module rules. | One schema serves every entry point (the CLI and the API). |
 | 2026-10-21 | Each module's routes file composes its layers; every module type ends in `Type`, with `<Action>RequestType` / `<Action>ResponseType` for HTTP bodies (0.5-7, 0.5-8). | Owner's direction. |
 | 2026-10-21 | Global declarations moved to `src/types/` (0.5-9). | Owner's direction. |
+| 2026-10-27 | `<feature>.config.ts` renamed to `<feature>.constants.ts`; settings a deployment can change live only in `src/config/` (0.5-5). | Phase 9: "config" means only `src/config/`. |

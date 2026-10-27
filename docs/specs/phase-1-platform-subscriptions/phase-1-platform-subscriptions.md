@@ -273,19 +273,19 @@ Every module follows the Phase 0.5 per-module file rules: its routes file compos
 ```
 src/
   db/schema/plans.ts, subscriptions.ts, email-verifications.ts
-  email/                                 EmailSenderType, the SMTP sender (nodemailer), email.config.ts, email.types.ts (P1.18)
+  email/                                 EmailSenderType, the SMTP sender (nodemailer), email.types.ts (P1.18)
   types/express.ts                       (changed) adds req.subscription
   modules/
     platform/
-      platform.config.ts                 PLATFORM_PERMISSIONS
+      platform.constants.ts              PLATFORM_PERMISSIONS
       platform.types.ts                  PlatformPermissionType, ...
       shared/middlewares.ts              requirePlatformPermission(permission)
       plans/                             plans.routes.ts (composes), .controller.ts, .service.ts, .repository.ts,
-                                         .config.ts, .schemas.ts, .types.ts
+                                         .constants.ts, .schemas.ts, .types.ts
       tenants/                           same files; tenant creation, list, detail, subscription change, resend
     subscriptions/
       subscriptions.routes.ts (composes), .controller.ts, .service.ts, .repository.ts   GET /subscription
-      subscriptions.config.ts, .schemas.ts, .types.ts
+      subscriptions.constants.ts, .schemas.ts, .types.ts
       shared/subscription-state.ts       pure state function
       shared/seats.ts                    assertSeatAvailable(tx, tenantId)
       shared/middlewares.ts              subscription guard and requireActiveSubscription
@@ -419,7 +419,7 @@ Promoted on 2026-10-21: P1.4-P1.6, P1.18-P1.20, and P1.24 to `TECHNICAL_DECISION
 | 2026-10-21 | Plans gain price, payment period, and discount; subscriptions copy them and add a customer discount; effective price computed (R1.2a, P1.19, P1.20); no minimum term (R1.2b, P1.21).                                                             | Owner review.                      |
 | 2026-10-21 | Price is per payment period with no term total (P1.22); the Tenant Admin sees all subscription data (R1.11, P1.23).                                                                                                                              | Owner review.                      |
 | 2026-10-21 | Spec approved; implementation started. | Owner approval. |
-| 2026-10-21 | Step 1.1 implemented and verified: platform permission list in `platform.config.ts`, `platformPermissionsOf`, `requirePlatformPermission` (also refuses tenant users on its own). | Acceptance criteria met. |
+| 2026-10-21 | Step 1.1 implemented and verified: platform permission list in `platform.constants.ts`, `platformPermissionsOf`, `requirePlatformPermission` (also refuses tenant users on its own). | Acceptance criteria met. |
 | 2026-10-21 | Step 1.2 implemented and verified: `plans` table (migration `0001_plans`), plan CRUD under `/operator/plans`, platform-level audit, `PLAN_NAME_TAKEN` via the constraint map; `auditContextOf(req)` in the auth module builds the audit actor and request ID. | Acceptance criteria met. |
 | 2026-10-21 | Step 1.3 implemented and verified: migration `0002`, tenants module (create, list, detail, resend), `/auth/verify`, login refuses unverified users, `email/` SMTP sender with Mailpit, subscriptions module shared functions (state, price, seats). Verify uses a conditional `UPDATE` instead of `FOR UPDATE` (same guarantee); a failed resend email returns 500. | Acceptance criteria met; two mechanism details recorded. |
 | 2026-10-21 | Step 1.4 implemented and verified: `PUT /operator/tenants/:tenantId/subscription` (copies the plan's current terms, keeps or replaces the customer discount, optional reason, seat lock, `subscription.changed` with before and after). Name ordering pinned to the ICU root collation (P1.24, proposed for owner approval). | Acceptance criteria met. |
