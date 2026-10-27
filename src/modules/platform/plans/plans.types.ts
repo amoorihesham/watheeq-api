@@ -17,8 +17,8 @@ export type PaymentPeriodType = (typeof PAYMENT_PERIODS)[number];
 /** A plan as the repository reads it and the API returns it. */
 export type PlanType = z.output<typeof planResponseSchema>;
 
-export type CreatePlanRequestType = z.input<typeof createPlanRequestSchema>;
-export type UpdatePlanRequestType = z.input<typeof updatePlanRequestSchema>;
+export type CreatePlanRequestType = z.output<typeof createPlanRequestSchema>;
+export type UpdatePlanRequestType = z.output<typeof updatePlanRequestSchema>;
 export type NewPlanType = z.output<typeof createPlanRequestSchema>;
 export type PlanChangesType = z.output<typeof updatePlanRequestSchema>;
 

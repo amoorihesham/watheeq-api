@@ -1,21 +1,21 @@
-import type { Request, RequestHandler } from "express";
-import { sendData } from "@/http/respond.js";
+import type { Request } from "express";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { auditContextOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import { escalationResponseSchema } from "./escalation.responses.js";
+import type { escalationApi } from "./escalation.endpoints.js";
 import type { EscalationServiceType } from "./escalation.types.js";
 
 const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
 
 export function createEscalationController({ service }: { service: EscalationServiceType }) {
   return {
-    get: (async (req, res) => {
-      sendData(res, 200, escalationResponseSchema, await service.get(tenantOf(req)));
-    }) satisfies RequestHandler,
+    get: (async (_input, req) => service.get(tenantOf(req))) satisfies HandlerOf<
+      typeof escalationApi.endpoints.get
+    >,
 
-    put: (async (req, res) => {
-      const escalation = await service.put(tenantOf(req), req.body, auditContextOf(req));
-      sendData(res, 200, escalationResponseSchema, escalation);
-    }) satisfies RequestHandler,
+    put: (async ({ body }, req) =>
+      service.put(tenantOf(req), body, auditContextOf(req))) satisfies HandlerOf<
+      typeof escalationApi.endpoints.put
+    >,
   };
 }

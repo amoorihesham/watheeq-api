@@ -52,9 +52,9 @@ export interface UnitRowType {
 export type PositionType = z.output<typeof positionResponseSchema>;
 export type AssigneeTargetResponseType = z.output<typeof assigneeTargetResponseSchema>;
 
-export type CreatePositionRequestType = z.input<typeof createPositionRequestSchema>;
-export type RenamePositionRequestType = z.input<typeof renamePositionRequestSchema>;
-export type SetHoldersRequestType = z.input<typeof setHoldersRequestSchema>;
+export type CreatePositionRequestType = z.output<typeof createPositionRequestSchema>;
+export type RenamePositionRequestType = z.output<typeof renamePositionRequestSchema>;
+export type SetHoldersRequestType = z.output<typeof setHoldersRequestSchema>;
 export type ListPositionsQueryType = z.output<typeof listPositionsQuerySchema>;
 
 /** Who a request is about; the handler is unknown until acceptance (Phase 5 spec, 4.3). */

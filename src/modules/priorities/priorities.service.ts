@@ -5,31 +5,16 @@ import { withTx } from "@/db/tx.js";
 import { AppError } from "@/http/errors.js";
 import { listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { validate } from "@/http/validate.js";
 import { PRIORITY_SORT_KEYS } from "./priorities.repository.js";
-import {
-  createPriorityRequestSchema,
-  listPrioritiesQuerySchema,
-  priorityIdSchema,
-  reorderPrioritiesRequestSchema,
-  updatePriorityRequestSchema,
-} from "./priorities.schemas.js";
 import type {
   CreatePriorityRequestType,
+  ListPrioritiesQueryType,
   PrioritiesRepositoryType,
   PriorityRowType,
   PriorityType,
   ReorderPrioritiesRequestType,
   UpdatePriorityRequestType,
 } from "./priorities.types.js";
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingPriorityId(priorityId: string): string {
-  if (!priorityIdSchema.safeParse(priorityId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return priorityId;
-}
 
 const toPriority = (row: PriorityRowType): PriorityType => ({
   id: row.id,
@@ -61,8 +46,7 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
   }
 
   return {
-    async list(tenantId: string, input: unknown): Promise<PageType<PriorityType>> {
-      const query = validate(listPrioritiesQuerySchema, input);
+    async list(tenantId: string, query: ListPrioritiesQueryType): Promise<PageType<PriorityType>> {
       const page = await listPage({
         db,
         list: "priorities",
@@ -79,10 +63,9 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
     /** Appends the priority to the end of the order (R5.12). A duplicate name reaches the error handler as PRIORITY_NAME_TAKEN. */
     create(
       tenantId: string,
-      input: CreatePriorityRequestType,
+      body: CreatePriorityRequestType,
       context: AuditContextType,
     ): Promise<PriorityType> {
-      const body = validate(createPriorityRequestSchema, input);
       return withTx(db, async (tx) => {
         await repo.lockOrder(tx, tenantId);
         const id = randomUUID();
@@ -108,12 +91,10 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
     /** Changes the name and/or the days; a save that changes nothing writes nothing. */
     update(
       tenantId: string,
-      priorityId: string,
-      input: UpdatePriorityRequestType,
+      id: string,
+      body: UpdatePriorityRequestType,
       context: AuditContextType,
     ): Promise<PriorityType> {
-      const id = existingPriorityId(priorityId);
-      const body = validate(updatePriorityRequestSchema, input);
       return withTx(db, async (tx) => {
         const priority = await lockPriority(tx, tenantId, id);
         if (priority.retiredAt) {
@@ -157,7 +138,7 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
       input: ReorderPrioritiesRequestType,
       context: AuditContextType,
     ): Promise<void> {
-      const { ids } = validate(reorderPrioritiesRequestSchema, input);
+      const { ids } = input;
       return withTx(db, async (tx) => {
         await repo.lockOrder(tx, tenantId);
         const before = await repo.activeIds(tx, tenantId);
@@ -183,8 +164,7 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
     },
 
     /** Takes the priority out of the order and hides it from new requests (R5.15). Repeating it is a no-op. */
-    retire(tenantId: string, priorityId: string, context: AuditContextType): Promise<PriorityType> {
-      const id = existingPriorityId(priorityId);
+    retire(tenantId: string, id: string, context: AuditContextType): Promise<PriorityType> {
       return withTx(db, async (tx) => {
         await repo.lockOrder(tx, tenantId);
         const priority = await lockPriority(tx, tenantId, id);
@@ -204,12 +184,7 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
     },
 
     /** Brings a retired priority back at the end of the order (R5.15); a name taken meanwhile is PRIORITY_NAME_TAKEN. */
-    restore(
-      tenantId: string,
-      priorityId: string,
-      context: AuditContextType,
-    ): Promise<PriorityType> {
-      const id = existingPriorityId(priorityId);
+    restore(tenantId: string, id: string, context: AuditContextType): Promise<PriorityType> {
       return withTx(db, async (tx) => {
         await repo.lockOrder(tx, tenantId);
         const priority = await lockPriority(tx, tenantId, id);

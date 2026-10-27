@@ -7,33 +7,18 @@ import { withTx } from "@/db/tx.js";
 import { AppError } from "@/http/errors.js";
 import { listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { validate } from "@/http/validate.js";
-import {
-  createPlanRequestSchema,
-  listPlansQuerySchema,
-  planIdSchema,
-  updatePlanRequestSchema,
-} from "./plans.schemas.js";
 import type {
   CreatePlanRequestType,
+  ListPlansQueryType,
   PlansRepositoryType,
   PlanType,
   UpdatePlanRequestType,
 } from "./plans.types.js";
 
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingPlanId(planId: string): string {
-  if (!planIdSchema.safeParse(planId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return planId;
-}
-
 export function createPlansService({ db, repo }: { db: Db; repo: PlansRepositoryType }) {
   return {
     /** A duplicate name (any case) reaches the error handler as PLAN_NAME_TAKEN and rolls back the audit entry too. */
-    create(input: CreatePlanRequestType, context: AuditContextType): Promise<PlanType> {
-      const values = validate(createPlanRequestSchema, input);
+    create(values: CreatePlanRequestType, context: AuditContextType): Promise<PlanType> {
       return withTx(db, async (tx) => {
         const [plan] = await repo.insert(tx, values);
         if (!plan) {
@@ -51,8 +36,7 @@ export function createPlansService({ db, repo }: { db: Db; repo: PlansRepository
       });
     },
 
-    list(input: unknown): Promise<PageType<PlanType>> {
-      const query = validate(listPlansQuerySchema, input);
+    list(query: ListPlansQueryType): Promise<PageType<PlanType>> {
       return listPage({
         db,
         list: "plans",
@@ -69,7 +53,7 @@ export function createPlansService({ db, repo }: { db: Db; repo: PlansRepository
     },
 
     async get(planId: string): Promise<PlanType> {
-      const [plan] = await repo.findById(db, existingPlanId(planId));
+      const [plan] = await repo.findById(db, planId);
       if (!plan) {
         throw new AppError("NOT_FOUND");
       }
@@ -78,12 +62,10 @@ export function createPlansService({ db, repo }: { db: Db; repo: PlansRepository
 
     /** Changes the plan only; subscriptions keep the terms they copied (R1.2, D14). */
     update(
-      planId: string,
-      input: UpdatePlanRequestType,
+      id: string,
+      changes: UpdatePlanRequestType,
       context: AuditContextType,
     ): Promise<PlanType> {
-      const id = existingPlanId(planId);
-      const changes = validate(updatePlanRequestSchema, input);
       return withTx(db, async (tx) => {
         const [before] = await repo.findByIdForUpdate(tx, id);
         if (!before) {

@@ -5,17 +5,10 @@ import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
 import { listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { validate } from "@/http/validate.js";
 import { WORKFLOW_SORT_KEYS } from "./workflows.repository.js";
-import {
-  createWorkflowRequestSchema,
-  listWorkflowsQuerySchema,
-  updateWorkflowRequestSchema,
-  versionNumberSchema,
-  workflowIdSchema,
-} from "./workflows.schemas.js";
 import type {
   CreateWorkflowRequestType,
+  ListWorkflowsQueryType,
   StageInputType,
   StageRowType,
   StageType,
@@ -26,14 +19,6 @@ import type {
   WorkflowsRepositoryType,
   WorkflowType,
 } from "./workflows.types.js";
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingWorkflowId(workflowId: string): string {
-  if (!workflowIdSchema.safeParse(workflowId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return workflowId;
-}
 
 const toStage = (row: StageRowType): StageType => ({
   id: row.id,
@@ -184,8 +169,10 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
   };
 
   return {
-    async list(tenantId: string, input: unknown): Promise<PageType<WorkflowSummaryType>> {
-      const query = validate(listWorkflowsQuerySchema, input);
+    async list(
+      tenantId: string,
+      query: ListWorkflowsQueryType,
+    ): Promise<PageType<WorkflowSummaryType>> {
       const page = await listPage({
         db,
         list: "workflows",
@@ -200,20 +187,12 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
     },
 
     get(tenantId: string, workflowId: string): Promise<WorkflowType> {
-      return loadWorkflow(db, tenantId, existingWorkflowId(workflowId));
+      return loadWorkflow(db, tenantId, workflowId);
     },
 
     /** Any version, current or earlier; earlier versions never change (R5.9). */
-    async getVersion(
-      tenantId: string,
-      workflowId: string,
-      versionNumber: string,
-    ): Promise<VersionType> {
-      const id = existingWorkflowId(workflowId);
-      if (!versionNumberSchema.safeParse(versionNumber).success) {
-        throw new AppError("NOT_FOUND");
-      }
-      const [version] = await repo.versionByNumber(db, tenantId, id, Number(versionNumber));
+    async getVersion(tenantId: string, id: string, versionNumber: number): Promise<VersionType> {
+      const [version] = await repo.versionByNumber(db, tenantId, id, versionNumber);
       if (!version) {
         throw new AppError("NOT_FOUND");
       }
@@ -229,10 +208,9 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
     /** Creates the workflow with version 1. A duplicate name (any case) reaches the error handler as WORKFLOW_NAME_TAKEN. */
     create(
       tenantId: string,
-      input: CreateWorkflowRequestType,
+      body: CreateWorkflowRequestType,
       context: AuditContextType,
     ): Promise<WorkflowType> {
-      const body = validate(createWorkflowRequestSchema, input);
       const createdBy = actorOf(context);
       return withTx(db, async (tx) => {
         await assertStagePositionsActive(tx, tenantId, body.stages);
@@ -271,12 +249,10 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
      */
     update(
       tenantId: string,
-      workflowId: string,
-      input: UpdateWorkflowRequestType,
+      id: string,
+      body: UpdateWorkflowRequestType,
       context: AuditContextType,
     ): Promise<WorkflowType> {
-      const id = existingWorkflowId(workflowId);
-      const body = validate(updateWorkflowRequestSchema, input);
       const createdBy = actorOf(context);
       return withTx(db, async (tx) => {
         const workflow = await lockWorkflow(tx, tenantId, id);
@@ -331,8 +307,7 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
     },
 
     /** Hides the workflow from new use (R5.15). Repeating it is a no-op. */
-    retire(tenantId: string, workflowId: string, context: AuditContextType): Promise<WorkflowType> {
-      const id = existingWorkflowId(workflowId);
+    retire(tenantId: string, id: string, context: AuditContextType): Promise<WorkflowType> {
       return withTx(db, async (tx) => {
         const workflow = await lockWorkflow(tx, tenantId, id);
         if (workflow.retiredAt) {
@@ -356,12 +331,7 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
     },
 
     /** Brings a retired workflow back (R5.15); a name taken meanwhile is WORKFLOW_NAME_TAKEN. Repeating it is a no-op. */
-    restore(
-      tenantId: string,
-      workflowId: string,
-      context: AuditContextType,
-    ): Promise<WorkflowType> {
-      const id = existingWorkflowId(workflowId);
+    restore(tenantId: string, id: string, context: AuditContextType): Promise<WorkflowType> {
       return withTx(db, async (tx) => {
         const workflow = await lockWorkflow(tx, tenantId, id);
         if (!workflow.retiredAt) {

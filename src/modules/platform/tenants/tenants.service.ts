@@ -8,7 +8,6 @@ import type { EmailSenderType } from "@/email/index.js";
 import { AppError, fromDatabaseError } from "@/http/errors.js";
 import { listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
 import { insertPendingUser, issuePasswordToken, verificationEmail } from "@/modules/auth/index.js";
 import { insertDefaultHours } from "@/modules/calendar/index.js";
@@ -20,15 +19,10 @@ import {
 } from "@/modules/subscriptions/index.js";
 import { SYSTEM_ROLE_NAME, systemRoleGrants } from "@/modules/tenant-access/index.js";
 import { createPlansRepository } from "../plans/plans.repository.js";
-import {
-  changeSubscriptionRequestSchema,
-  createTenantRequestSchema,
-  listTenantsQuerySchema,
-  tenantIdSchema,
-} from "./tenants.schemas.js";
 import type {
   ChangeSubscriptionRequestType,
   CreateTenantRequestType,
+  ListTenantsQueryType,
   TenantDetailType,
   TenantsRepositoryType,
   TenantsSettingsType,
@@ -36,13 +30,6 @@ import type {
 
 const plansRepo = createPlansRepository();
 const subscriptionsRepo = createSubscriptionsRepository();
-
-function existingTenantId(tenantId: string): string {
-  if (!tenantIdSchema.safeParse(tenantId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return tenantId;
-}
 
 function toDetail(row: {
   tenant: TenantDetailType["tenant"];
@@ -94,11 +81,10 @@ export function createTenantsService({
      * goes out only after commit, so a rolled-back tenant never sends one (P1.14).
      */
     async create(
-      input: CreateTenantRequestType,
+      body: CreateTenantRequestType,
       context: AuditContextType,
       log: Logger,
     ): Promise<TenantDetailType> {
-      const body = validate(createTenantRequestSchema, input);
       const { admin, token, response } = await withTx(db, async (tx) => {
         const today = (await subscriptionsRepo.today(tx)).rows[0]?.today ?? "";
         if (body.subscription.startDate > today) {
@@ -199,8 +185,7 @@ export function createTenantsService({
       return response;
     },
 
-    async list(input: unknown): Promise<PageType<TenantDetailType>> {
-      const query = validate(listTenantsQuerySchema, input);
+    async list(query: ListTenantsQueryType): Promise<PageType<TenantDetailType>> {
       const page = await listPage({
         db,
         list: "tenants",
@@ -218,7 +203,7 @@ export function createTenantsService({
     },
 
     async get(tenantId: string): Promise<TenantDetailType> {
-      const [row] = await repo.findById(db, existingTenantId(tenantId));
+      const [row] = await repo.findById(db, tenantId);
       if (!row) {
         throw new AppError("NOT_FOUND");
       }
@@ -231,12 +216,10 @@ export function createTenantsService({
      * change racing a user creation, run one after the other (R1.5).
      */
     changeSubscription(
-      tenantId: string,
-      input: ChangeSubscriptionRequestType,
+      id: string,
+      body: ChangeSubscriptionRequestType,
       context: AuditContextType,
     ): Promise<TenantDetailType> {
-      const id = existingTenantId(tenantId);
-      const body = validate(changeSubscriptionRequestSchema, input);
       return withTx(db, async (tx) => {
         const today = (await subscriptionsRepo.today(tx)).rows[0]?.today ?? "";
         if (body.startDate > today) {
@@ -284,8 +267,7 @@ export function createTenantsService({
      * Issues a new link for the tenant's owner and retires every older one (P1.16).
      * A send failure surfaces as an error: Omar asked for an email, so he must not be told it went out.
      */
-    async resendVerification(tenantId: string, context: AuditContextType): Promise<void> {
-      const id = existingTenantId(tenantId);
+    async resendVerification(id: string, context: AuditContextType): Promise<void> {
       const { owner, token } = await withTx(db, async (tx) => {
         const [owner] = await repo.findOwner(tx, id);
         if (!owner) {

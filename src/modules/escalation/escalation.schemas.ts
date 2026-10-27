@@ -41,22 +41,24 @@ function checkRecipients(refusedBuiltins: readonly string[] = []) {
 }
 
 // Thresholds are required even for a rule that is off, so turning it on never needs a value it lost (4.1).
-export const putEscalationRequestSchema = z.strictObject({
-  r0: z
-    .strictObject({
-      enabled: z.boolean(),
-      days: z.int().min(MIN_R0_DAYS).max(MAX_R0_DAYS),
-      recipients: recipientsSchema,
-    })
-    .superRefine(checkRecipients(HANDLER_SIDE_BUILTINS)),
-  r1: z
-    .strictObject({
-      enabled: z.boolean(),
-      percent: z.int().min(MIN_R1_PERCENT).max(MAX_R1_PERCENT),
-      recipients: recipientsSchema,
-    })
-    .superRefine(checkRecipients()),
-  r2: z
-    .strictObject({ enabled: z.boolean(), recipients: recipientsSchema })
-    .superRefine(checkRecipients()),
-});
+export const putEscalationRequestSchema = z
+  .strictObject({
+    r0: z
+      .strictObject({
+        enabled: z.boolean(),
+        days: z.int().min(MIN_R0_DAYS).max(MAX_R0_DAYS),
+        recipients: recipientsSchema,
+      })
+      .superRefine(checkRecipients(HANDLER_SIDE_BUILTINS)),
+    r1: z
+      .strictObject({
+        enabled: z.boolean(),
+        percent: z.int().min(MIN_R1_PERCENT).max(MAX_R1_PERCENT),
+        recipients: recipientsSchema,
+      })
+      .superRefine(checkRecipients()),
+    r2: z
+      .strictObject({ enabled: z.boolean(), recipients: recipientsSchema })
+      .superRefine(checkRecipients()),
+  })
+  .meta({ id: "PutEscalationRequest" });

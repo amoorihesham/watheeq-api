@@ -32,8 +32,8 @@ export interface GrantRowType {
 /** A role as the API returns it; the system role lists its computed grants (P3.8). */
 export type RoleType = z.output<typeof roleResponseSchema>;
 
-export type CreateRoleRequestType = z.input<typeof createRoleRequestSchema>;
-export type UpdateRoleRequestType = z.input<typeof updateRoleRequestSchema>;
+export type CreateRoleRequestType = z.output<typeof createRoleRequestSchema>;
+export type UpdateRoleRequestType = z.output<typeof updateRoleRequestSchema>;
 
 export type PermissionType = z.output<typeof permissionResponseSchema>;
 export type ListRolesQueryType = z.output<typeof listRolesQuerySchema>;

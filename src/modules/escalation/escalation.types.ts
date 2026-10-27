@@ -8,7 +8,7 @@ import type { escalationResponseSchema } from "./escalation.responses.js";
 import type { putEscalationRequestSchema } from "./escalation.schemas.js";
 import type { createEscalationService } from "./escalation.service.js";
 
-export type PutEscalationRequestType = z.input<typeof putEscalationRequestSchema>;
+export type PutEscalationRequestType = z.output<typeof putEscalationRequestSchema>;
 export type EscalationInputType = z.output<typeof putEscalationRequestSchema>;
 
 export type EscalationRuleType = "r0" | "r1" | "r2";

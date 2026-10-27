@@ -1,57 +1,52 @@
-import type { Request, RequestHandler } from "express";
-import { sendData, sendPage } from "@/http/respond.js";
+import type { Request } from "express";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { auditContextOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import { serviceResponseSchema } from "./services.responses.js";
+import type { servicesApi } from "./services.endpoints.js";
 import type { ServicesServiceType } from "./services.types.js";
 
 const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
-const serviceIdOf = (req: Request) => String(req.params.serviceId);
 
 export function createServicesController({ service }: { service: ServicesServiceType }) {
   return {
-    list: (async (req, res) => {
-      sendPage(res, serviceResponseSchema, await service.list(tenantOf(req), req.query));
-    }) satisfies RequestHandler,
+    list: (async ({ query }, req) => service.list(tenantOf(req), query)) satisfies HandlerOf<
+      typeof servicesApi.endpoints.list
+    >,
 
-    get: (async (req, res) => {
-      const found = await service.get(tenantOf(req), serviceIdOf(req));
-      sendData(res, 200, serviceResponseSchema, found);
-    }) satisfies RequestHandler,
+    get: (async ({ params }, req) =>
+      service.get(tenantOf(req), params.serviceId)) satisfies HandlerOf<
+      typeof servicesApi.endpoints.get
+    >,
 
-    create: (async (req, res) => {
-      const created = await service.create(tenantOf(req), req.body, auditContextOf(req));
-      sendData(res, 201, serviceResponseSchema, created);
-    }) satisfies RequestHandler,
+    create: (async ({ body }, req) =>
+      service.create(tenantOf(req), body, auditContextOf(req))) satisfies HandlerOf<
+      typeof servicesApi.endpoints.create
+    >,
 
-    update: (async (req, res) => {
-      const updated = await service.update(
+    update: (async ({ params, body }, req) =>
+      service.update(
         tenantOf(req),
-        serviceIdOf(req),
-        req.body,
+        params.serviceId,
+        body,
         auditContextOf(req),
-      );
-      sendData(res, 200, serviceResponseSchema, updated);
-    }) satisfies RequestHandler,
+      )) satisfies HandlerOf<typeof servicesApi.endpoints.update>,
 
-    updateForm: (async (req, res) => {
-      const updated = await service.updateForm(
+    updateForm: (async ({ params, body }, req) =>
+      service.updateForm(
         tenantOf(req),
-        serviceIdOf(req),
-        req.body,
+        params.serviceId,
+        body,
         auditContextOf(req),
-      );
-      sendData(res, 200, serviceResponseSchema, updated);
-    }) satisfies RequestHandler,
+      )) satisfies HandlerOf<typeof servicesApi.endpoints.updateForm>,
 
-    retire: (async (req, res) => {
-      const retired = await service.retire(tenantOf(req), serviceIdOf(req), auditContextOf(req));
-      sendData(res, 200, serviceResponseSchema, retired);
-    }) satisfies RequestHandler,
+    retire: (async ({ params }, req) =>
+      service.retire(tenantOf(req), params.serviceId, auditContextOf(req))) satisfies HandlerOf<
+      typeof servicesApi.endpoints.retire
+    >,
 
-    restore: (async (req, res) => {
-      const restored = await service.restore(tenantOf(req), serviceIdOf(req), auditContextOf(req));
-      sendData(res, 200, serviceResponseSchema, restored);
-    }) satisfies RequestHandler,
+    restore: (async ({ params }, req) =>
+      service.restore(tenantOf(req), params.serviceId, auditContextOf(req))) satisfies HandlerOf<
+      typeof servicesApi.endpoints.restore
+    >,
   };
 }

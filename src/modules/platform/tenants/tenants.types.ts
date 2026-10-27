@@ -27,8 +27,8 @@ export interface TenantOwnerType {
   emailVerifiedAt: Date | null;
 }
 
-export type CreateTenantRequestType = z.input<typeof createTenantRequestSchema>;
-export type ChangeSubscriptionRequestType = z.input<typeof changeSubscriptionRequestSchema>;
+export type CreateTenantRequestType = z.output<typeof createTenantRequestSchema>;
+export type ChangeSubscriptionRequestType = z.output<typeof changeSubscriptionRequestSchema>;
 
 export type TenantDetailType = z.output<typeof tenantDetailResponseSchema>;
 export type ListTenantsQueryType = z.output<typeof listTenantsQuerySchema>;

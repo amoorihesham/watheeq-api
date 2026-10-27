@@ -64,8 +64,8 @@ export interface PositionStateRowType {
   retiredAt: Date | null;
 }
 
-export type CreateWorkflowRequestType = z.input<typeof createWorkflowRequestSchema>;
-export type UpdateWorkflowRequestType = z.input<typeof updateWorkflowRequestSchema>;
+export type CreateWorkflowRequestType = z.output<typeof createWorkflowRequestSchema>;
+export type UpdateWorkflowRequestType = z.output<typeof updateWorkflowRequestSchema>;
 export type ListWorkflowsQueryType = z.output<typeof listWorkflowsQuerySchema>;
 export type StageInputType = z.output<typeof createWorkflowRequestSchema>["stages"][number];
 

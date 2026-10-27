@@ -8,7 +8,6 @@ import type { EmailSenderType } from "@/email/index.js";
 import { AppError } from "@/http/errors.js";
 import { listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
 import {
   endUserAccess,
@@ -24,17 +23,11 @@ import {
   loadRoleGrants,
   type TenantPermissionType,
 } from "@/modules/tenant-access/index.js";
-import {
-  assignRoleRequestSchema,
-  inviteUserRequestSchema,
-  listUsersQuerySchema,
-  updateUserRequestSchema,
-  userIdSchema,
-} from "./users.schemas.js";
 import type {
   AssignRoleRequestType,
   CallerType,
   InviteUserRequestType,
+  ListUsersQueryType,
   MemberChangesType,
   UpdateUserRequestType,
   UserRowType,
@@ -42,14 +35,6 @@ import type {
   UsersSettingsType,
   UserType,
 } from "./users.types.js";
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingUserId(userId: string): string {
-  if (!userIdSchema.safeParse(userId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return userId;
-}
 
 function toUser(row: UserRowType): UserType {
   return {
@@ -133,8 +118,11 @@ export function createUsersService({
   }
 
   return {
-    async list(tenantId: string, callerId: string, input: unknown): Promise<PageType<UserType>> {
-      const query = validate(listUsersQuerySchema, input);
+    async list(
+      tenantId: string,
+      callerId: string,
+      query: ListUsersQueryType,
+    ): Promise<PageType<UserType>> {
       const visible = repo.visibleTo(tenantId, callerId);
       const page = await listPage({
         db,
@@ -154,9 +142,7 @@ export function createUsersService({
 
     /** A user outside the caller's scope is 404, like one of another tenant (R3.15). */
     async get(tenantId: string, callerId: string, userId: string): Promise<UserType> {
-      return toUser(
-        await loadUser(db, tenantId, existingUserId(userId), repo.visibleTo(tenantId, callerId)),
-      );
+      return toUser(await loadUser(db, tenantId, userId, repo.visibleTo(tenantId, callerId)));
     },
 
     /**
@@ -165,12 +151,11 @@ export function createUsersService({
      */
     async invite(
       tenantId: string,
-      input: InviteUserRequestType,
+      body: InviteUserRequestType,
       caller: CallerType,
       context: AuditContextType,
       log: Logger,
     ): Promise<UserType> {
-      const body = validate(inviteUserRequestSchema, input);
       if (body.isManager && !body.unitId) {
         throw managerNeedsUnit();
       }
@@ -237,12 +222,10 @@ export function createUsersService({
      */
     update(
       tenantId: string,
-      userId: string,
-      input: UpdateUserRequestType,
+      id: string,
+      body: UpdateUserRequestType,
       context: AuditContextType,
     ): Promise<UserType> {
-      const id = existingUserId(userId);
-      const body = validate(updateUserRequestSchema, input);
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
         const unitId = body.unitId === undefined ? before.unitId : body.unitId;
@@ -306,13 +289,12 @@ export function createUsersService({
      */
     assignRole(
       tenantId: string,
-      userId: string,
+      id: string,
       input: AssignRoleRequestType,
       caller: CallerType,
       context: AuditContextType,
     ): Promise<UserType> {
-      const id = existingUserId(userId);
-      const { roleId } = validate(assignRoleRequestSchema, input);
+      const { roleId } = input;
       return withTx(db, async (tx) => {
         // The caller's directory scope bounds whom they can reach (Phase 3 spec, step 3.4).
         const before = await lockUser(tx, tenantId, id, repo.visibleTo(tenantId, caller.id));
@@ -351,11 +333,10 @@ export function createUsersService({
     /** Frees the seat and ends the manager role, the position held (R5.3), every link, and every session (R2.12). Repeating it is a no-op. */
     deactivate(
       tenantId: string,
-      userId: string,
+      id: string,
       caller: CallerType,
       context: AuditContextType,
     ): Promise<UserType> {
-      const id = existingUserId(userId);
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
         if (id === caller.id) {
@@ -407,11 +388,10 @@ export function createUsersService({
      */
     reactivate(
       tenantId: string,
-      userId: string,
+      id: string,
       caller: CallerType,
       context: AuditContextType,
     ): Promise<UserType> {
-      const id = existingUserId(userId);
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
         const role = await grantsOfRole(tx, tenantId, before.roleId);
@@ -438,11 +418,10 @@ export function createUsersService({
      */
     async resendInvitation(
       tenantId: string,
-      userId: string,
+      id: string,
       caller: CallerType,
       context: AuditContextType,
     ): Promise<void> {
-      const id = existingUserId(userId);
       const { user, token, tenantName } = await withTx(db, async (tx) => {
         const user = await lockUser(tx, tenantId, id);
         if (user.emailVerifiedAt) {

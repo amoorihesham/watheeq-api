@@ -1,14 +1,12 @@
-import { Router } from "express";
-import { noStore } from "@/middleware/no-store.js";
-import { authenticate, requireRole } from "@/modules/auth/index.js";
-import { subscriptionGuard } from "@/modules/subscriptions/index.js";
-import { requireTenantPermission } from "@/modules/tenant-access/index.js";
+import type { Router } from "express";
+import { buildRouter } from "@/http/endpoint.js";
 import { createUsersController } from "./users.controller.js";
+import { usersApi } from "./users.endpoints.js";
 import { createUsersRepository } from "./users.repository.js";
 import { createUsersService } from "./users.service.js";
 import type { UsersRouterDepsType } from "./users.types.js";
 
-/** The users module's composition root; mounted at `/users`. */
+/** The users module's composition root; its router is built from `usersApi` and mounted at its prefix. */
 export function createUsersRouter({ db, auth, links, emailSender }: UsersRouterDepsType): Router {
   const service = createUsersService({
     db,
@@ -21,27 +19,5 @@ export function createUsersRouter({ db, auth, links, emailSender }: UsersRouterD
   });
   const controller = createUsersController({ service });
 
-  const router = Router();
-  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
-  router.get("/", requireTenantPermission("user.view"), controller.list);
-  router.post("/", requireTenantPermission("user.create"), controller.invite);
-  router.get("/:userId", requireTenantPermission("user.view"), controller.get);
-  router.patch("/:userId", requireTenantPermission("user.update"), controller.update);
-  router.put("/:userId/role", requireTenantPermission("role.assign"), controller.assignRole);
-  router.post(
-    "/:userId/deactivate",
-    requireTenantPermission("user.deactivate"),
-    controller.deactivate,
-  );
-  router.post(
-    "/:userId/reactivate",
-    requireTenantPermission("user.deactivate"),
-    controller.reactivate,
-  );
-  router.post(
-    "/:userId/resend-invitation",
-    requireTenantPermission("user.create"),
-    controller.resendInvitation,
-  );
-  return router;
+  return buildRouter(usersApi, controller, { db, jwtSecret: auth.jwtSecret });
 }

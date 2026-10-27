@@ -1,28 +1,26 @@
-import type { RequestHandler } from "express";
-import { sendData, sendPage } from "@/http/respond.js";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { auditContextOf } from "@/modules/auth/index.js";
-import { planResponseSchema } from "./plans.responses.js";
+import type { plansApi } from "./plans.endpoints.js";
 import type { PlansServiceType } from "./plans.types.js";
 
 export function createPlansController({ service }: { service: PlansServiceType }) {
   return {
-    create: (async (req, res) => {
-      const plan = await service.create(req.body, auditContextOf(req));
-      sendData(res, 201, planResponseSchema, plan);
-    }) satisfies RequestHandler,
+    create: (async ({ body }, req) =>
+      service.create(body, auditContextOf(req))) satisfies HandlerOf<
+      typeof plansApi.endpoints.create
+    >,
 
-    list: (async (req, res) => {
-      sendPage(res, planResponseSchema, await service.list(req.query));
-    }) satisfies RequestHandler,
+    list: (async ({ query }) => service.list(query)) satisfies HandlerOf<
+      typeof plansApi.endpoints.list
+    >,
 
-    get: (async (req, res) => {
-      const plan = await service.get(String(req.params.planId));
-      sendData(res, 200, planResponseSchema, plan);
-    }) satisfies RequestHandler,
+    get: (async ({ params }) => service.get(params.planId)) satisfies HandlerOf<
+      typeof plansApi.endpoints.get
+    >,
 
-    update: (async (req, res) => {
-      const plan = await service.update(String(req.params.planId), req.body, auditContextOf(req));
-      sendData(res, 200, planResponseSchema, plan);
-    }) satisfies RequestHandler,
+    update: (async ({ params, body }, req) =>
+      service.update(params.planId, body, auditContextOf(req))) satisfies HandlerOf<
+      typeof plansApi.endpoints.update
+    >,
   };
 }

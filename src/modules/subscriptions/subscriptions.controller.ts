@@ -1,14 +1,12 @@
-import type { RequestHandler } from "express";
-import { sendData } from "@/http/respond.js";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { subscriptionOf } from "./shared/middlewares.js";
-import { getSubscriptionResponseSchema } from "./subscriptions.responses.js";
+import type { subscriptionsApi } from "./subscriptions.endpoints.js";
 import type { SubscriptionsServiceType } from "./subscriptions.types.js";
 
 export function createSubscriptionsController({ service }: { service: SubscriptionsServiceType }) {
   return {
-    get: (async (req, res) => {
-      const result = await service.get(subscriptionOf(req).tenantId);
-      sendData(res, 200, getSubscriptionResponseSchema, result);
-    }) satisfies RequestHandler,
+    get: (async (_input, req) => service.get(subscriptionOf(req).tenantId)) satisfies HandlerOf<
+      typeof subscriptionsApi.endpoints.get
+    >,
   };
 }

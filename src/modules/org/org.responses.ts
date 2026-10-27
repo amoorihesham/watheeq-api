@@ -1,14 +1,16 @@
 import { z } from "zod";
 import { ORG_UNIT_KINDS } from "./org.constants.js";
 
-export const orgUnitResponseSchema = z.strictObject({
-  id: z.string(),
-  kind: z.enum(ORG_UNIT_KINDS),
-  parentId: z.string().nullable(),
-  name: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});
+export const orgUnitResponseSchema = z
+  .strictObject({
+    id: z.string(),
+    kind: z.enum(ORG_UNIT_KINDS),
+    parentId: z.string().nullable(),
+    name: z.string(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+  })
+  .meta({ id: "OrgUnit" });
 
 const sectionNodeFields = {
   id: z.string(),
@@ -25,8 +27,10 @@ const departmentNodeResponseSchema = z.strictObject({
   sections: z.array(sectionNodeResponseSchema),
 });
 
-export const orgTreeResponseSchema = z.strictObject({
-  /** Members with no unit sit directly under the organization (P2.13). */
-  organization: z.strictObject({ memberCount: z.number() }),
-  departments: z.array(departmentNodeResponseSchema),
-});
+export const orgTreeResponseSchema = z
+  .strictObject({
+    /** Members with no unit sit directly under the organization (P2.13). */
+    organization: z.strictObject({ memberCount: z.number() }),
+    departments: z.array(departmentNodeResponseSchema),
+  })
+  .meta({ id: "OrgTree" });

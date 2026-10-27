@@ -1,21 +1,15 @@
-import { Router } from "express";
-import { noStore } from "@/middleware/no-store.js";
-// The file, not auth's index: auth imports this module for `/auth/me`, and the index would close a cycle.
-import { authenticate, requireRole } from "@/modules/auth/shared/middlewares.js";
-import { requireTenantPermission } from "@/modules/tenant-access/index.js";
-import { subscriptionGuard } from "./shared/middlewares.js";
+import type { Router } from "express";
+import { buildRouter } from "@/http/endpoint.js";
 import { createSubscriptionsController } from "./subscriptions.controller.js";
+import { subscriptionsApi } from "./subscriptions.endpoints.js";
 import { createSubscriptionsRepository } from "./subscriptions.repository.js";
 import { createSubscriptionsService } from "./subscriptions.service.js";
 import type { SubscriptionsRouterDepsType } from "./subscriptions.types.js";
 
-/** The subscriptions module's composition root; mounted at `/subscription`. */
+/** The subscriptions module's composition root; its router is built from `subscriptionsApi` and mounted at its prefix. */
 export function createSubscriptionsRouter({ db, auth }: SubscriptionsRouterDepsType): Router {
   const service = createSubscriptionsService({ db, repo: createSubscriptionsRepository() });
   const controller = createSubscriptionsController({ service });
 
-  const router = Router();
-  router.use(noStore, authenticate(auth.jwtSecret), requireRole("user"), subscriptionGuard(db));
-  router.get("/", requireTenantPermission("subscription.view"), controller.get);
-  return router;
+  return buildRouter(subscriptionsApi, controller, { db, jwtSecret: auth.jwtSecret });
 }

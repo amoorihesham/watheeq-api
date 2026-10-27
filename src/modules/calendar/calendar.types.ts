@@ -11,6 +11,14 @@ import type {
   periodResponseSchema,
   weekShapeResponseSchema,
 } from "./calendar.responses.js";
+import type {
+  calendarQuerySchema,
+  createPeriodRequestSchema,
+  dayViewQuerySchema,
+  periodOverrideRequestSchema,
+  updatePeriodRequestSchema,
+  weekShapeSchema,
+} from "./calendar.schemas.js";
 import type { createCalendarService } from "./calendar.service.js";
 
 export type WeekdayType = (typeof WEEKDAYS)[number];
@@ -100,6 +108,13 @@ export type PeriodViewType = CalendarPeriodType & {
   /** The first occurrence not yet over, after adjustments, so clients need no Hijri conversion. */
   next: DateRangeType | null;
 };
+
+export type CalendarQueryType = z.output<typeof calendarQuerySchema>;
+export type DayViewQueryType = z.output<typeof dayViewQuerySchema>;
+export type WeekShapeInputType = z.output<typeof weekShapeSchema>;
+export type CreatePeriodRequestType = z.output<typeof createPeriodRequestSchema>;
+export type UpdatePeriodRequestType = z.output<typeof updatePeriodRequestSchema>;
+export type PeriodOverrideRequestType = z.output<typeof periodOverrideRequestSchema>;
 
 export type CalendarResponseType = z.output<typeof calendarResponseSchema>;
 export type PeriodResponseType = z.output<typeof periodResponseSchema>;

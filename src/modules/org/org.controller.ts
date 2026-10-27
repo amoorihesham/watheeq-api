@@ -1,43 +1,30 @@
-import type { RequestHandler } from "express";
-import { sendData, sendNoContent } from "@/http/respond.js";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { auditContextOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import { orgTreeResponseSchema, orgUnitResponseSchema } from "./org.responses.js";
+import type { orgApi } from "./org.endpoints.js";
 import type { OrgServiceType } from "./org.types.js";
 
 export function createOrgController({ service }: { service: OrgServiceType }) {
   return {
-    tree: (async (req, res) => {
-      const tree = await service.tree(subscriptionOf(req).tenantId);
-      sendData(res, 200, orgTreeResponseSchema, tree);
-    }) satisfies RequestHandler,
+    tree: (async (_input, req) => service.tree(subscriptionOf(req).tenantId)) satisfies HandlerOf<
+      typeof orgApi.endpoints.tree
+    >,
 
-    create: (async (req, res) => {
-      const unit = await service.create(
-        subscriptionOf(req).tenantId,
-        req.body,
-        auditContextOf(req),
-      );
-      sendData(res, 201, orgUnitResponseSchema, unit);
-    }) satisfies RequestHandler,
+    create: (async ({ body }, req) =>
+      service.create(subscriptionOf(req).tenantId, body, auditContextOf(req))) satisfies HandlerOf<
+      typeof orgApi.endpoints.create
+    >,
 
-    update: (async (req, res) => {
-      const unit = await service.update(
+    update: (async ({ params, body }, req) =>
+      service.update(
         subscriptionOf(req).tenantId,
-        String(req.params.unitId),
-        req.body,
+        params.unitId,
+        body,
         auditContextOf(req),
-      );
-      sendData(res, 200, orgUnitResponseSchema, unit);
-    }) satisfies RequestHandler,
+      )) satisfies HandlerOf<typeof orgApi.endpoints.update>,
 
-    delete: (async (req, res) => {
-      await service.delete(
-        subscriptionOf(req).tenantId,
-        String(req.params.unitId),
-        auditContextOf(req),
-      );
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    delete: (async ({ params }, req) => {
+      await service.delete(subscriptionOf(req).tenantId, params.unitId, auditContextOf(req));
+    }) satisfies HandlerOf<typeof orgApi.endpoints.delete>,
   };
 }

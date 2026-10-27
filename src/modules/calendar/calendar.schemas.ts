@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { idSchema, NO_FIELDS } from "@/http/validate.js";
+import { NO_FIELDS } from "@/http/validate.js";
 import {
   DAY_MODES,
   MAX_DAY_VIEW_DAYS,
@@ -66,7 +66,8 @@ export const weekShapeSchema = z
   .refine((week) => Object.values(week.days).some((rule) => rule !== "off"), {
     path: ["days"],
     params: { code: "no_working_day" },
-  });
+  })
+  .meta({ id: "WeekShapeRequest" });
 
 export const calendarDateSchema = z.iso.date();
 
@@ -117,24 +118,33 @@ export const createPeriodRequestSchema = z
     kind: z.enum(PERIOD_KINDS),
     recurrence: z.enum(PERIOD_RECURRENCES),
     name: periodFields.name,
-  });
+  })
+  .meta({ id: "CreateCalendarPeriodRequest" });
 
 // `kind` and `recurrence` never change: a different kind of period is a new period.
 export const updatePeriodRequestSchema = z
   .strictObject(periodFields)
   .partial()
-  .refine((body) => Object.keys(body).length > 0, NO_FIELDS);
+  .refine((body) => Object.keys(body).length > 0, NO_FIELDS)
+  .meta({ id: "UpdateCalendarPeriodRequest" });
 
-export const periodOverrideRequestSchema = z.discriminatedUnion("action", [
-  z.strictObject({ action: z.literal("skip") }),
-  z.strictObject({
-    action: z.literal("move"),
-    startDate: calendarDateSchema,
-    endDate: calendarDateSchema,
-  }),
-]);
+export const periodOverrideRequestSchema = z
+  .discriminatedUnion("action", [
+    z.strictObject({ action: z.literal("skip") }),
+    z.strictObject({
+      action: z.literal("move"),
+      startDate: calendarDateSchema,
+      endDate: calendarDateSchema,
+    }),
+  ])
+  .meta({ id: "PeriodOverrideRequest" });
 
-export const periodIdSchema = idSchema;
+// A malformed date or year in a path is a 400 with a detail at its name, not the 404 of a malformed ID, so the
+// declared params stay plain strings (documented through `meta`) and the service checks them with the schemas below.
+export const effectiveFromParamSchema = z
+  .string()
+  .meta({ description: "A date, YYYY-MM-DD.", format: "date" });
+export const yearParamSchema = z.string().meta({ description: "A year, 1 to 9999." });
 
 export const overrideYearSchema = z.strictObject({
   year: z.coerce.number().int().min(1).max(9999),

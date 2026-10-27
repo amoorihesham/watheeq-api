@@ -4,15 +4,15 @@ import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import { emailSchema, userNameSchema } from "@/modules/auth/index.js";
 import { MAX_USER_SEARCH_LENGTH, USER_STATUSES } from "./users.constants.js";
 
-export const userIdSchema = idSchema;
-
-export const inviteUserRequestSchema = z.strictObject({
-  email: emailSchema,
-  userName: userNameSchema,
-  unitId: idSchema.nullable().default(null),
-  isManager: z.boolean().default(false),
-  roleId: idSchema,
-});
+export const inviteUserRequestSchema = z
+  .strictObject({
+    email: emailSchema,
+    userName: userNameSchema,
+    unitId: idSchema.nullable().default(null),
+    isManager: z.boolean().default(false),
+    roleId: idSchema,
+  })
+  .meta({ id: "InviteUserRequest" });
 
 export const updateUserRequestSchema = z
   .strictObject({
@@ -21,9 +21,12 @@ export const updateUserRequestSchema = z
     isManager: z.boolean(),
   })
   .partial()
-  .refine((body) => Object.keys(body).length > 0, NO_FIELDS);
+  .refine((body) => Object.keys(body).length > 0, NO_FIELDS)
+  .meta({ id: "UpdateUserRequest" });
 
-export const assignRoleRequestSchema = z.strictObject({ roleId: idSchema });
+export const assignRoleRequestSchema = z
+  .strictObject({ roleId: idSchema })
+  .meta({ id: "AssignRoleRequest" });
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listUsersQuerySchema = z.object({

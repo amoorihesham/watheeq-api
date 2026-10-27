@@ -1,60 +1,49 @@
-import type { Request, RequestHandler } from "express";
-import { sendData, sendPage } from "@/http/respond.js";
+import type { Request } from "express";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { auditContextOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import {
-  versionResponseSchema,
-  workflowResponseSchema,
-  workflowSummaryResponseSchema,
-} from "./workflows.responses.js";
+import type { workflowsApi } from "./workflows.endpoints.js";
 import type { WorkflowsServiceType } from "./workflows.types.js";
 
 const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
-const workflowIdOf = (req: Request) => String(req.params.workflowId);
 
 export function createWorkflowsController({ service }: { service: WorkflowsServiceType }) {
   return {
-    list: (async (req, res) => {
-      sendPage(res, workflowSummaryResponseSchema, await service.list(tenantOf(req), req.query));
-    }) satisfies RequestHandler,
+    list: (async ({ query }, req) => service.list(tenantOf(req), query)) satisfies HandlerOf<
+      typeof workflowsApi.endpoints.list
+    >,
 
-    get: (async (req, res) => {
-      const workflow = await service.get(tenantOf(req), workflowIdOf(req));
-      sendData(res, 200, workflowResponseSchema, workflow);
-    }) satisfies RequestHandler,
+    get: (async ({ params }, req) =>
+      service.get(tenantOf(req), params.workflowId)) satisfies HandlerOf<
+      typeof workflowsApi.endpoints.get
+    >,
 
-    getVersion: (async (req, res) => {
-      const version = await service.getVersion(
+    getVersion: (async ({ params }, req) =>
+      service.getVersion(tenantOf(req), params.workflowId, params.number)) satisfies HandlerOf<
+      typeof workflowsApi.endpoints.getVersion
+    >,
+
+    create: (async ({ body }, req) =>
+      service.create(tenantOf(req), body, auditContextOf(req))) satisfies HandlerOf<
+      typeof workflowsApi.endpoints.create
+    >,
+
+    update: (async ({ params, body }, req) =>
+      service.update(
         tenantOf(req),
-        workflowIdOf(req),
-        String(req.params.number),
-      );
-      sendData(res, 200, versionResponseSchema, version);
-    }) satisfies RequestHandler,
-
-    create: (async (req, res) => {
-      const workflow = await service.create(tenantOf(req), req.body, auditContextOf(req));
-      sendData(res, 201, workflowResponseSchema, workflow);
-    }) satisfies RequestHandler,
-
-    update: (async (req, res) => {
-      const workflow = await service.update(
-        tenantOf(req),
-        workflowIdOf(req),
-        req.body,
+        params.workflowId,
+        body,
         auditContextOf(req),
-      );
-      sendData(res, 200, workflowResponseSchema, workflow);
-    }) satisfies RequestHandler,
+      )) satisfies HandlerOf<typeof workflowsApi.endpoints.update>,
 
-    retire: (async (req, res) => {
-      const workflow = await service.retire(tenantOf(req), workflowIdOf(req), auditContextOf(req));
-      sendData(res, 200, workflowResponseSchema, workflow);
-    }) satisfies RequestHandler,
+    retire: (async ({ params }, req) =>
+      service.retire(tenantOf(req), params.workflowId, auditContextOf(req))) satisfies HandlerOf<
+      typeof workflowsApi.endpoints.retire
+    >,
 
-    restore: (async (req, res) => {
-      const workflow = await service.restore(tenantOf(req), workflowIdOf(req), auditContextOf(req));
-      sendData(res, 200, workflowResponseSchema, workflow);
-    }) satisfies RequestHandler,
+    restore: (async ({ params }, req) =>
+      service.restore(tenantOf(req), params.workflowId, auditContextOf(req))) satisfies HandlerOf<
+      typeof workflowsApi.endpoints.restore
+    >,
   };
 }

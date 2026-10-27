@@ -4,32 +4,17 @@ import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
 import { listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { validate } from "@/http/validate.js";
 import { POSITION_SORT_KEYS } from "./positions.repository.js";
-import {
-  createPositionRequestSchema,
-  listPositionsQuerySchema,
-  positionIdSchema,
-  renamePositionRequestSchema,
-  setHoldersRequestSchema,
-} from "./positions.schemas.js";
 import type {
   CreatePositionRequestType,
   HolderRowType,
+  ListPositionsQueryType,
   PositionRowType,
   PositionsRepositoryType,
   PositionType,
   RenamePositionRequestType,
   SetHoldersRequestType,
 } from "./positions.types.js";
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingPositionId(positionId: string): string {
-  if (!positionIdSchema.safeParse(positionId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return positionId;
-}
 
 const toPosition = (row: PositionRowType, holders: HolderRowType[]): PositionType => ({
   id: row.id,
@@ -68,8 +53,7 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
   };
 
   return {
-    async list(tenantId: string, input: unknown): Promise<PageType<PositionType>> {
-      const query = validate(listPositionsQuerySchema, input);
+    async list(tenantId: string, query: ListPositionsQueryType): Promise<PageType<PositionType>> {
       const page = await listPage({
         db,
         list: "positions",
@@ -85,16 +69,15 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
     },
 
     get(tenantId: string, positionId: string): Promise<PositionType> {
-      return loadPosition(db, tenantId, existingPositionId(positionId));
+      return loadPosition(db, tenantId, positionId);
     },
 
     /** A duplicate name (any case) among active positions reaches the error handler as POSITION_NAME_TAKEN (R5.1). */
     create(
       tenantId: string,
-      input: CreatePositionRequestType,
+      body: CreatePositionRequestType,
       context: AuditContextType,
     ): Promise<PositionType> {
-      const body = validate(createPositionRequestSchema, input);
       return withTx(db, async (tx) => {
         if (!(await repo.findUnit(tx, tenantId, body.unitId)).length) {
           throw new AppError("VALIDATION_FAILED", [{ path: "unitId", code: "unknown_unit" }]);
@@ -117,12 +100,11 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
 
     rename(
       tenantId: string,
-      positionId: string,
+      id: string,
       input: RenamePositionRequestType,
       context: AuditContextType,
     ): Promise<PositionType> {
-      const id = existingPositionId(positionId);
-      const { name } = validate(renamePositionRequestSchema, input);
+      const { name } = input;
       return withTx(db, async (tx) => {
         const before = await lockPosition(tx, tenantId, id);
         assertActive(before);
@@ -148,12 +130,11 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
      */
     setHolders(
       tenantId: string,
-      positionId: string,
+      id: string,
       input: SetHoldersRequestType,
       context: AuditContextType,
     ): Promise<PositionType> {
-      const id = existingPositionId(positionId);
-      const { userIds } = validate(setHoldersRequestSchema, input);
+      const { userIds } = input;
       const wanted = [...new Set(userIds)];
       return withTx(db, async (tx) => {
         const position = await lockPosition(tx, tenantId, id);
@@ -202,8 +183,7 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
     },
 
     /** Hides the position from new use and removes its holders (R5.15, R5.16). Repeating it is a no-op. */
-    retire(tenantId: string, positionId: string, context: AuditContextType): Promise<PositionType> {
-      const id = existingPositionId(positionId);
+    retire(tenantId: string, id: string, context: AuditContextType): Promise<PositionType> {
       return withTx(db, async (tx) => {
         const position = await lockPosition(tx, tenantId, id);
         if (position.retiredAt) {
@@ -232,12 +212,7 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
     },
 
     /** Brings a retired position back, vacant (R5.15). Repeating it is a no-op. */
-    restore(
-      tenantId: string,
-      positionId: string,
-      context: AuditContextType,
-    ): Promise<PositionType> {
-      const id = existingPositionId(positionId);
+    restore(tenantId: string, id: string, context: AuditContextType): Promise<PositionType> {
       return withTx(db, async (tx) => {
         // The unit is locked before the position, the order a unit delete takes them in, so the two cannot deadlock.
         const [peek] = await repo.findById(tx, tenantId, id);

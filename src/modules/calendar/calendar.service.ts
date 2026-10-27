@@ -6,26 +6,22 @@ import { AppError } from "@/http/errors.js";
 import { validate } from "@/http/validate.js";
 import { addDays } from "@/modules/subscriptions/index.js";
 import { MAX_DAYS_AHEAD, MAX_PERIOD_DAYS } from "./calendar.constants.js";
-import {
-  calendarDateSchema,
-  calendarQuerySchema,
-  createPeriodRequestSchema,
-  dayViewQuerySchema,
-  overrideYearSchema,
-  periodIdSchema,
-  periodOverrideRequestSchema,
-  updatePeriodRequestSchema,
-  weekShapeSchema,
-} from "./calendar.schemas.js";
+import { calendarDateSchema, overrideYearSchema } from "./calendar.schemas.js";
 import type {
   CalendarDaysResponseType,
   CalendarPeriodType,
+  CalendarQueryType,
   CalendarRepositoryType,
   CalendarResponseType,
+  CreatePeriodRequestType,
+  DayViewQueryType,
   HoursVersionResponseType,
+  PeriodOverrideRequestType,
   PeriodOverrideType,
   PeriodViewType,
   RecurringPeriodType,
+  UpdatePeriodRequestType,
+  WeekShapeInputType,
 } from "./calendar.types.js";
 import { toHijri } from "./shared/hijri.js";
 import { loadCalendar } from "./shared/load.js";
@@ -52,14 +48,6 @@ function assertAfterToday(date: string, today: string): void {
   if (date <= today) {
     throw new AppError("CALENDAR_DATE_LOCKED");
   }
-}
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingPeriodId(periodId: string): string {
-  if (!periodIdSchema.safeParse(periodId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return periodId;
 }
 
 const yearOf = (value: string) => validate(overrideYearSchema, { year: value }).year;
@@ -182,8 +170,7 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
 
   return {
     /** The rules; versions ended by an edit and one-off periods already over are listed on request. */
-    async get(tenantId: string, input: unknown): Promise<CalendarResponseType> {
-      const query = validate(calendarQuerySchema, input);
+    async get(tenantId: string, query: CalendarQueryType): Promise<CalendarResponseType> {
       const today = await todayOf(db);
       const [hours, views] = await Promise.all([
         repo.listHours(db, tenantId),
@@ -200,8 +187,10 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
     },
 
     /** Each date's Hijri date, hours, holidays, and season (R4.11). */
-    async days(tenantId: string, input: unknown): Promise<CalendarDaysResponseType> {
-      const { from, to } = validate(dayViewQuerySchema, input);
+    async days(
+      tenantId: string,
+      { from, to }: DayViewQueryType,
+    ): Promise<CalendarDaysResponseType> {
       const calendar = await loadCalendar(db, tenantId);
       const days: CalendarDaysResponseType["days"] = [];
       for (let date = from; date <= to; date = addDays(date, 1)) {
@@ -224,11 +213,11 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
     setHours(
       tenantId: string,
       effectiveFromInput: string,
-      input: unknown,
+      shape: WeekShapeInputType,
       context: AuditContextType,
     ): Promise<HoursVersionResponseType> {
       const effectiveFrom = effectiveFromOf(effectiveFromInput);
-      const week = canonicalWeek(validate(weekShapeSchema, input));
+      const week = canonicalWeek(shape);
       return withTx(db, async (tx) => {
         await repo.lock(tx, tenantId);
         const today = await todayOf(tx);
@@ -282,8 +271,11 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
     },
 
     /** Adds a holiday or season (R4.4, R4.5); a recurring one applies from tomorrow (P4.8). */
-    create(tenantId: string, input: unknown, context: AuditContextType): Promise<PeriodViewType> {
-      const body = validate(createPeriodRequestSchema, input);
+    create(
+      tenantId: string,
+      body: CreatePeriodRequestType,
+      context: AuditContextType,
+    ): Promise<PeriodViewType> {
       const def: PeriodDefinitionType = {
         kind: body.kind,
         name: body.name,
@@ -332,12 +324,10 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
      */
     update(
       tenantId: string,
-      periodIdInput: string,
-      input: unknown,
+      periodId: string,
+      body: UpdatePeriodRequestType,
       context: AuditContextType,
     ): Promise<PeriodViewType> {
-      const periodId = existingPeriodId(periodIdInput);
-      const body = validate(updatePeriodRequestSchema, input);
       return withTx(db, async (tx) => {
         const { today, views, period } = await lockAndLoad(tx, tenantId, periodId);
         if (isEnded(period)) {
@@ -407,8 +397,7 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
     },
 
     /** Removes a period that has not begun, or ends one that has; days up to today keep it (R4.8). */
-    delete(tenantId: string, periodIdInput: string, context: AuditContextType): Promise<void> {
-      const periodId = existingPeriodId(periodIdInput);
+    delete(tenantId: string, periodId: string, context: AuditContextType): Promise<void> {
       return withTx(db, async (tx) => {
         const { today, period } = await lockAndLoad(tx, tenantId, periodId);
         if (isEnded(period)) {
@@ -445,14 +434,12 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
     /** Moves or skips one year's occurrence of a recurring period, before it begins (R4.7). */
     setOverride(
       tenantId: string,
-      periodIdInput: string,
+      periodId: string,
       yearInput: string,
-      input: unknown,
+      after: PeriodOverrideRequestType,
       context: AuditContextType,
     ): Promise<PeriodViewType> {
-      const periodId = existingPeriodId(periodIdInput);
       const year = yearOf(yearInput);
-      const after = validate(periodOverrideRequestSchema, input);
       return withTx(db, async (tx) => {
         const { today, period } = await lockAndLoad(tx, tenantId, periodId);
         const { before } = assertOverridable(period, year, today);
@@ -495,11 +482,10 @@ export function createCalendarService({ db, repo }: { db: Db; repo: CalendarRepo
     /** Returns one year's occurrence to the rule, before it begins (R4.7). */
     deleteOverride(
       tenantId: string,
-      periodIdInput: string,
+      periodId: string,
       yearInput: string,
       context: AuditContextType,
     ): Promise<void> {
-      const periodId = existingPeriodId(periodIdInput);
       const year = yearOf(yearInput);
       return withTx(db, async (tx) => {
         const { today, period } = await lockAndLoad(tx, tenantId, periodId);

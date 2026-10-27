@@ -9,19 +9,23 @@ import {
 
 const positionName = z.string().trim().min(1).max(MAX_POSITION_NAME_LENGTH);
 
-export const positionIdSchema = idSchema;
+export const createPositionRequestSchema = z
+  .strictObject({
+    unitId: idSchema,
+    name: positionName,
+  })
+  .meta({ id: "CreatePositionRequest" });
 
-export const createPositionRequestSchema = z.strictObject({
-  unitId: idSchema,
-  name: positionName,
-});
-
-export const renamePositionRequestSchema = z.strictObject({ name: positionName });
+export const renamePositionRequestSchema = z
+  .strictObject({ name: positionName })
+  .meta({ id: "RenamePositionRequest" });
 
 // Replaces the whole set of holders; an empty list leaves the position vacant.
-export const setHoldersRequestSchema = z.strictObject({
-  userIds: z.array(idSchema).max(MAX_POSITION_HOLDERS),
-});
+export const setHoldersRequestSchema = z
+  .strictObject({
+    userIds: z.array(idSchema).max(MAX_POSITION_HOLDERS),
+  })
+  .meta({ id: "SetPositionHoldersRequest" });
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listPositionsQuerySchema = z.object({

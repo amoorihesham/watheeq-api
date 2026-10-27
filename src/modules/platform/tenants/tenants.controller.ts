@@ -1,38 +1,31 @@
-import type { RequestHandler } from "express";
-import { sendData, sendNoContent, sendPage } from "@/http/respond.js";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { auditContextOf } from "@/modules/auth/index.js";
-import { tenantDetailResponseSchema } from "./tenants.responses.js";
+import type { tenantsApi } from "./tenants.endpoints.js";
 import type { TenantsServiceType } from "./tenants.types.js";
 
 export function createTenantsController({ service }: { service: TenantsServiceType }) {
   return {
-    create: (async (req, res) => {
-      const created = await service.create(req.body, auditContextOf(req), req.log);
+    create: (async ({ body }, req) => {
+      const created = await service.create(body, auditContextOf(req), req.log);
       req.log.info({ tenantId: created.tenant.id }, "tenant created");
-      sendData(res, 201, tenantDetailResponseSchema, created);
-    }) satisfies RequestHandler,
+      return created;
+    }) satisfies HandlerOf<typeof tenantsApi.endpoints.create>,
 
-    list: (async (req, res) => {
-      sendPage(res, tenantDetailResponseSchema, await service.list(req.query));
-    }) satisfies RequestHandler,
+    list: (async ({ query }) => service.list(query)) satisfies HandlerOf<
+      typeof tenantsApi.endpoints.list
+    >,
 
-    get: (async (req, res) => {
-      const detail = await service.get(String(req.params.tenantId));
-      sendData(res, 200, tenantDetailResponseSchema, detail);
-    }) satisfies RequestHandler,
+    get: (async ({ params }) => service.get(params.tenantId)) satisfies HandlerOf<
+      typeof tenantsApi.endpoints.get
+    >,
 
-    changeSubscription: (async (req, res) => {
-      const changed = await service.changeSubscription(
-        String(req.params.tenantId),
-        req.body,
-        auditContextOf(req),
-      );
-      sendData(res, 200, tenantDetailResponseSchema, changed);
-    }) satisfies RequestHandler,
+    changeSubscription: (async ({ params, body }, req) =>
+      service.changeSubscription(params.tenantId, body, auditContextOf(req))) satisfies HandlerOf<
+      typeof tenantsApi.endpoints.changeSubscription
+    >,
 
-    resendVerification: (async (req, res) => {
-      await service.resendVerification(String(req.params.tenantId), auditContextOf(req));
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    resendVerification: (async ({ params }, req) => {
+      await service.resendVerification(params.tenantId, auditContextOf(req));
+    }) satisfies HandlerOf<typeof tenantsApi.endpoints.resendVerification>,
   };
 }

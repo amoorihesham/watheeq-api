@@ -1,85 +1,67 @@
-import type { Request, RequestHandler } from "express";
-import { sendData, sendNoContent } from "@/http/respond.js";
+import type { Request } from "express";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { auditContextOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import {
-  calendarDaysResponseSchema,
-  calendarResponseSchema,
-  hoursVersionResponseSchema,
-  periodResponseSchema,
-} from "./calendar.responses.js";
+import type { calendarApi } from "./calendar.endpoints.js";
 import type { CalendarServiceType } from "./calendar.types.js";
 import { toPeriodResponse } from "./shared/period-response.js";
 
 const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
-const effectiveFromOf = (req: Request) => String(req.params.effectiveFrom);
-const periodIdOf = (req: Request) => String(req.params.periodId);
-const yearOf = (req: Request) => String(req.params.year);
 
 export function createCalendarController({ service }: { service: CalendarServiceType }) {
   return {
-    get: (async (req, res) => {
-      sendData(res, 200, calendarResponseSchema, await service.get(tenantOf(req), req.query));
-    }) satisfies RequestHandler,
+    get: (async ({ query }, req) => service.get(tenantOf(req), query)) satisfies HandlerOf<
+      typeof calendarApi.endpoints.get
+    >,
 
-    days: (async (req, res) => {
-      sendData(res, 200, calendarDaysResponseSchema, await service.days(tenantOf(req), req.query));
-    }) satisfies RequestHandler,
+    days: (async ({ query }, req) => service.days(tenantOf(req), query)) satisfies HandlerOf<
+      typeof calendarApi.endpoints.days
+    >,
 
-    setHours: (async (req, res) => {
-      const version = await service.setHours(
+    setHours: (async ({ params, body }, req) =>
+      service.setHours(
         tenantOf(req),
-        effectiveFromOf(req),
-        req.body,
+        params.effectiveFrom,
+        body,
         auditContextOf(req),
-      );
-      sendData(res, 200, hoursVersionResponseSchema, version);
-    }) satisfies RequestHandler,
+      )) satisfies HandlerOf<typeof calendarApi.endpoints.setHours>,
 
-    deleteHours: (async (req, res) => {
-      await service.deleteHours(tenantOf(req), effectiveFromOf(req), auditContextOf(req));
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    deleteHours: (async ({ params }, req) => {
+      await service.deleteHours(tenantOf(req), params.effectiveFrom, auditContextOf(req));
+    }) satisfies HandlerOf<typeof calendarApi.endpoints.deleteHours>,
 
-    createPeriod: (async (req, res) => {
-      const period = await service.create(tenantOf(req), req.body, auditContextOf(req));
-      sendData(res, 201, periodResponseSchema, toPeriodResponse(period));
-    }) satisfies RequestHandler,
+    createPeriod: (async ({ body }, req) =>
+      toPeriodResponse(
+        await service.create(tenantOf(req), body, auditContextOf(req)),
+      )) satisfies HandlerOf<typeof calendarApi.endpoints.createPeriod>,
 
-    updatePeriod: (async (req, res) => {
-      const period = await service.update(
-        tenantOf(req),
-        periodIdOf(req),
-        req.body,
-        auditContextOf(req),
-      );
-      sendData(res, 200, periodResponseSchema, toPeriodResponse(period));
-    }) satisfies RequestHandler,
+    updatePeriod: (async ({ params, body }, req) =>
+      toPeriodResponse(
+        await service.update(tenantOf(req), params.periodId, body, auditContextOf(req)),
+      )) satisfies HandlerOf<typeof calendarApi.endpoints.updatePeriod>,
 
-    deletePeriod: (async (req, res) => {
-      await service.delete(tenantOf(req), periodIdOf(req), auditContextOf(req));
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    deletePeriod: (async ({ params }, req) => {
+      await service.delete(tenantOf(req), params.periodId, auditContextOf(req));
+    }) satisfies HandlerOf<typeof calendarApi.endpoints.deletePeriod>,
 
-    setOverride: (async (req, res) => {
-      const period = await service.setOverride(
-        tenantOf(req),
-        periodIdOf(req),
-        yearOf(req),
-        req.body,
-        auditContextOf(req),
-      );
-      sendData(res, 200, periodResponseSchema, toPeriodResponse(period));
-    }) satisfies RequestHandler,
+    setOverride: (async ({ params, body }, req) =>
+      toPeriodResponse(
+        await service.setOverride(
+          tenantOf(req),
+          params.periodId,
+          params.year,
+          body,
+          auditContextOf(req),
+        ),
+      )) satisfies HandlerOf<typeof calendarApi.endpoints.setOverride>,
 
-    deleteOverride: (async (req, res) => {
+    deleteOverride: (async ({ params }, req) => {
       await service.deleteOverride(
         tenantOf(req),
-        periodIdOf(req),
-        yearOf(req),
+        params.periodId,
+        params.year,
         auditContextOf(req),
       );
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    }) satisfies HandlerOf<typeof calendarApi.endpoints.deleteOverride>,
   };
 }

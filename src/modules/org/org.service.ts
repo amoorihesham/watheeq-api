@@ -2,8 +2,6 @@ import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError, type DetailCode } from "@/http/errors.js";
-import { validate } from "@/http/validate.js";
-import { createUnitRequestSchema, unitIdSchema, updateUnitRequestSchema } from "./org.schemas.js";
 import type {
   CreateUnitRequestType,
   OrgRepositoryType,
@@ -11,14 +9,6 @@ import type {
   OrgUnitType,
   UpdateUnitRequestType,
 } from "./org.types.js";
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingUnitId(unitId: string): string {
-  if (!unitIdSchema.safeParse(unitId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return unitId;
-}
 
 const invalidParent = (code: DetailCode) =>
   new AppError("VALIDATION_FAILED", [{ path: "parentId", code }]);
@@ -74,7 +64,7 @@ export function createOrgService({ db, repo }: { db: Db; repo: OrgRepositoryType
       input: CreateUnitRequestType,
       context: AuditContextType,
     ): Promise<OrgUnitType> {
-      const { name, parentId } = validate(createUnitRequestSchema, input);
+      const { name, parentId } = input;
       return withTx(db, async (tx) => {
         if (parentId) {
           await assertDepartment(tx, tenantId, parentId);
@@ -103,12 +93,10 @@ export function createOrgService({ db, repo }: { db: Db; repo: OrgRepositoryType
     /** Renames a unit or moves a section to another department (R2.4). */
     update(
       tenantId: string,
-      unitId: string,
-      input: UpdateUnitRequestType,
+      id: string,
+      changes: UpdateUnitRequestType,
       context: AuditContextType,
     ): Promise<OrgUnitType> {
-      const id = existingUnitId(unitId);
-      const changes = validate(updateUnitRequestSchema, input);
       return withTx(db, async (tx) => {
         const [before] = await repo.findByIdForUpdate(tx, tenantId, id);
         if (!before) {
@@ -140,8 +128,7 @@ export function createOrgService({ db, repo }: { db: Db; repo: OrgRepositoryType
     },
 
     /** Deletes a unit with no sections, no members, and no active positions (R2.5, R5.15). The lock makes the check hold under concurrency. */
-    delete(tenantId: string, unitId: string, context: AuditContextType): Promise<void> {
-      const id = existingUnitId(unitId);
+    delete(tenantId: string, id: string, context: AuditContextType): Promise<void> {
       return withTx(db, async (tx) => {
         const [unit] = await repo.findByIdForUpdate(tx, tenantId, id);
         if (!unit) {

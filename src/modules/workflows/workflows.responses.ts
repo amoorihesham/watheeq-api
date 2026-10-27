@@ -18,24 +18,30 @@ const versionHeader = {
   createdBy: z.string(),
 };
 
-export const versionResponseSchema = z.strictObject({
-  ...versionHeader,
-  stages: z.array(stage),
-});
+export const versionResponseSchema = z
+  .strictObject({
+    ...versionHeader,
+    stages: z.array(stage),
+  })
+  .meta({ id: "WorkflowVersion" });
 
 /** An item of `GET /workflows`: the current version's header, without stages. */
-export const workflowSummaryResponseSchema = z.strictObject({
-  id: z.string(),
-  name: z.string(),
-  retired: z.boolean(),
-  version: z.strictObject(versionHeader),
-  versionCount: z.number(),
-});
+export const workflowSummaryResponseSchema = z
+  .strictObject({
+    id: z.string(),
+    name: z.string(),
+    retired: z.boolean(),
+    version: z.strictObject(versionHeader),
+    versionCount: z.number(),
+  })
+  .meta({ id: "WorkflowSummary" });
 
-export const workflowResponseSchema = z.strictObject({
-  id: z.string(),
-  name: z.string(),
-  retired: z.boolean(),
-  version: versionResponseSchema,
-  versionCount: z.number(),
-});
+export const workflowResponseSchema = z
+  .strictObject({
+    id: z.string(),
+    name: z.string(),
+    retired: z.boolean(),
+    version: versionResponseSchema,
+    versionCount: z.number(),
+  })
+  .meta({ id: "Workflow" });

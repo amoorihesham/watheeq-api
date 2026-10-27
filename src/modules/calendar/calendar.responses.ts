@@ -7,25 +7,29 @@ const dayRule = z.strictObject({
   end: z.string().nullable(),
 });
 
-export const weekShapeResponseSchema = z.strictObject({
-  start: z.string(),
-  end: z.string(),
-  days: z.strictObject({
-    sun: dayRule,
-    mon: dayRule,
-    tue: dayRule,
-    wed: dayRule,
-    thu: dayRule,
-    fri: dayRule,
-    sat: dayRule,
-  }),
-});
+export const weekShapeResponseSchema = z
+  .strictObject({
+    start: z.string(),
+    end: z.string(),
+    days: z.strictObject({
+      sun: dayRule,
+      mon: dayRule,
+      tue: dayRule,
+      wed: dayRule,
+      thu: dayRule,
+      fri: dayRule,
+      sat: dayRule,
+    }),
+  })
+  .meta({ id: "WeekShape" });
 
 /** An entry of `GET /calendar`'s `hours`, and what the hours writes return. */
-export const hoursVersionResponseSchema = z.strictObject({
-  effectiveFrom: z.string(),
-  week: weekShapeResponseSchema,
-});
+export const hoursVersionResponseSchema = z
+  .strictObject({
+    effectiveFrom: z.string(),
+    week: weekShapeResponseSchema,
+  })
+  .meta({ id: "HoursVersion" });
 
 const monthDay = z.strictObject({ month: z.number(), day: z.number() });
 const dateRange = z.strictObject({ startDate: z.string(), endDate: z.string() });
@@ -35,51 +39,57 @@ const dateRange = z.strictObject({ startDate: z.string(), endDate: z.string() })
  * period, `start`, `end`, `validFrom`, `validUntil` and `overrides` to a recurring one, `week` and `rank` to a
  * season; the keys that do not apply are `null` (an empty list for `overrides`).
  */
-export const periodResponseSchema = z.strictObject({
-  id: z.string(),
-  name: z.string(),
-  kind: z.enum(["holiday", "season"]),
-  recurrence: z.enum(["once", "gregorian", "hijri"]),
-  startDate: z.string().nullable(),
-  endDate: z.string().nullable(),
-  start: monthDay.nullable(),
-  end: monthDay.nullable(),
-  validFrom: z.string().nullable(),
-  validUntil: z.string().nullable(),
-  overrides: z.array(
-    z.strictObject({
-      year: z.number(),
-      action: z.enum(["skip", "move"]),
-      startDate: z.string().nullable(),
-      endDate: z.string().nullable(),
-    }),
-  ),
-  week: weekShapeResponseSchema.nullable(),
-  rank: z.number().nullable(),
-  replacesId: z.string().nullable(),
-  next: dateRange.nullable(),
-});
+export const periodResponseSchema = z
+  .strictObject({
+    id: z.string(),
+    name: z.string(),
+    kind: z.enum(["holiday", "season"]),
+    recurrence: z.enum(["once", "gregorian", "hijri"]),
+    startDate: z.string().nullable(),
+    endDate: z.string().nullable(),
+    start: monthDay.nullable(),
+    end: monthDay.nullable(),
+    validFrom: z.string().nullable(),
+    validUntil: z.string().nullable(),
+    overrides: z.array(
+      z.strictObject({
+        year: z.number(),
+        action: z.enum(["skip", "move"]),
+        startDate: z.string().nullable(),
+        endDate: z.string().nullable(),
+      }),
+    ),
+    week: weekShapeResponseSchema.nullable(),
+    rank: z.number().nullable(),
+    replacesId: z.string().nullable(),
+    next: dateRange.nullable(),
+  })
+  .meta({ id: "CalendarPeriod" });
 
-export const calendarResponseSchema = z.strictObject({
-  today: z.string(),
-  hours: z.array(hoursVersionResponseSchema),
-  periods: z.array(periodResponseSchema),
-});
+export const calendarResponseSchema = z
+  .strictObject({
+    today: z.string(),
+    hours: z.array(hoursVersionResponseSchema),
+    periods: z.array(periodResponseSchema),
+  })
+  .meta({ id: "Calendar" });
 
 const idAndName = z.strictObject({ id: z.string(), name: z.string() });
 
-export const calendarDaysResponseSchema = z.strictObject({
-  from: z.string(),
-  to: z.string(),
-  days: z.array(
-    z.strictObject({
-      date: z.string(),
-      hijriDate: z.strictObject({ year: z.number(), month: z.number(), day: z.number() }),
-      working: z.boolean(),
-      start: z.string().nullable(),
-      end: z.string().nullable(),
-      holidays: z.array(idAndName),
-      season: idAndName.nullable(),
-    }),
-  ),
-});
+export const calendarDaysResponseSchema = z
+  .strictObject({
+    from: z.string(),
+    to: z.string(),
+    days: z.array(
+      z.strictObject({
+        date: z.string(),
+        hijriDate: z.strictObject({ year: z.number(), month: z.number(), day: z.number() }),
+        working: z.boolean(),
+        start: z.string().nullable(),
+        end: z.string().nullable(),
+        holidays: z.array(idAndName),
+        season: idAndName.nullable(),
+      }),
+    ),
+  })
+  .meta({ id: "CalendarDays" });

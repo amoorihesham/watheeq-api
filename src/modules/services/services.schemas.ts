@@ -18,8 +18,6 @@ const serviceName = z.string().trim().min(1).max(MAX_SERVICE_NAME_LENGTH);
 // A blank description is no description.
 const description = optionalText(MAX_SERVICE_DESCRIPTION_LENGTH);
 
-export const serviceIdSchema = idSchema;
-
 const workflowsSchema = z
   .array(z.strictObject({ id: idSchema, isDefault: z.boolean() }))
   .superRefine((workflows, ctx) => {
@@ -47,11 +45,13 @@ const workflowsSchema = z
     });
   });
 
-export const createServiceRequestSchema = z.strictObject({
-  name: serviceName,
-  description: description.optional(),
-  workflows: workflowsSchema,
-});
+export const createServiceRequestSchema = z
+  .strictObject({
+    name: serviceName,
+    description: description.optional(),
+    workflows: workflowsSchema,
+  })
+  .meta({ id: "CreateServiceRequest" });
 
 export const updateServiceRequestSchema = z
   .strictObject({
@@ -60,7 +60,8 @@ export const updateServiceRequestSchema = z
     workflows: workflowsSchema,
   })
   .partial()
-  .refine((body) => Object.keys(body).length > 0, NO_FIELDS);
+  .refine((body) => Object.keys(body).length > 0, NO_FIELDS)
+  .meta({ id: "UpdateServiceRequest" });
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listServicesQuerySchema = z.object({
@@ -161,46 +162,48 @@ function flagRepeats(
   }
 }
 
-export const updateServiceFormRequestSchema = z.strictObject({
-  baseRevision: z.int().min(0),
-  fields: z.array(formFieldSchema).superRefine((fields, ctx) => {
-    flagRepeats(
-      ctx,
-      fields.map((field, index) => ({ value: field.label, path: [index, "label"] })),
-      "duplicate_label",
-    );
-    flagRepeats(
-      ctx,
-      fields.map((field, index) => ({ value: field.id, path: [index, "id"] })),
-      "duplicate_field_id",
-    );
-    fields.forEach((field, index) => {
-      if (
-        field.type === "number" &&
-        field.min !== null &&
-        field.max !== null &&
-        field.min > field.max
-      ) {
-        ctx.addIssue({ code: "custom", path: [index, "min"], params: { code: "min_above_max" } });
-      }
-      if (field.type === "single_choice" || field.type === "multiple_choice") {
-        flagRepeats(
-          ctx,
-          field.options.map((option, at) => ({
-            value: option.label,
-            path: [index, "options", at, "label"],
-          })),
-          "duplicate_option",
-        );
-        flagRepeats(
-          ctx,
-          field.options.map((option, at) => ({
-            value: option.id,
-            path: [index, "options", at, "id"],
-          })),
-          "duplicate_option",
-        );
-      }
-    });
-  }),
-});
+export const updateServiceFormRequestSchema = z
+  .strictObject({
+    baseRevision: z.int().min(0),
+    fields: z.array(formFieldSchema).superRefine((fields, ctx) => {
+      flagRepeats(
+        ctx,
+        fields.map((field, index) => ({ value: field.label, path: [index, "label"] })),
+        "duplicate_label",
+      );
+      flagRepeats(
+        ctx,
+        fields.map((field, index) => ({ value: field.id, path: [index, "id"] })),
+        "duplicate_field_id",
+      );
+      fields.forEach((field, index) => {
+        if (
+          field.type === "number" &&
+          field.min !== null &&
+          field.max !== null &&
+          field.min > field.max
+        ) {
+          ctx.addIssue({ code: "custom", path: [index, "min"], params: { code: "min_above_max" } });
+        }
+        if (field.type === "single_choice" || field.type === "multiple_choice") {
+          flagRepeats(
+            ctx,
+            field.options.map((option, at) => ({
+              value: option.label,
+              path: [index, "options", at, "label"],
+            })),
+            "duplicate_option",
+          );
+          flagRepeats(
+            ctx,
+            field.options.map((option, at) => ({
+              value: option.id,
+              path: [index, "options", at, "id"],
+            })),
+            "duplicate_option",
+          );
+        }
+      });
+    }),
+  })
+  .meta({ id: "UpdateServiceFormRequest" });

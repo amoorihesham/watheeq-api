@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pageQuery } from "@/http/filters.js";
-import { idSchema, NO_FIELDS } from "@/http/validate.js";
+import { NO_FIELDS } from "@/http/validate.js";
 import {
   MAX_DISCOUNT_PERCENT,
   MAX_GRACE_DAYS,
@@ -30,16 +30,17 @@ const planFields = {
   discountPercent: discountPercentSchema,
 };
 
-export const createPlanRequestSchema = z.strictObject({
-  ...planFields,
-  discountPercent: planFields.discountPercent.default(0),
-});
+export const createPlanRequestSchema = z
+  .strictObject({
+    ...planFields,
+    discountPercent: planFields.discountPercent.default(0),
+  })
+  .meta({ id: "CreatePlanRequest" });
 
 export const updatePlanRequestSchema = z
   .strictObject(planFields)
   .partial()
-  .refine((body) => Object.keys(body).length > 0, NO_FIELDS);
-
-export const planIdSchema = idSchema;
+  .refine((body) => Object.keys(body).length > 0, NO_FIELDS)
+  .meta({ id: "UpdatePlanRequest" });
 
 export const listPlansQuerySchema = z.object({ ...pageQuery });

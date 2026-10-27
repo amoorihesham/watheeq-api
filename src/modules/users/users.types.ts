@@ -52,9 +52,9 @@ export interface MemberChangesType {
   positionId?: null;
 }
 
-export type InviteUserRequestType = z.input<typeof inviteUserRequestSchema>;
-export type UpdateUserRequestType = z.input<typeof updateUserRequestSchema>;
-export type AssignRoleRequestType = z.input<typeof assignRoleRequestSchema>;
+export type InviteUserRequestType = z.output<typeof inviteUserRequestSchema>;
+export type UpdateUserRequestType = z.output<typeof updateUserRequestSchema>;
+export type AssignRoleRequestType = z.output<typeof assignRoleRequestSchema>;
 export type ListUsersQueryType = z.output<typeof listUsersQuerySchema>;
 
 /** The signed-in user acting on another user. */

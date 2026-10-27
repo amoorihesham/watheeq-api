@@ -1,48 +1,48 @@
-import type { Request, RequestHandler } from "express";
-import { sendData, sendNoContent, sendPage } from "@/http/respond.js";
+import type { Request } from "express";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { auditContextOf, principalOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import { permissionResponseSchema, roleResponseSchema } from "./roles.responses.js";
+import type { permissionsApi, rolesApi } from "./roles.endpoints.js";
 import type { RolesServiceType } from "./roles.types.js";
 
 const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
 const actorOf = (req: Request) => principalOf(req).id;
-const roleIdOf = (req: Request) => String(req.params.roleId);
 
 export function createRolesController({ service }: { service: RolesServiceType }) {
   return {
-    permissions: ((req, res) => {
-      sendPage(res, permissionResponseSchema, service.permissions(req.query));
-    }) satisfies RequestHandler,
+    roles: {
+      list: (async ({ query }, req) => service.list(tenantOf(req), query)) satisfies HandlerOf<
+        typeof rolesApi.endpoints.list
+      >,
 
-    list: (async (req, res) => {
-      sendPage(res, roleResponseSchema, await service.list(tenantOf(req), req.query));
-    }) satisfies RequestHandler,
+      get: (async ({ params }, req) =>
+        service.get(tenantOf(req), params.roleId)) satisfies HandlerOf<
+        typeof rolesApi.endpoints.get
+      >,
 
-    get: (async (req, res) => {
-      const role = await service.get(tenantOf(req), roleIdOf(req));
-      sendData(res, 200, roleResponseSchema, role);
-    }) satisfies RequestHandler,
+      create: (async ({ body }, req) =>
+        service.create(tenantOf(req), actorOf(req), body, auditContextOf(req))) satisfies HandlerOf<
+        typeof rolesApi.endpoints.create
+      >,
 
-    create: (async (req, res) => {
-      const role = await service.create(tenantOf(req), actorOf(req), req.body, auditContextOf(req));
-      sendData(res, 201, roleResponseSchema, role);
-    }) satisfies RequestHandler,
+      update: (async ({ params, body }, req) =>
+        service.update(
+          tenantOf(req),
+          params.roleId,
+          actorOf(req),
+          body,
+          auditContextOf(req),
+        )) satisfies HandlerOf<typeof rolesApi.endpoints.update>,
 
-    update: (async (req, res) => {
-      const role = await service.update(
-        tenantOf(req),
-        roleIdOf(req),
-        actorOf(req),
-        req.body,
-        auditContextOf(req),
-      );
-      sendData(res, 200, roleResponseSchema, role);
-    }) satisfies RequestHandler,
+      delete: (async ({ params }, req) => {
+        await service.delete(tenantOf(req), params.roleId, actorOf(req), auditContextOf(req));
+      }) satisfies HandlerOf<typeof rolesApi.endpoints.delete>,
+    },
 
-    delete: (async (req, res) => {
-      await service.delete(tenantOf(req), roleIdOf(req), actorOf(req), auditContextOf(req));
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    permissions: {
+      list: (async ({ query }) => service.permissions(query)) satisfies HandlerOf<
+        typeof permissionsApi.endpoints.list
+      >,
+    },
   };
 }

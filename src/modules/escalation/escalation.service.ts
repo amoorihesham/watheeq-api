@@ -2,8 +2,7 @@ import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Db, Executor } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
-import { validate } from "@/http/validate.js";
-import { putEscalationRequestSchema, targetKey } from "./escalation.schemas.js";
+import { targetKey } from "./escalation.schemas.js";
 import type {
   EscalationInputType,
   EscalationRepositoryType,
@@ -119,10 +118,9 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
      */
     put(
       tenantId: string,
-      input: PutEscalationRequestType,
+      body: PutEscalationRequestType,
       context: AuditContextType,
     ): Promise<EscalationResponseType> {
-      const body = validate(putEscalationRequestSchema, input);
       return withTx(db, async (tx) => {
         await repo.lockSettings(tx, tenantId);
         const after = canonical(body);

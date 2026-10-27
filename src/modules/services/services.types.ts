@@ -37,9 +37,9 @@ export interface WorkflowStateRowType {
   retiredAt: Date | null;
 }
 
-export type CreateServiceRequestType = z.input<typeof createServiceRequestSchema>;
-export type UpdateServiceRequestType = z.input<typeof updateServiceRequestSchema>;
-export type UpdateServiceFormRequestType = z.input<typeof updateServiceFormRequestSchema>;
+export type CreateServiceRequestType = z.output<typeof createServiceRequestSchema>;
+export type UpdateServiceRequestType = z.output<typeof updateServiceRequestSchema>;
+export type UpdateServiceFormRequestType = z.output<typeof updateServiceFormRequestSchema>;
 export type RequestedFieldType = z.output<typeof updateServiceFormRequestSchema>["fields"][number];
 export type ListServicesQueryType = z.output<typeof listServicesQuerySchema>;
 export type WorkflowChoiceType = z.output<typeof createServiceRequestSchema>["workflows"][number];

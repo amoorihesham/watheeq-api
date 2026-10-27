@@ -1,8 +1,8 @@
-import type { Request, RequestHandler } from "express";
-import { sendData, sendNoContent, sendPage } from "@/http/respond.js";
+import type { Request } from "express";
+import type { HandlerOf } from "@/http/endpoint.js";
 import { auditContextOf, principalOf } from "@/modules/auth/index.js";
 import { subscriptionOf } from "@/modules/subscriptions/index.js";
-import { userResponseSchema } from "./users.responses.js";
+import type { usersApi } from "./users.endpoints.js";
 import type { CallerType, UsersServiceType } from "./users.types.js";
 
 const callerOf = (req: Request): CallerType => {
@@ -10,80 +10,65 @@ const callerOf = (req: Request): CallerType => {
   return { id, userName };
 };
 const tenantOf = (req: Request) => subscriptionOf(req).tenantId;
-const userIdOf = (req: Request) => String(req.params.userId);
 
 export function createUsersController({ service }: { service: UsersServiceType }) {
   return {
-    list: (async (req, res) => {
-      const page = await service.list(tenantOf(req), callerOf(req).id, req.query);
-      sendPage(res, userResponseSchema, page);
-    }) satisfies RequestHandler,
+    list: (async ({ query }, req) =>
+      service.list(tenantOf(req), callerOf(req).id, query)) satisfies HandlerOf<
+      typeof usersApi.endpoints.list
+    >,
 
-    get: (async (req, res) => {
-      const user = await service.get(tenantOf(req), callerOf(req).id, userIdOf(req));
-      sendData(res, 200, userResponseSchema, user);
-    }) satisfies RequestHandler,
-
-    invite: (async (req, res) => {
-      const user = await service.invite(
+    invite: (async ({ body }, req) =>
+      service.invite(
         tenantOf(req),
-        req.body,
+        body,
         callerOf(req),
         auditContextOf(req),
         req.log,
-      );
-      sendData(res, 201, userResponseSchema, user);
-    }) satisfies RequestHandler,
+      )) satisfies HandlerOf<typeof usersApi.endpoints.invite>,
 
-    update: (async (req, res) => {
-      const user = await service.update(
-        tenantOf(req),
-        userIdOf(req),
-        req.body,
-        auditContextOf(req),
-      );
-      sendData(res, 200, userResponseSchema, user);
-    }) satisfies RequestHandler,
+    get: (async ({ params }, req) =>
+      service.get(tenantOf(req), callerOf(req).id, params.userId)) satisfies HandlerOf<
+      typeof usersApi.endpoints.get
+    >,
 
-    assignRole: (async (req, res) => {
-      const user = await service.assignRole(
+    update: (async ({ params, body }, req) =>
+      service.update(tenantOf(req), params.userId, body, auditContextOf(req))) satisfies HandlerOf<
+      typeof usersApi.endpoints.update
+    >,
+
+    assignRole: (async ({ params, body }, req) =>
+      service.assignRole(
         tenantOf(req),
-        userIdOf(req),
-        req.body,
+        params.userId,
+        body,
         callerOf(req),
         auditContextOf(req),
-      );
-      sendData(res, 200, userResponseSchema, user);
-    }) satisfies RequestHandler,
+      )) satisfies HandlerOf<typeof usersApi.endpoints.assignRole>,
 
-    deactivate: (async (req, res) => {
-      const user = await service.deactivate(
+    deactivate: (async ({ params }, req) =>
+      service.deactivate(
         tenantOf(req),
-        userIdOf(req),
+        params.userId,
         callerOf(req),
         auditContextOf(req),
-      );
-      sendData(res, 200, userResponseSchema, user);
-    }) satisfies RequestHandler,
+      )) satisfies HandlerOf<typeof usersApi.endpoints.deactivate>,
 
-    reactivate: (async (req, res) => {
-      const user = await service.reactivate(
+    reactivate: (async ({ params }, req) =>
+      service.reactivate(
         tenantOf(req),
-        userIdOf(req),
+        params.userId,
         callerOf(req),
         auditContextOf(req),
-      );
-      sendData(res, 200, userResponseSchema, user);
-    }) satisfies RequestHandler,
+      )) satisfies HandlerOf<typeof usersApi.endpoints.reactivate>,
 
-    resendInvitation: (async (req, res) => {
+    resendInvitation: (async ({ params }, req) => {
       await service.resendInvitation(
         tenantOf(req),
-        userIdOf(req),
+        params.userId,
         callerOf(req),
         auditContextOf(req),
       );
-      sendNoContent(res);
-    }) satisfies RequestHandler,
+    }) satisfies HandlerOf<typeof usersApi.endpoints.resendInvitation>,
   };
 }

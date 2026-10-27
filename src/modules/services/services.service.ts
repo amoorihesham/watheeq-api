@@ -6,18 +6,11 @@ import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
 import { listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { validate } from "@/http/validate.js";
 import { SERVICE_SORT_KEYS } from "./services.repository.js";
-import {
-  createServiceRequestSchema,
-  listServicesQuerySchema,
-  serviceIdSchema,
-  updateServiceFormRequestSchema,
-  updateServiceRequestSchema,
-} from "./services.schemas.js";
 import type {
   AllowedWorkflowRowType,
   CreateServiceRequestType,
+  ListServicesQueryType,
   RequestedFieldType,
   ServiceRowType,
   ServicesRepositoryType,
@@ -27,14 +20,6 @@ import type {
   WorkflowChoiceType,
 } from "./services.types.js";
 import { type FormFieldType, fieldView } from "./shared/form.js";
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingServiceId(serviceId: string): string {
-  if (!serviceIdSchema.safeParse(serviceId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return serviceId;
-}
 
 const toService = (row: ServiceRowType, allowed: AllowedWorkflowRowType[]): ServiceType => ({
   id: row.id,
@@ -176,8 +161,7 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
   }
 
   return {
-    async list(tenantId: string, input: unknown): Promise<PageType<ServiceType>> {
-      const query = validate(listServicesQuerySchema, input);
+    async list(tenantId: string, query: ListServicesQueryType): Promise<PageType<ServiceType>> {
       const page = await listPage({
         db,
         list: "services",
@@ -205,16 +189,15 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
     },
 
     get(tenantId: string, serviceId: string): Promise<ServiceType> {
-      return loadService(db, tenantId, existingServiceId(serviceId));
+      return loadService(db, tenantId, serviceId);
     },
 
     /** A duplicate name (any case) reaches the error handler as SERVICE_NAME_TAKEN. */
     create(
       tenantId: string,
-      input: CreateServiceRequestType,
+      body: CreateServiceRequestType,
       context: AuditContextType,
     ): Promise<ServiceType> {
-      const body = validate(createServiceRequestSchema, input);
       const description = body.description ?? null;
       return withTx(db, async (tx) => {
         await assertWorkflowsActive(tx, tenantId, body.workflows);
@@ -239,12 +222,10 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
      */
     update(
       tenantId: string,
-      serviceId: string,
-      input: UpdateServiceRequestType,
+      id: string,
+      body: UpdateServiceRequestType,
       context: AuditContextType,
     ): Promise<ServiceType> {
-      const id = existingServiceId(serviceId);
-      const body = validate(updateServiceRequestSchema, input);
       return withTx(db, async (tx) => {
         const service = await lockService(tx, tenantId, id);
         if (service.retiredAt) {
@@ -304,12 +285,10 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
      */
     updateForm(
       tenantId: string,
-      serviceId: string,
-      input: UpdateServiceFormRequestType,
+      id: string,
+      body: UpdateServiceFormRequestType,
       context: AuditContextType,
     ): Promise<ServiceType> {
-      const id = existingServiceId(serviceId);
-      const body = validate(updateServiceFormRequestSchema, input);
       return withTx(db, async (tx) => {
         const service = await lockService(tx, tenantId, id);
         if (service.retiredAt) {
@@ -342,8 +321,7 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
     },
 
     /** Hides the service from new requests (R5.15). Repeating it is a no-op. */
-    retire(tenantId: string, serviceId: string, context: AuditContextType): Promise<ServiceType> {
-      const id = existingServiceId(serviceId);
+    retire(tenantId: string, id: string, context: AuditContextType): Promise<ServiceType> {
       return withTx(db, async (tx) => {
         const service = await lockService(tx, tenantId, id);
         if (service.retiredAt) {
@@ -365,8 +343,7 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
      * Brings a retired service back (R5.15). Its workflows are share-locked, so none is retired while it becomes
      * active; a name taken meanwhile is SERVICE_NAME_TAKEN. Repeating it is a no-op.
      */
-    restore(tenantId: string, serviceId: string, context: AuditContextType): Promise<ServiceType> {
-      const id = existingServiceId(serviceId);
+    restore(tenantId: string, id: string, context: AuditContextType): Promise<ServiceType> {
       return withTx(db, async (tx) => {
         const service = await lockService(tx, tenantId, id);
         if (!service.retiredAt) {

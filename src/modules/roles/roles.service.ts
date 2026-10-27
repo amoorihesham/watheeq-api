@@ -7,7 +7,6 @@ import { withTx } from "@/db/tx.js";
 import { AppError, type ErrorDetail } from "@/http/errors.js";
 import { listInMemory, listPage } from "@/http/list.js";
 import type { PageType } from "@/http/respond.js";
-import { validate } from "@/http/validate.js";
 import {
   assertGrantsHeld,
   type GrantMapType,
@@ -20,30 +19,17 @@ import {
   type TenantPermissionType,
   type WantedGrantType,
 } from "@/modules/tenant-access/index.js";
-import {
-  createRoleRequestSchema,
-  listPermissionsQuerySchema,
-  listRolesQuerySchema,
-  roleIdSchema,
-  updateRoleRequestSchema,
-} from "./roles.schemas.js";
 import type {
   CreateRoleRequestType,
   GrantRowType,
+  ListPermissionsQueryType,
+  ListRolesQueryType,
   PermissionType,
   RoleRowType,
   RolesRepositoryType,
   RoleType,
   UpdateRoleRequestType,
 } from "./roles.types.js";
-
-/** A non-UUID id is answered like an unknown one, never as a database cast error. */
-function existingRoleId(roleId: string): string {
-  if (!roleIdSchema.safeParse(roleId).success) {
-    throw new AppError("NOT_FOUND");
-  }
-  return roleId;
-}
 
 const sameGrants = (a: GrantType[], b: GrantType[]) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -128,17 +114,16 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
   }
 
   return {
-    permissions(input: unknown): PageType<PermissionType> {
+    permissions(query: ListPermissionsQueryType): PageType<PermissionType> {
       return listInMemory({
         list: "permissions",
-        query: validate(listPermissionsQuerySchema, input),
+        query,
         items: TENANT_PERMISSIONS.map((key) => ({ key, scopes: [...PERMISSION_CATALOG[key]] })),
         keyOf: (permission) => permission.key,
       });
     },
 
-    async list(tenantId: string, input: unknown): Promise<PageType<RoleType>> {
-      const query = validate(listRolesQuerySchema, input);
+    async list(tenantId: string, query: ListRolesQueryType): Promise<PageType<RoleType>> {
       const page = await listPage({
         db,
         list: "roles",
@@ -164,17 +149,16 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
     },
 
     get(tenantId: string, roleId: string): Promise<RoleType> {
-      return loadRole(db, tenantId, existingRoleId(roleId));
+      return loadRole(db, tenantId, roleId);
     },
 
     /** A duplicate name (any case) reaches the error handler as ROLE_NAME_TAKEN (R3.5). */
     create(
       tenantId: string,
       actorId: string,
-      input: CreateRoleRequestType,
+      body: CreateRoleRequestType,
       context: AuditContextType,
     ): Promise<RoleType> {
-      const body = validate(createRoleRequestSchema, input);
       const grants = catalogGrants(body.permissions);
       return withTx(db, async (tx) => {
         await assertWithinActor(tx, tenantId, actorId, askedAt(body.permissions, grants));
@@ -203,13 +187,11 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
      */
     update(
       tenantId: string,
-      roleId: string,
+      id: string,
       actorId: string,
-      input: UpdateRoleRequestType,
+      body: UpdateRoleRequestType,
       context: AuditContextType,
     ): Promise<RoleType> {
-      const id = existingRoleId(roleId);
-      const body = validate(updateRoleRequestSchema, input);
       const requested =
         body.permissions === undefined ? undefined : catalogGrants(body.permissions);
       return withTx(db, async (tx) => {
@@ -257,11 +239,10 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
     /** Deletes a role nobody holds, active or not (R3.7). The lock makes the check hold under concurrency. */
     delete(
       tenantId: string,
-      roleId: string,
+      id: string,
       actorId: string,
       context: AuditContextType,
     ): Promise<void> {
-      const id = existingRoleId(roleId);
       return withTx(db, async (tx) => {
         const { role, grants } = await lockEditableRole(tx, tenantId, id);
         await assertWithinActor(tx, tenantId, actorId, grants);

@@ -1,13 +1,12 @@
-import { Router } from "express";
-import { noStore } from "@/middleware/no-store.js";
-import { authenticate, requireRole } from "@/modules/auth/index.js";
-import { requirePlatformPermission } from "../shared/middlewares.js";
+import type { Router } from "express";
+import { buildRouter } from "@/http/endpoint.js";
 import { createTenantsController } from "./tenants.controller.js";
+import { tenantsApi } from "./tenants.endpoints.js";
 import { createTenantsRepository } from "./tenants.repository.js";
 import { createTenantsService } from "./tenants.service.js";
 import type { TenantsRouterDepsType } from "./tenants.types.js";
 
-/** The tenants module's composition root; mounted at `/operator/tenants`. */
+/** The tenants module's composition root; its router is built from `tenantsApi` and mounted at its prefix. */
 export function createTenantsRouter({
   db,
   auth,
@@ -25,20 +24,5 @@ export function createTenantsRouter({
   });
   const controller = createTenantsController({ service });
 
-  const router = Router();
-  router.use(noStore, authenticate(auth.jwtSecret), requireRole("operator"));
-  router.post("/", requirePlatformPermission("platform.tenant.create"), controller.create);
-  router.get("/", requirePlatformPermission("platform.tenant.view"), controller.list);
-  router.get("/:tenantId", requirePlatformPermission("platform.tenant.view"), controller.get);
-  router.put(
-    "/:tenantId/subscription",
-    requirePlatformPermission("platform.subscription.update"),
-    controller.changeSubscription,
-  );
-  router.post(
-    "/:tenantId/admin/resend-verification",
-    requirePlatformPermission("platform.tenant.create"),
-    controller.resendVerification,
-  );
-  return router;
+  return buildRouter(tenantsApi, controller, { db, jwtSecret: auth.jwtSecret });
 }

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { booleanFilter, pageQuery } from "@/http/filters.js";
-import { idSchema } from "@/http/validate.js";
 import { assigneeTargetSchema } from "@/modules/positions/index.js";
 import {
   MAX_STAGE_NAME_LENGTH,
@@ -11,8 +10,6 @@ import {
 } from "./workflows.constants.js";
 
 const workflowName = z.string().trim().min(1).max(MAX_WORKFLOW_NAME_LENGTH);
-
-export const workflowIdSchema = idSchema;
 
 // Every field is required: the builder decides each stage's behavior, with no default (Phase 5 spec, Q10).
 const stageSchema = z.strictObject({
@@ -59,16 +56,20 @@ const stagesSchema = z
     });
   });
 
-export const createWorkflowRequestSchema = z.strictObject({
-  name: workflowName,
-  stages: stagesSchema,
-});
+export const createWorkflowRequestSchema = z
+  .strictObject({
+    name: workflowName,
+    stages: stagesSchema,
+  })
+  .meta({ id: "CreateWorkflowRequest" });
 
-export const updateWorkflowRequestSchema = z.strictObject({
-  name: workflowName,
-  baseVersion: z.int().min(1),
-  stages: stagesSchema,
-});
+export const updateWorkflowRequestSchema = z
+  .strictObject({
+    name: workflowName,
+    baseVersion: z.int().min(1),
+    stages: stagesSchema,
+  })
+  .meta({ id: "UpdateWorkflowRequest" });
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listWorkflowsQuerySchema = z.object({
@@ -76,5 +77,8 @@ export const listWorkflowsQuerySchema = z.object({
   ...pageQuery,
 });
 
-/** A version number in a path; anything else is answered like an unknown version. */
-export const versionNumberSchema = z.string().regex(/^[1-9]\d{0,8}$/);
+/** A version number in a path; anything else is answered like an unknown version (the params check, R10.3). */
+export const versionNumberSchema = z
+  .string()
+  .regex(/^[1-9]\d{0,8}$/)
+  .transform(Number);
