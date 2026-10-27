@@ -27,6 +27,9 @@ export function createDocsRouter(document: object): express.Router {
     apiReference({
       url: "/openapi.json",
       cdn: SCRIPT_PATH,
+      // The package's defaults reach third-party hosts (fonts, usage telemetry); R10.10 allows none.
+      withDefaultFonts: false,
+      telemetry: false,
       pageTitle: "Watheeq API reference",
     }),
   );
