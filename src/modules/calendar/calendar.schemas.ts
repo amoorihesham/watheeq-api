@@ -8,7 +8,7 @@ import {
   PERIOD_KINDS,
   PERIOD_RECURRENCES,
   TIME_PATTERN,
-} from "./calendar.config.js";
+} from "./calendar.constants.js";
 import type { DayRuleType } from "./calendar.types.js";
 import { daysBetweenDates } from "./shared/riyadh-time.js";
 

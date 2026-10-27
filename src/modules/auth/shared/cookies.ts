@@ -4,7 +4,7 @@ import {
   ACCESS_COOKIE_FLAGS,
   REFRESH_COOKIE,
   REFRESH_COOKIE_FLAGS,
-} from "../auth.config.js";
+} from "../auth.constants.js";
 import type { AuthSettingsType, AuthTokensType } from "../auth.types.js";
 
 export function setAuthCookies(

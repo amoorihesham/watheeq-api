@@ -1,4 +1,4 @@
-import { CALENDAR_TIME_ZONE } from "../calendar.config.js";
+import { CALENDAR_TIME_ZONE } from "../calendar.constants.js";
 
 const MS_PER_DAY = 86_400_000;
 

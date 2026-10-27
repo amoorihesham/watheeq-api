@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ORG_UNIT_KINDS } from "@/modules/org/index.js";
-import { USER_STATUSES } from "./users.config.js";
+import { USER_STATUSES } from "./users.constants.js";
 
 export const userResponseSchema = z.strictObject({
   id: z.string(),

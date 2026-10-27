@@ -1,5 +1,5 @@
 import { addDays } from "@/modules/subscriptions/index.js";
-import { HIJRI_MAX_YEAR, HIJRI_MIN_YEAR } from "../calendar.config.js";
+import { HIJRI_MAX_YEAR, HIJRI_MIN_YEAR } from "../calendar.constants.js";
 import type { HijriDateType } from "../calendar.types.js";
 
 // Umm al-Qura, the Saudi civil calendar, from the runtime's ICU data (P4.6).

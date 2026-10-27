@@ -7,7 +7,7 @@ import { validate } from "@/http/validate.js";
 import type { Logger } from "@/logging/logger.js";
 import { toSubscriptionStatus } from "@/modules/subscriptions/index.js";
 import { grantedPermissions } from "@/modules/tenant-access/index.js";
-import { DUMMY_PASSWORD_HASH } from "./auth.config.js";
+import { DUMMY_PASSWORD_HASH } from "./auth.constants.js";
 import { createAuthRepository } from "./auth.repository.js";
 import {
   changePasswordRequestSchema,

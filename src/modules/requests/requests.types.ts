@@ -12,7 +12,7 @@ import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
 import type { AnswerSnapshotType } from "@/modules/services/shared/answers.js";
 import type { FormFieldType } from "@/modules/services/shared/form.js";
 import type { FileStoreType } from "@/storage/index.js";
-import type { REQUEST_VIEWS } from "./requests.config.js";
+import type { REQUEST_VIEWS } from "./requests.constants.js";
 import type { createRequestsController } from "./requests.controller.js";
 import type { createRequestsRepository } from "./requests.repository.js";
 import type {

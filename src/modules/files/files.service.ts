@@ -18,7 +18,7 @@ import {
   PENDING_LIFETIME_HOURS,
   STORAGE_REARM_PERCENT,
   STORAGE_WARNING_PERCENT,
-} from "./files.config.js";
+} from "./files.constants.js";
 import { fileIdSchema } from "./files.schemas.js";
 import type {
   FileDownloadType,

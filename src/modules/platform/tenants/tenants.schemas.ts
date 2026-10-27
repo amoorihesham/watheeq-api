@@ -3,7 +3,7 @@ import { pageQuery } from "@/http/filters.js";
 import { idSchema } from "@/http/validate.js";
 import { emailSchema, userNameSchema } from "@/modules/auth/index.js";
 import { discountPercentSchema } from "../plans/plans.schemas.js";
-import { MAX_REASON_LENGTH, MAX_TENANT_NAME_LENGTH, SLUG_PATTERN } from "./tenants.config.js";
+import { MAX_REASON_LENGTH, MAX_TENANT_NAME_LENGTH, SLUG_PATTERN } from "./tenants.constants.js";
 
 export const createTenantRequestSchema = z.strictObject({
   name: z.string().trim().min(1).max(MAX_TENANT_NAME_LENGTH),

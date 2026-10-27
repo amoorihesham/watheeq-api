@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DUMMY_PASSWORD_HASH } from "../src/modules/auth/auth.config.js";
+import { DUMMY_PASSWORD_HASH } from "../src/modules/auth/auth.constants.js";
 import { hashPassword, verifyPassword } from "../src/modules/auth/shared/passwords.js";
 
 describe("passwords", () => {

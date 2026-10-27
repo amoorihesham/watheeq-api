@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { Readable } from "node:stream";
 import { fileTypeFromBuffer } from "file-type";
 import { AppError } from "@/http/errors.js";
-import { DETECTION_PREFIX_BYTES } from "../files.config.js";
+import { DETECTION_PREFIX_BYTES } from "../files.constants.js";
 import type { FileKindType, UploadInspectorType } from "../files.types.js";
 
 const lengthMismatch = () =>

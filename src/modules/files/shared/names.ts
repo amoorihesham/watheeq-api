@@ -1,5 +1,5 @@
 import { AppError } from "@/http/errors.js";
-import { KIND_BY_EXTENSION, MAX_FILE_NAME_LENGTH } from "../files.config.js";
+import { KIND_BY_EXTENSION, MAX_FILE_NAME_LENGTH } from "../files.constants.js";
 import type { FileKindType } from "../files.types.js";
 
 const invalidName = () =>

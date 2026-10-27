@@ -1,4 +1,4 @@
-import { BYTES_PER_GB } from "../subscriptions.config.js";
+import { BYTES_PER_GB } from "../subscriptions.constants.js";
 import type {
   SubscriptionRowType,
   SubscriptionStatusType,

@@ -1,7 +1,7 @@
 import type { Db } from "@/db/pool.js";
 import { withTx } from "@/db/tx.js";
 import type { FileStoreType } from "@/storage/index.js";
-import { SWEEP_BATCH_SIZE, SWEEP_BUDGET_MS } from "../files.config.js";
+import { SWEEP_BATCH_SIZE, SWEEP_BUDGET_MS } from "../files.constants.js";
 import { createFilesRepository } from "../files.repository.js";
 import type { SweepOptionsType, SweepResultType } from "../files.types.js";
 import { storageKeyOf } from "./keys.js";

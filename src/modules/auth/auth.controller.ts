@@ -1,7 +1,7 @@
 import type { RequestHandler } from "express";
 import { AppError } from "@/http/errors.js";
 import { sendData, sendNoContent } from "@/http/respond.js";
-import { REFRESH_COOKIE } from "./auth.config.js";
+import { REFRESH_COOKIE } from "./auth.constants.js";
 import { sessionResponseSchema } from "./auth.responses.js";
 import type { AuthServiceType, AuthSettingsType } from "./auth.types.js";
 import { clearAuthCookies, setAuthCookies } from "./shared/cookies.js";

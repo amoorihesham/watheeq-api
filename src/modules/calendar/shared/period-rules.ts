@@ -1,6 +1,6 @@
 import type { ErrorDetail } from "@/http/errors.js";
 import { addDays } from "@/modules/subscriptions/index.js";
-import { MAX_PERIOD_DAYS } from "../calendar.config.js";
+import { MAX_PERIOD_DAYS } from "../calendar.constants.js";
 import type {
   CalendarPeriodType,
   MonthDayType,

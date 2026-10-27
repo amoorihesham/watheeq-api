@@ -1,4 +1,4 @@
-import { WEEKDAYS } from "../calendar.config.js";
+import { WEEKDAYS } from "../calendar.constants.js";
 import type {
   CalendarPeriodType,
   CalendarType,

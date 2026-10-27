@@ -2,7 +2,7 @@ import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
-import type { STAGE_FALLBACKS } from "./workflows.config.js";
+import type { STAGE_FALLBACKS } from "./workflows.constants.js";
 import type { createWorkflowsController } from "./workflows.controller.js";
 import type { createWorkflowsRepository } from "./workflows.repository.js";
 import type {

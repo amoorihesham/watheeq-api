@@ -9,7 +9,7 @@ import {
   MAX_STORAGE_LIMIT_GB,
   MAX_USER_LIMIT,
   PAYMENT_PERIODS,
-} from "./plans.config.js";
+} from "./plans.constants.js";
 
 // Two decimals at most: 12.5 and 12.34 pass, 12.345 fails. Compared in hundredths to avoid floating-point noise.
 export const discountPercentSchema = z

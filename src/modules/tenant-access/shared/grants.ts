@@ -4,7 +4,7 @@ import {
   PERMISSION_CATALOG,
   PERMISSION_SCOPES,
   TENANT_PERMISSIONS,
-} from "../tenant-access.config.js";
+} from "../tenant-access.constants.js";
 import { createTenantAccessRepository } from "../tenant-access.repository.js";
 import type {
   GrantMapType,

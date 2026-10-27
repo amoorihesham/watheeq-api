@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type { ASSIGNEE_BUILTINS } from "./positions.config.js";
+import type { ASSIGNEE_BUILTINS } from "./positions.constants.js";
 import type { createPositionsController } from "./positions.controller.js";
 import type { createPositionsRepository } from "./positions.repository.js";
 import type {

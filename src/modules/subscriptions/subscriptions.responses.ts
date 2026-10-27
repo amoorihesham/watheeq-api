@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SUBSCRIPTION_STATES } from "./subscriptions.config.js";
+import { SUBSCRIPTION_STATES } from "./subscriptions.constants.js";
 
 const subscriptionState = z.enum(SUBSCRIPTION_STATES);
 

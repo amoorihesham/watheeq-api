@@ -21,7 +21,7 @@ import {
   ESCALATION_BUDGET_MS,
   ESCALATION_INTERVAL_MS,
   ESCALATION_RULE_STATES,
-} from "../requests.config.js";
+} from "../requests.constants.js";
 import type {
   EscalationCandidateRowType,
   EscalationFiringType,

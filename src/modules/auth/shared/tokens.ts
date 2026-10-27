@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { jwtVerify, SignJWT } from "jose";
-import { JWT_ALGORITHM, JWT_ISSUER, REFRESH_TOKEN_BYTES } from "../auth.config.js";
+import { JWT_ALGORITHM, JWT_ISSUER, REFRESH_TOKEN_BYTES } from "../auth.constants.js";
 import { accessTokenPayloadSchema } from "../auth.schemas.js";
 import type { AccessTokenPayloadType, AuthUserType } from "../auth.types.js";
 

@@ -5,7 +5,7 @@ import {
   MAX_PRIORITY_DAYS,
   MAX_PRIORITY_NAME_LENGTH,
   MIN_PRIORITY_DAYS,
-} from "./priorities.config.js";
+} from "./priorities.constants.js";
 
 const priorityName = z.string().trim().min(1).max(MAX_PRIORITY_NAME_LENGTH);
 const days = z.int().min(MIN_PRIORITY_DAYS).max(MAX_PRIORITY_DAYS);

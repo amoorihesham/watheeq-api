@@ -4,7 +4,7 @@ import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { files } from "@/db/schema/index.js";
 import type { FileStoreType } from "@/storage/index.js";
-import type { FILE_KINDS } from "./files.config.js";
+import type { FILE_KINDS } from "./files.constants.js";
 import type { createFilesController } from "./files.controller.js";
 import type { createFilesRepository } from "./files.repository.js";
 import type { fileResponseSchema } from "./files.responses.js";

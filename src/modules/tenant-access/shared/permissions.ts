@@ -1,4 +1,4 @@
-import { PERMISSION_CATALOG, TENANT_PERMISSIONS } from "../tenant-access.config.js";
+import { PERMISSION_CATALOG, TENANT_PERMISSIONS } from "../tenant-access.constants.js";
 import type {
   GrantType,
   TenantPermissionsOfType,

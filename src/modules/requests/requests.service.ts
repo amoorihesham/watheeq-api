@@ -21,7 +21,7 @@ import {
   loadMemberGrants,
 } from "@/modules/tenant-access/index.js";
 import type { FileStoreType } from "@/storage/index.js";
-import { MAX_REQUEST_FILES, NUMBER_PREFIX } from "./requests.config.js";
+import { MAX_REQUEST_FILES, NUMBER_PREFIX } from "./requests.constants.js";
 import { REQUEST_SORT_KEYS } from "./requests.repository.js";
 import {
   acceptRequestSchema,

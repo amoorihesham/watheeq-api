@@ -8,7 +8,7 @@ import {
   MAX_WORKFLOW_NAME_LENGTH,
   PARTY_BUILTINS,
   STAGE_FALLBACKS,
-} from "./workflows.config.js";
+} from "./workflows.constants.js";
 
 const workflowName = z.string().trim().min(1).max(MAX_WORKFLOW_NAME_LENGTH);
 

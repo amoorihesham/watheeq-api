@@ -1,6 +1,6 @@
 import type { Request, RequestHandler } from "express";
 import { AppError } from "@/http/errors.js";
-import { ACCESS_COOKIE } from "../auth.config.js";
+import { ACCESS_COOKIE } from "../auth.constants.js";
 import type { AuthUserType, UserRoleType } from "../auth.types.js";
 import { verifyAccessToken } from "./tokens.js";
 

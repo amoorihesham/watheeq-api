@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ORG_UNIT_KINDS } from "./org.config.js";
+import { ORG_UNIT_KINDS } from "./org.constants.js";
 
 export const orgUnitResponseSchema = z.strictObject({
   id: z.string(),

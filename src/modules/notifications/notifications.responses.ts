@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NOTIFICATION_KINDS } from "./notifications.config.js";
+import { NOTIFICATION_KINDS } from "./notifications.constants.js";
 
 export const notificationResponseSchema = z.strictObject({
   id: z.string(),

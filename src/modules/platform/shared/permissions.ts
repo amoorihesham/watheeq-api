@@ -1,4 +1,4 @@
-import { PLATFORM_PERMISSIONS } from "../platform.config.js";
+import { PLATFORM_PERMISSIONS } from "../platform.constants.js";
 import type { PlatformPermissionsOfType, PlatformPermissionType } from "../platform.types.js";
 
 const ALL_PLATFORM_PERMISSIONS: ReadonlySet<PlatformPermissionType> = new Set(PLATFORM_PERMISSIONS);

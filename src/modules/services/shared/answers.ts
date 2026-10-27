@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { DetailCode, ErrorDetail } from "@/http/errors.js";
-import { MAX_LONG_TEXT_LENGTH, MAX_SHORT_TEXT_LENGTH } from "../services.config.js";
+import { MAX_LONG_TEXT_LENGTH, MAX_SHORT_TEXT_LENGTH } from "../services.constants.js";
 import type { FormFieldType, FormOptionType } from "./form.js";
 
 export type AnswersType = Record<string, unknown>;

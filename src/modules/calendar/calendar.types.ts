@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type { WEEKDAYS } from "./calendar.config.js";
+import type { WEEKDAYS } from "./calendar.constants.js";
 import type { createCalendarController } from "./calendar.controller.js";
 import type { createCalendarRepository } from "./calendar.repository.js";
 import type {

@@ -1,4 +1,4 @@
-export { ACCESS_COOKIE, DUMMY_PASSWORD_HASH, REFRESH_COOKIE } from "./auth.config.js";
+export { ACCESS_COOKIE, DUMMY_PASSWORD_HASH, REFRESH_COOKIE } from "./auth.constants.js";
 export { createAuthRouter } from "./auth.routes.js";
 export { emailSchema, userNameSchema } from "./auth.schemas.js";
 export { createOperator } from "./auth.service.js";

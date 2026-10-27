@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type { ORG_UNIT_KINDS } from "./org.config.js";
+import type { ORG_UNIT_KINDS } from "./org.constants.js";
 import type { createOrgController } from "./org.controller.js";
 import type { createOrgRepository } from "./org.repository.js";
 import type { orgTreeResponseSchema, orgUnitResponseSchema } from "./org.responses.js";

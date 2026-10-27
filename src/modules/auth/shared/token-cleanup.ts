@@ -1,6 +1,6 @@
 import type { Db } from "@/db/pool.js";
 import type { JobType } from "@/scheduler/index.js";
-import { TOKEN_CLEANUP_BATCH_SIZE, TOKEN_CLEANUP_INTERVAL_MS } from "../auth.config.js";
+import { TOKEN_CLEANUP_BATCH_SIZE, TOKEN_CLEANUP_INTERVAL_MS } from "../auth.constants.js";
 import { createAuthRepository } from "../auth.repository.js";
 
 const repo = createAuthRepository();

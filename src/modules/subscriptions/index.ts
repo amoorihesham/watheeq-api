@@ -18,7 +18,7 @@ export {
   NOTICE_NOTIFICATION_KINDS,
   SUBSCRIPTION_STATES,
   SUBSCRIPTION_TIME_ZONE,
-} from "./subscriptions.config.js";
+} from "./subscriptions.constants.js";
 export {
   createSubscriptionsRepository,
   riyadhDateOf,

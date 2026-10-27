@@ -2,7 +2,7 @@ import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
 import type { subscriptions, tenantNoticeKinds } from "@/db/schema/index.js";
-import type { SUBSCRIPTION_STATES } from "./subscriptions.config.js";
+import type { SUBSCRIPTION_STATES } from "./subscriptions.constants.js";
 import type { createSubscriptionsController } from "./subscriptions.controller.js";
 import type { createSubscriptionsRepository } from "./subscriptions.repository.js";
 import type {

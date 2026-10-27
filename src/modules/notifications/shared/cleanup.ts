@@ -4,7 +4,7 @@ import {
   CLEANUP_BATCH_SIZE,
   CLEANUP_INTERVAL_MS,
   RETENTION_DAYS,
-} from "../notifications.config.js";
+} from "../notifications.constants.js";
 import { createNotificationsRepository } from "../notifications.repository.js";
 
 const repo = createNotificationsRepository();

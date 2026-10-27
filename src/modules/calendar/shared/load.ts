@@ -1,6 +1,6 @@
 import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
 import type { Executor, Tx } from "@/db/pool.js";
-import { DEFAULT_WEEK } from "../calendar.config.js";
+import { DEFAULT_WEEK } from "../calendar.constants.js";
 import { createCalendarRepository } from "../calendar.repository.js";
 import type { CalendarType } from "../calendar.types.js";
 import { canonicalWeek, toCalendarPeriod } from "./rows.js";

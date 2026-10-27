@@ -11,7 +11,7 @@ import {
   MAX_KEYS_PER_DELETE,
   UPLOAD_PART_SIZE_BYTES,
   UPLOAD_QUEUE_SIZE,
-} from "./storage.config.js";
+} from "./storage.constants.js";
 import type { FileStoreType, StorageSettingsType } from "./storage.types.js";
 
 export function storageSettingsOf(config: Config): StorageSettingsType {

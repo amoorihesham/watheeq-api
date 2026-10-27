@@ -11,7 +11,7 @@ import {
   MAX_OPTIONS_PER_FIELD,
   MAX_SERVICE_DESCRIPTION_LENGTH,
   MAX_SERVICE_NAME_LENGTH,
-} from "./services.config.js";
+} from "./services.constants.js";
 
 const serviceName = z.string().trim().min(1).max(MAX_SERVICE_NAME_LENGTH);
 

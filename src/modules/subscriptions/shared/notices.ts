@@ -9,7 +9,7 @@ import {
   ENDING_SOON_DAYS,
   NOTICE_NOTIFICATION_KINDS,
   NOTICES_INTERVAL_MS,
-} from "../subscriptions.config.js";
+} from "../subscriptions.constants.js";
 import { createSubscriptionsRepository } from "../subscriptions.repository.js";
 import type { NoticeKindType } from "../subscriptions.types.js";
 import { addDays, subscriptionState } from "./subscription-state.js";

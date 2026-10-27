@@ -1,7 +1,7 @@
 import { and, count, eq, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "@/db/pool.js";
 import { files, subscriptions, tenantMembers, tenantNotices, users } from "@/db/schema/index.js";
-import { SUBSCRIPTION_TIME_ZONE } from "./subscriptions.config.js";
+import { SUBSCRIPTION_TIME_ZONE } from "./subscriptions.constants.js";
 import type {
   NewSubscriptionType,
   NoticeKindType,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { assigneeTargetResponseSchema } from "@/modules/positions/index.js";
-import { STAGE_FALLBACKS } from "./workflows.config.js";
+import { STAGE_FALLBACKS } from "./workflows.constants.js";
 
 const stage = z.strictObject({
   id: z.string(),

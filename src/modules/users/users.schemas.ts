@@ -2,7 +2,7 @@ import { z } from "zod";
 import { booleanFilter, idFilter, optionalText, pageQuery, valueFilter } from "@/http/filters.js";
 import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import { emailSchema, userNameSchema } from "@/modules/auth/index.js";
-import { MAX_USER_SEARCH_LENGTH, USER_STATUSES } from "./users.config.js";
+import { MAX_USER_SEARCH_LENGTH, USER_STATUSES } from "./users.constants.js";
 
 export const userIdSchema = idSchema;
 

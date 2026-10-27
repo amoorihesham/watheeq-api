@@ -5,7 +5,7 @@ import {
   MAX_PASSWORD_LENGTH,
   MAX_USER_NAME_LENGTH,
   MIN_PASSWORD_LENGTH,
-} from "../modules/auth/auth.config.js";
+} from "../modules/auth/auth.constants.js";
 import { createOperator } from "../modules/auth/auth.service.js";
 
 // Reads the URL directly: validated config is for the running app, not this tool.

@@ -5,7 +5,7 @@ import {
   MAX_PASSWORD_LENGTH,
   MAX_USER_NAME_LENGTH,
   MIN_PASSWORD_LENGTH,
-} from "./auth.config.js";
+} from "./auth.constants.js";
 
 // The database check requires lower(btrim(email)), so every email is normalized before it reaches a query.
 export const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(MAX_EMAIL_LENGTH));

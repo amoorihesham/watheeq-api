@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { idSchema, NO_FIELDS } from "@/http/validate.js";
-import { MAX_UNIT_NAME_LENGTH } from "./org.config.js";
+import { MAX_UNIT_NAME_LENGTH } from "./org.constants.js";
 
 const unitName = z.string().trim().min(1).max(MAX_UNIT_NAME_LENGTH);
 

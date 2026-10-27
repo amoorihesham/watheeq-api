@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { Config } from "@/config/config.js";
 import type { Db } from "@/db/pool.js";
-import type { PAYMENT_PERIODS } from "./plans.config.js";
+import type { PAYMENT_PERIODS } from "./plans.constants.js";
 import type { createPlansController } from "./plans.controller.js";
 import type { createPlansRepository } from "./plans.repository.js";
 import type { planResponseSchema } from "./plans.responses.js";

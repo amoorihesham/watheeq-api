@@ -1,5 +1,5 @@
 import { addDays } from "@/modules/subscriptions/index.js";
-import { MAX_WORKING_DAY_SEARCH_DAYS } from "../calendar.config.js";
+import { MAX_WORKING_DAY_SEARCH_DAYS } from "../calendar.constants.js";
 import type { CalendarType, DayHoursType } from "../calendar.types.js";
 import { fromRiyadh, toRiyadh } from "./riyadh-time.js";
 import { dayHours } from "./week.js";

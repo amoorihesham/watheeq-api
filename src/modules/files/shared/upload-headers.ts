@@ -1,6 +1,6 @@
 import type { Request } from "express";
 import { AppError } from "@/http/errors.js";
-import { MAX_FILE_BYTES, UPLOAD_CONTENT_TYPE } from "../files.config.js";
+import { MAX_FILE_BYTES, UPLOAD_CONTENT_TYPE } from "../files.constants.js";
 
 /**
  * The size an upload declares, checked before any byte is read: the media type must be raw bytes, the length must

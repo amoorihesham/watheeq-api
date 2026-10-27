@@ -1,4 +1,4 @@
-export { DEFAULT_WEEK } from "./calendar.config.js";
+export { DEFAULT_WEEK } from "./calendar.constants.js";
 export { createCalendarRouter } from "./calendar.routes.js";
 export { weekShapeSchema } from "./calendar.schemas.js";
 export type {

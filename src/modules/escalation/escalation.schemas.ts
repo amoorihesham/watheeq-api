@@ -7,7 +7,7 @@ import {
   MAX_RECIPIENTS_PER_RULE,
   MIN_R0_DAYS,
   MIN_R1_PERCENT,
-} from "./escalation.config.js";
+} from "./escalation.constants.js";
 
 type TargetInputType = z.output<typeof assigneeTargetSchema>;
 

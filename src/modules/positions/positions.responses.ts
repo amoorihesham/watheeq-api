@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ASSIGNEE_BUILTINS } from "./positions.config.js";
+import { ASSIGNEE_BUILTINS } from "./positions.constants.js";
 
 export const positionResponseSchema = z.strictObject({
   id: z.string(),

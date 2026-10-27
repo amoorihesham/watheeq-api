@@ -5,7 +5,7 @@ import {
   ASSIGNEE_BUILTINS,
   MAX_POSITION_HOLDERS,
   MAX_POSITION_NAME_LENGTH,
-} from "./positions.config.js";
+} from "./positions.constants.js";
 
 const positionName = z.string().trim().min(1).max(MAX_POSITION_NAME_LENGTH);
 

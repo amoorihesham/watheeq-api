@@ -1,7 +1,7 @@
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createLogger } from "../src/logging/logger.js";
-import { ALL_FIELD_SETTINGS, FIELD_SETTINGS } from "../src/modules/services/services.config.js";
+import { ALL_FIELD_SETTINGS, FIELD_SETTINGS } from "../src/modules/services/services.constants.js";
 import { testApp } from "./helpers/app.js";
 import { accessCookie, hashPassword, login } from "./helpers/auth.js";
 import {

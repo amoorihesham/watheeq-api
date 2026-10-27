@@ -1,5 +1,5 @@
 import type { calendarPeriodOverrides, calendarPeriods } from "@/db/schema/index.js";
-import { WEEKDAYS } from "../calendar.config.js";
+import { WEEKDAYS } from "../calendar.constants.js";
 import type {
   CalendarPeriodType,
   DayRuleType,

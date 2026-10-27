@@ -1,5 +1,5 @@
 import type { AuthUserType } from "@/modules/auth/index.js";
-import type { PLATFORM_PERMISSIONS } from "./platform.config.js";
+import type { PLATFORM_PERMISSIONS } from "./platform.constants.js";
 
 export type PlatformPermissionType = (typeof PLATFORM_PERMISSIONS)[number];
 

@@ -5,7 +5,7 @@ import {
   ABANDONED_AFTER_HOURS,
   OVERDUE_AFTER_HOURS,
   PENDING_LIFETIME_HOURS,
-} from "./files.config.js";
+} from "./files.constants.js";
 import type { DueFileRowType, FileRowType, LockedFileRowType, NewFileType } from "./files.types.js";
 
 const hours = (value: number) => sql`make_interval(hours => ${value})`;

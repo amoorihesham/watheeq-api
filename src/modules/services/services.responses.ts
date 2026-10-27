@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FIELD_TYPES } from "./services.config.js";
+import { FIELD_TYPES } from "./services.constants.js";
 
 const option = z.strictObject({ id: z.string(), label: z.string() });
 

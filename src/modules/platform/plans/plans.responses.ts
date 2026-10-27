@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PAYMENT_PERIODS } from "./plans.config.js";
+import { PAYMENT_PERIODS } from "./plans.constants.js";
 
 export const planResponseSchema = z.strictObject({
   id: z.string(),

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { pageQuery } from "@/http/filters.js";
 import { idSchema, NO_FIELDS } from "@/http/validate.js";
 import { PERMISSION_SCOPES } from "@/modules/tenant-access/index.js";
-import { MAX_ROLE_NAME_LENGTH, MAX_ROLE_PERMISSIONS } from "./roles.config.js";
+import { MAX_ROLE_NAME_LENGTH, MAX_ROLE_PERMISSIONS } from "./roles.constants.js";
 
 const roleName = z.string().trim().min(1).max(MAX_ROLE_NAME_LENGTH);
 

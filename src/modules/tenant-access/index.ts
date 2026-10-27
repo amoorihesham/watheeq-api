@@ -16,7 +16,7 @@ export {
   PERMISSION_SCOPES,
   SYSTEM_ROLE_NAME,
   TENANT_PERMISSIONS,
-} from "./tenant-access.config.js";
+} from "./tenant-access.constants.js";
 export type {
   GrantMapType,
   GrantType,

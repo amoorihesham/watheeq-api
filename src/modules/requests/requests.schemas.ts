@@ -8,7 +8,7 @@ import {
   MAX_REASON_LENGTH,
   MAX_TITLE_LENGTH,
   REQUEST_VIEWS,
-} from "./requests.config.js";
+} from "./requests.constants.js";
 
 export const requestIdSchema = idSchema;
 

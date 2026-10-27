@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DAY_MODES } from "./calendar.config.js";
+import { DAY_MODES } from "./calendar.constants.js";
 
 const dayRule = z.strictObject({
   mode: z.enum(DAY_MODES),
