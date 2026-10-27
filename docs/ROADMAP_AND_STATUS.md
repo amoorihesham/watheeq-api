@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Last updated:** 2026-10-26
+**Last updated:** 2026-10-27
 
 ### Current Status
 
@@ -20,7 +20,7 @@
   Its main decisions are D18-D20 in `MVP_SCOPE.md` and T21-T24 in `TECHNICAL_DECISIONS.md`. Migration `0004` replaces `email_verifications` with `password_tokens`, so pending verification links in a local database must be resent.
 - **Phase 3 (roles & authorization) implemented** (`docs/specs/phase-3-roles-authorization/phase-3-roles-authorization.md`): a code-held permission catalog with scopes, tenant-defined roles, a protected Tenant Admin role with computed permissions, role management and assignment under the subset rule checked against the actor's current role, and the user directory limited by `user.view` scope resolved in SQL from the caller's current unit.
   Its main decisions are D21-D23 in `MVP_SCOPE.md` and T26-T29 in `TECHNICAL_DECISIONS.md`; T25 (request bodies reject unknown fields) was added during the phase. Migration `0005` adds a required `role_id` to members, so a local database migrated earlier must be recreated (`docker compose down -v`).
-- **Known test flake:** now and then a full test run loses a Vitest worker to an external SIGKILL (once in nine runs during the Phase 7 review; not memory, systemd-oomd logged no kill, and no test kills processes). The sender is not yet identified; tracing it needs `strace`, which is not installed. A second flake, the first file test timing out while a fresh SeaweedFS allocated its volumes, was fixed in Phase 7 by warming the test store up.
+- **Known test flake:** now and then a full test run loses a Vitest worker to an external SIGKILL (once in nine runs during the Phase 7 review; not memory, systemd-oomd logged no kill, and no test kills processes). During Phase 8 it hit 4 times, with no out-of-memory kill in the kernel log or the cgroups and not from Vitest's own stop path. The sender is not yet identified; tracing it needs `bpftrace` or `strace` with root, neither installed. A second flake, the first file test timing out while a fresh SeaweedFS allocated its volumes, was fixed in Phase 7 by warming the test store up.
 - **Phase 4 (working calendar) implemented** (`docs/specs/phase-4-working-calendar/phase-4-working-calendar.md`): per-tenant working hours with weekday spans, seasonal hours with explicit ranks, holidays one-off or recurring on Gregorian or Umm al-Qura dates with one-year adjustments, versioned rules whose past never changes, a day view, and the working-time functions Phases 6 and 7 use (`loadCalendar`, `addWorkingDays`, `workingDaysBetween`).
   Its main decisions are D24-D27 in `MVP_SCOPE.md` and T30-T33 in `TECHNICAL_DECISIONS.md`. Migrations `0006` and `0007` add the calendar tables and give existing tenants the default hours.
 - **Phase 5 (legal configuration) implemented** (`docs/specs/phase-5-legal-configuration/phase-5-legal-configuration.md`): positions placed in org units and held by their members, six built-in positions relative to the handler and the requester, the assignee resolver that Phases 6 and 7 use (`resolveAssignees`, `nextLevel`), linear workflows with immutable versions, services with allowed workflows and a default, priorities with a display order, and escalation settings per rule (on or off, threshold, recipients) that must be saved before requests can be submitted (`isEscalationConfigured`).
@@ -33,9 +33,10 @@
   Its main decisions are D41-D46 in `MVP_SCOPE.md` (resolving open questions 6 and 8) and T47-T51 in `TECHNICAL_DECISIONS.md` (resolving the deferred job-runner decision). Migrations `0020`-`0022` add the tables. A running server now also reads the `JOBS` setting (default `all`) from `.env.example`.
 - **The MVP phase list is complete.** Before production: the KSA hosting provider and SMTP provider (known open items above) and the "Deferred hardening" items marked "before production" in `TECHNICAL_DECISIONS.md`.
 - **Specs reorganized (2026-10-26):** each phase now has its own folder in `docs/specs/`, holding the spec and a `<phase>.API.md` file with the endpoints that used to be the spec's section 4.2.
-- **Phase 8 (API contract) in implementation** (`docs/specs/phase-8-api-contract/phase-8-api-contract.md`): one success, list, and error shape for every endpoint, cursor paging with totals, one filter rule, the request-side rules, `docs/api/`, and the helpers and tests that enforce them. Spec approved 2026-10-26.
-  A local staging setup follows as its own phase.
-- **Next action:** implement Phase 8 (steps 8.1-8.4 by two agents), then one review and report.
+- **Phase 8 (API contract) implemented** (`docs/specs/phase-8-api-contract/phase-8-api-contract.md`): every endpoint answers `{data}` (lists `{data, page: {nextCursor, total}}`) or `{error: {code, requestId, details}}`, writes return what their reads return, every key is always present, lists are paged by cursor with one server-side order and one filter rule, and `docs/api/` states the HTTP contract once for the frontend.
+  Responses go only through the respond helpers, which check every response against its schema outside production, and contract tests tie error codes to `docs/api/errors.md` and routes to the phase `.API.md` tables.
+  Its main decisions are T52-T56 in `TECHNICAL_DECISIONS.md`, with T11 rewritten. Migration `0023` adds an index for the request list. The response shapes changed for every endpoint, so any client written before must follow `docs/api/`.
+- **Next action:** the owner decides the next phase. A local staging setup was named as a later phase; it must avoid the ports of other local projects.
 
 ---
 
@@ -55,7 +56,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 5.5 | Service forms & file storage    | Per-service request forms, answer validation, file uploads, pending-file cleanup            | 5          | Implemented                             |
 | 6   | Request lifecycle               | Submit → review → accept/reject → stages → info requests → closure, attachments             | 5.5        | Implemented                             |
 | 7   | Escalation & notifications      | Background deadline checks, R0-R2, in-app notifications                                     | 6          | Implemented                             |
-| 8   | API contract                    | One response, list, and error shape; cursor paging; filters; `docs/api/`; contract checks   | 0-7        | In Implementation                       |
+| 8   | API contract                    | One response, list, and error shape; cursor paging; filters; `docs/api/`; contract checks   | 0-7        | Implemented                             |
 
 Audit is cross-cutting: built in Phase 0, used by every later phase.
 

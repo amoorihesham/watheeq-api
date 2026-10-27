@@ -39,6 +39,8 @@ Every list gains `cursor` and `limit` (1-100, default 25) and answers `{data: [i
 | GET    | `/calendar/days`                             | `calendar.view`                  | unchanged | 200 `{from, to, days}`; a day's `start`, `end`, and `season` are `null` when absent                                                        |
 | GET    | `/requests/:requestId`                       | visibility                       |           | 200 the request; every answer has `files` (`null` for non-file fields); a removed file has `name`, `contentType`, `sizeBytes` as `null` |
 | POST   | `/requests/:requestId/information-requests`  | handler or stage assignee        | unchanged | 200 the request (was 201: no new resource with its own URL)                                                                                 |
+| PUT    | `/services/:serviceId/form`                  | `service.manage`                 | fields as read | 200 the service; every field is `{id, type, label, helpText, required, min, max, integer, options, maxFiles}`, `null` where the type has none; a field may be sent back as read (Q22) |
+| PUT    | `/calendar/hours/:effectiveFrom`             | `calendar.manage`                | a week    | 200 the hours version; every weekday is `{mode, start, end}` in the request and the response (Q23)                                          |
 
 Unique-value conflicts on `POST` and `PATCH` of plans, tenants, org units, users, roles, positions, workflows, services, and priorities answer 409 `TAKEN` at the field.
 `PUT /workflows/:workflowId` and `PUT /services/:serviceId/form` answer 409 `VERSION_CHANGED` at `baseVersion` and `baseRevision`.
