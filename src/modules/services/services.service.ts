@@ -1,12 +1,12 @@
-import { randomUUID } from "node:crypto";
-import { isDeepStrictEqual } from "node:util";
-import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
-import type { Db, Executor } from "@/db/pool.js";
-import { withTx } from "@/db/tx.js";
-import { AppError, type ErrorDetail } from "@/http/errors.js";
-import { listPage } from "@/http/list.js";
-import type { PageType } from "@/http/respond.js";
-import { SERVICE_SORT_KEYS } from "./services.repository.js";
+import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { type AuditContextType, writeAuditEntry } from '@/audit/index.js';
+import type { Db, Executor } from '@/db/pool.js';
+import { withTx } from '@/db/tx.js';
+import { AppError, type ErrorDetail } from '@/http/errors.js';
+import { listPage } from '@/http/list.js';
+import type { PageType } from '@/http/respond.js';
+import { SERVICE_SORT_KEYS } from './services.repository.js';
 import type {
   AllowedWorkflowRowType,
   CreateServiceRequestType,
@@ -18,8 +18,8 @@ import type {
   UpdateServiceFormRequestType,
   UpdateServiceRequestType,
   WorkflowChoiceType,
-} from "./services.types.js";
-import { type FormFieldType, fieldView } from "./shared/form.js";
+} from './services.types.js';
+import { type FormFieldType, fieldView } from './shared/form.js';
 
 const toService = (row: ServiceRowType, allowed: AllowedWorkflowRowType[]): ServiceType => ({
   id: row.id,
@@ -36,44 +36,33 @@ const toService = (row: ServiceRowType, allowed: AllowedWorkflowRowType[]): Serv
 });
 
 /** The choices in a fixed order, so equal lists give equal text. */
-const choicesKey = (choices: WorkflowChoiceType[]) =>
-  JSON.stringify(
-    choices
-      .map((choice) => [choice.id, choice.isDefault] as const)
-      .sort(([a], [b]) => a.localeCompare(b)),
-  );
+const choicesKey = (choices: WorkflowChoiceType[]) => JSON.stringify(choices.map((choice) => [choice.id, choice.isDefault] as const).sort(([a], [b]) => a.localeCompare(b)));
 
-const toChoices = (allowed: AllowedWorkflowRowType[]): WorkflowChoiceType[] =>
-  allowed.map((workflow) => ({ id: workflow.id, isDefault: workflow.isDefault }));
+const toChoices = (allowed: AllowedWorkflowRowType[]): WorkflowChoiceType[] => allowed.map((workflow) => ({ id: workflow.id, isDefault: workflow.isDefault }));
 
 /**
  * The requested fields as stored fields: a sent ID must belong to the current form and keep its type, new fields
  * and options get new IDs (R5.5.5). Problems are reported at the request's paths.
  */
-function resolveForm(
-  current: FormFieldType[],
-  requested: RequestedFieldType[],
-): { fields: FormFieldType[]; details: ErrorDetail[] } {
+function resolveForm(current: FormFieldType[], requested: RequestedFieldType[]): { fields: FormFieldType[]; details: ErrorDetail[] } {
   const currentById = new Map(current.map((field) => [field.id, field]));
   const details: ErrorDetail[] = [];
   const fields = requested.map((field, index): FormFieldType => {
     const at = `fields.${index}`;
     const existing = field.id === undefined ? undefined : currentById.get(field.id);
     if (field.id !== undefined && !existing) {
-      details.push({ path: `${at}.id`, code: "unknown_field_id" });
+      details.push({ path: `${at}.id`, code: 'unknown_field_id' });
     } else if (existing && existing.type !== field.type) {
-      details.push({ path: `${at}.type`, code: "type_changed" });
+      details.push({ path: `${at}.type`, code: 'type_changed' });
     }
     const stored = { ...field, id: field.id ?? randomUUID() } as FormFieldType;
-    if ("options" in field && "options" in stored) {
+    if ('options' in field && 'options' in stored) {
       // A new field has no options to keep; a field with a bad ID or changed type is already reported.
       const checkOptions = existing ? existing.type === field.type : field.id === undefined;
-      const known = new Set(
-        existing && "options" in existing ? existing.options.map((option) => option.id) : [],
-      );
+      const known = new Set(existing && 'options' in existing ? existing.options.map((option) => option.id) : []);
       stored.options = field.options.map((option, position) => {
         if (checkOptions && option.id !== undefined && !known.has(option.id)) {
-          details.push({ path: `${at}.options.${position}.id`, code: "unknown_option_id" });
+          details.push({ path: `${at}.options.${position}.id`, code: 'unknown_option_id' });
         }
         return { id: option.id ?? randomUUID(), label: option.label };
       });
@@ -86,14 +75,10 @@ function resolveForm(
 const workflowPath = (index: number) => `workflows.${index}.id`;
 
 export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepositoryType }) {
-  async function loadService(
-    executor: Executor,
-    tenantId: string,
-    serviceId: string,
-  ): Promise<ServiceType> {
+  async function loadService(executor: Executor, tenantId: string, serviceId: string): Promise<ServiceType> {
     const [row] = await repo.findById(executor, tenantId, serviceId);
     if (!row) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     return toService(row, await repo.workflowsOf(executor, tenantId, [serviceId]));
   }
@@ -102,7 +87,7 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
   async function lockService(tx: Executor, tenantId: string, serviceId: string) {
     const [row] = await repo.findByIdForUpdate(tx, tenantId, serviceId);
     if (!row) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     return row;
   }
@@ -134,27 +119,23 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
     return { unknown, retired };
   }
 
-  async function assertWorkflowsActive(
-    tx: Executor,
-    tenantId: string,
-    choices: WorkflowChoiceType[],
-  ) {
+  async function assertWorkflowsActive(tx: Executor, tenantId: string, choices: WorkflowChoiceType[]) {
     const { unknown, retired } = await lockWorkflows(tx, tenantId, choices);
     const details: (ErrorDetail & { index: number })[] = [
       ...unknown.map((index) => ({
         index,
         path: workflowPath(index),
-        code: "unknown_workflow" as const,
+        code: 'unknown_workflow' as const,
       })),
       ...retired.map((index) => ({
         index,
         path: workflowPath(index),
-        code: "workflow_retired" as const,
+        code: 'workflow_retired' as const,
       })),
     ].sort((a, b) => a.index - b.index);
     if (details.length > 0) {
       throw new AppError(
-        "VALIDATION_FAILED",
+        'VALIDATION_FAILED',
         details.map(({ path, code }) => ({ path, code })),
       );
     }
@@ -164,10 +145,10 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
     async list(tenantId: string, query: ListServicesQueryType): Promise<PageType<ServiceType>> {
       const page = await listPage({
         db,
-        list: "services",
+        list: 'services',
         query,
         keys: SERVICE_SORT_KEYS,
-        direction: "asc",
+        direction: 'asc',
         where: ({ retired }) => repo.listWhere(tenantId, retired),
         selectPage: (tx, request) => repo.selectPage(tx, request),
         count: (tx, where) => repo.count(tx, where),
@@ -193,11 +174,7 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
     },
 
     /** A duplicate name (any case) reaches the error handler as SERVICE_NAME_TAKEN. */
-    create(
-      tenantId: string,
-      body: CreateServiceRequestType,
-      context: AuditContextType,
-    ): Promise<ServiceType> {
+    create(tenantId: string, body: CreateServiceRequestType, context: AuditContextType): Promise<ServiceType> {
       const description = body.description ?? null;
       return withTx(db, async (tx) => {
         await assertWorkflowsActive(tx, tenantId, body.workflows);
@@ -207,8 +184,8 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "service.created",
-          resourceType: "service",
+          action: 'service.created',
+          resourceType: 'service',
           resourceId: id,
           details: { name: body.name, description, workflows: body.workflows },
         });
@@ -220,16 +197,11 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
      * Changes the given fields; a workflow list replaces the old one whole. A save that changes nothing writes
      * nothing.
      */
-    update(
-      tenantId: string,
-      id: string,
-      body: UpdateServiceRequestType,
-      context: AuditContextType,
-    ): Promise<ServiceType> {
+    update(tenantId: string, id: string, body: UpdateServiceRequestType, context: AuditContextType): Promise<ServiceType> {
       return withTx(db, async (tx) => {
         const service = await lockService(tx, tenantId, id);
         if (service.retiredAt) {
-          throw new AppError("RESOURCE_RETIRED");
+          throw new AppError('RESOURCE_RETIRED');
         }
         if (body.workflows) {
           await assertWorkflowsActive(tx, tenantId, body.workflows);
@@ -249,10 +221,7 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
           before.description = service.description;
           after.description = body.description;
         }
-        const newWorkflows =
-          body.workflows && choicesKey(body.workflows) !== choicesKey(current)
-            ? body.workflows
-            : undefined;
+        const newWorkflows = body.workflows && choicesKey(body.workflows) !== choicesKey(current) ? body.workflows : undefined;
         if (newWorkflows) {
           before.workflows = current;
           after.workflows = newWorkflows;
@@ -270,8 +239,8 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "service.updated",
-          resourceType: "service",
+          action: 'service.updated',
+          resourceType: 'service',
           resourceId: id,
           details: { before, after },
         });
@@ -283,25 +252,18 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
      * Saves the whole form based on `baseRevision` (R5.5.4). A save that changes nothing writes nothing; one that
      * does increments the revision and is audited with the fields before and after.
      */
-    updateForm(
-      tenantId: string,
-      id: string,
-      body: UpdateServiceFormRequestType,
-      context: AuditContextType,
-    ): Promise<ServiceType> {
+    updateForm(tenantId: string, id: string, body: UpdateServiceFormRequestType, context: AuditContextType): Promise<ServiceType> {
       return withTx(db, async (tx) => {
         const service = await lockService(tx, tenantId, id);
         if (service.retiredAt) {
-          throw new AppError("RESOURCE_RETIRED");
+          throw new AppError('RESOURCE_RETIRED');
         }
         if (body.baseRevision !== service.formRevision) {
-          throw new AppError("VERSION_CHANGED", [
-            { path: "baseRevision", code: "version_changed" },
-          ]);
+          throw new AppError('VERSION_CHANGED', [{ path: 'baseRevision', code: 'version_changed' }]);
         }
         const { fields, details } = resolveForm(service.form, body.fields);
         if (details.length > 0) {
-          throw new AppError("VALIDATION_FAILED", details);
+          throw new AppError('VALIDATION_FAILED', details);
         }
         if (isDeepStrictEqual(fields, service.form)) {
           return loadService(tx, tenantId, id);
@@ -311,8 +273,8 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "service.form_updated",
-          resourceType: "service",
+          action: 'service.form_updated',
+          resourceType: 'service',
           resourceId: id,
           details: { revision, before: service.form, after: fields },
         });
@@ -331,8 +293,8 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "service.retired",
-          resourceType: "service",
+          action: 'service.retired',
+          resourceType: 'service',
           resourceId: id,
         });
         return loadService(tx, tenantId, id);
@@ -353,10 +315,10 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
         const { retired } = await lockWorkflows(tx, tenantId, allowed);
         if (retired.length > 0) {
           throw new AppError(
-            "SERVICE_WORKFLOW_RETIRED",
+            'SERVICE_WORKFLOW_RETIRED',
             retired.map((index) => ({
               path: workflowPath(index),
-              code: "workflow_retired" as const,
+              code: 'workflow_retired' as const,
             })),
           );
         }
@@ -364,8 +326,8 @@ export function createServicesService({ db, repo }: { db: Db; repo: ServicesRepo
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "service.restored",
-          resourceType: "service",
+          action: 'service.restored',
+          resourceType: 'service',
           resourceId: id,
         });
         return loadService(tx, tenantId, id);

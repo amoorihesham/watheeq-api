@@ -5,4 +5,4 @@ export const MAX_GRACE_DAYS = 365;
 // 1,000,000.00 SAR per payment period.
 export const MAX_PRICE_HALALAS = 100_000_000;
 export const MAX_DISCOUNT_PERCENT = 100;
-export const PAYMENT_PERIODS = ["monthly", "yearly"] as const;
+export const PAYMENT_PERIODS = ['monthly', 'yearly'] as const;

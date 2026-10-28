@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import type { JobType, SchedulerDepsType, SchedulerType } from "./scheduler.types.js";
+import { randomUUID } from 'node:crypto';
+import type { JobType, SchedulerDepsType, SchedulerType } from './scheduler.types.js';
 
 /**
  * Runs each job once now, then again `intervalMs` after each run ends: a `setTimeout` chain per job, never
@@ -17,9 +17,9 @@ export function startScheduler({ jobs, db, logger }: SchedulerDepsType): Schedul
     try {
       const counts = await job.run({ db, logger: log, signal: abort.signal, runId });
       const didSomething = Object.values(counts).some((count) => count !== 0);
-      log[didSomething ? "info" : "debug"]({ counts }, "job finished");
+      log[didSomething ? 'info' : 'debug']({ counts }, 'job finished');
     } catch (err) {
-      log.error({ err }, "job failed");
+      log.error({ err }, 'job failed');
     }
   }
 

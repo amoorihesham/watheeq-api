@@ -1,15 +1,7 @@
-import { z } from "zod";
-import { pageQuery } from "@/http/filters.js";
-import { NO_FIELDS } from "@/http/validate.js";
-import {
-  MAX_DISCOUNT_PERCENT,
-  MAX_GRACE_DAYS,
-  MAX_PLAN_NAME_LENGTH,
-  MAX_PRICE_HALALAS,
-  MAX_STORAGE_LIMIT_GB,
-  MAX_USER_LIMIT,
-  PAYMENT_PERIODS,
-} from "./plans.constants.js";
+import { z } from 'zod';
+import { pageQuery } from '@/http/filters.js';
+import { NO_FIELDS } from '@/http/validate.js';
+import { MAX_DISCOUNT_PERCENT, MAX_GRACE_DAYS, MAX_PLAN_NAME_LENGTH, MAX_PRICE_HALALAS, MAX_STORAGE_LIMIT_GB, MAX_USER_LIMIT, PAYMENT_PERIODS } from './plans.constants.js';
 
 // Two decimals at most: 12.5 and 12.34 pass, 12.345 fails. Compared in hundredths to avoid floating-point noise.
 export const discountPercentSchema = z
@@ -17,7 +9,7 @@ export const discountPercentSchema = z
   .min(0)
   .max(MAX_DISCOUNT_PERCENT)
   .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-9, {
-    params: { code: "too_many_decimals" },
+    params: { code: 'too_many_decimals' },
   });
 
 const planFields = {
@@ -35,12 +27,12 @@ export const createPlanRequestSchema = z
     ...planFields,
     discountPercent: planFields.discountPercent.default(0),
   })
-  .meta({ id: "CreatePlanRequest" });
+  .meta({ id: 'CreatePlanRequest' });
 
 export const updatePlanRequestSchema = z
   .strictObject(planFields)
   .partial()
   .refine((body) => Object.keys(body).length > 0, NO_FIELDS)
-  .meta({ id: "UpdatePlanRequest" });
+  .meta({ id: 'UpdatePlanRequest' });
 
 export const listPlansQuerySchema = z.object({ ...pageQuery });

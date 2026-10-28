@@ -1,18 +1,12 @@
-import type { z } from "zod";
-import type { AuthConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { notificationKinds } from "@/db/schema/index.js";
-import type { createNotificationsController } from "./notifications.controller.js";
-import type { createNotificationsRepository } from "./notifications.repository.js";
-import type {
-  notificationResponseSchema,
-  unreadCountResponseSchema,
-} from "./notifications.responses.js";
-import type {
-  listNotificationsQuerySchema,
-  readAllRequestSchema,
-} from "./notifications.schemas.js";
-import type { createNotificationsService } from "./notifications.service.js";
+import type { z } from 'zod';
+import type { AuthConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { notificationKinds } from '@/db/schema/index.js';
+import type { createNotificationsController } from './notifications.controller.js';
+import type { createNotificationsRepository } from './notifications.repository.js';
+import type { notificationResponseSchema, unreadCountResponseSchema } from './notifications.responses.js';
+import type { listNotificationsQuerySchema, readAllRequestSchema } from './notifications.schemas.js';
+import type { createNotificationsService } from './notifications.service.js';
 
 export type NotificationKindType = (typeof notificationKinds.enumValues)[number];
 

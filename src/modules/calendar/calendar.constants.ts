@@ -1,13 +1,13 @@
-import type { WeekShapeType } from "./calendar.types.js";
+import type { WeekShapeType } from './calendar.types.js';
 
 /** Every calendar date and time is a Riyadh one (Phase 4 spec, P4.1). */
-export const CALENDAR_TIME_ZONE = "Asia/Riyadh";
+export const CALENDAR_TIME_ZONE = 'Asia/Riyadh';
 
 /** In `getUTCDay()` order, so a weekday's index is its JavaScript day number. */
-export const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+export const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 /** How a weekday works: the week's own span, off, or its own span. */
-export const DAY_MODES = ["default", "off", "custom"] as const;
+export const DAY_MODES = ['default', 'off', 'custom'] as const;
 
 /** `HH:MM` from 00:00 to 24:00; strings in this form compare in time order. */
 export const TIME_PATTERN = /^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/;
@@ -21,16 +21,16 @@ export const MAX_WORKING_DAY_SEARCH_DAYS = 3660;
 
 /** A new tenant's normal hours (R4.1); migration 0007 gives existing tenants the same week. */
 export const DEFAULT_WEEK = {
-  start: "08:00",
-  end: "16:00",
+  start: '08:00',
+  end: '16:00',
   days: {
-    sun: "default",
-    mon: "default",
-    tue: "default",
-    wed: "default",
-    thu: "default",
-    fri: "off",
-    sat: "off",
+    sun: 'default',
+    mon: 'default',
+    tue: 'default',
+    wed: 'default',
+    thu: 'default',
+    fri: 'off',
+    sat: 'off',
   },
 } as const satisfies WeekShapeType;
 
@@ -39,8 +39,8 @@ export const MAX_DAYS_AHEAD = 1826;
 
 export const MAX_DAY_VIEW_DAYS = 366;
 
-export const PERIOD_KINDS = ["holiday", "season"] as const;
-export const PERIOD_RECURRENCES = ["once", "gregorian", "hijri"] as const;
+export const PERIOD_KINDS = ['holiday', 'season'] as const;
+export const PERIOD_RECURRENCES = ['once', 'gregorian', 'hijri'] as const;
 
 export const MAX_PERIOD_NAME_LENGTH = 100;
 export const MAX_SEASON_RANK = 100;

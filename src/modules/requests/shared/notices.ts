@@ -1,13 +1,12 @@
-import type { Tx } from "@/db/pool.js";
-import { type NotificationKindType, notify } from "@/modules/notifications/index.js";
-import type { RequestRowType, StageDefRowType } from "../requests.types.js";
-import type { TransitionType } from "./stages.js";
+import type { Tx } from '@/db/pool.js';
+import { type NotificationKindType, notify } from '@/modules/notifications/index.js';
+import type { RequestRowType, StageDefRowType } from '../requests.types.js';
+import type { TransitionType } from './stages.js';
 
 /** `REQ-42-2026`, as the API shows it. */
-export const numberOf = (row: Pick<RequestRowType, "number" | "year">) =>
-  `REQ-${row.number}-${row.year}`;
+export const numberOf = (row: Pick<RequestRowType, 'number' | 'year'>) => `REQ-${row.number}-${row.year}`;
 
-type NoticeRequestType = Pick<RequestRowType, "id" | "tenantId" | "number" | "year" | "title">;
+type NoticeRequestType = Pick<RequestRowType, 'id' | 'tenantId' | 'number' | 'year' | 'title'>;
 
 /** Tells `recipients` about `request` inside the action's transaction; the actor is never told (R7.11). */
 export function notifyAbout(
@@ -39,7 +38,7 @@ export function notifyAbout(
  */
 export async function notifyStageChanges(
   tx: Tx,
-  request: NoticeRequestType & Pick<RequestRowType, "handlerId">,
+  request: NoticeRequestType & Pick<RequestRowType, 'handlerId'>,
   actorId: string,
   stages: readonly StageDefRowType[],
   transitions: readonly TransitionType[],
@@ -47,17 +46,17 @@ export async function notifyStageChanges(
 ): Promise<void> {
   for (const transition of transitions) {
     const stage = stages.find((candidate) => candidate.id === transition.stage)?.name;
-    if (transition.state === "active") {
+    if (transition.state === 'active') {
       const known = new Set(before.get(transition.run));
       await notifyAbout(tx, request, {
-        kind: "request.stage_assigned",
+        kind: 'request.stage_assigned',
         recipients: transition.assignees.filter((userId) => !known.has(userId)),
         actorId,
         data: { stage },
       });
-    } else if (transition.state === "held" && request.handlerId) {
+    } else if (transition.state === 'held' && request.handlerId) {
       await notifyAbout(tx, request, {
-        kind: "request.stage_held",
+        kind: 'request.stage_held',
         recipients: [request.handlerId],
         actorId,
         data: { stage },

@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { idSchema } from "@/http/validate.js";
+import { z } from 'zod';
+import { idSchema } from '@/http/validate.js';
 
 export const fileIdSchema = idSchema;
 
@@ -8,8 +8,5 @@ export const fileIdSchema = idSchema;
  * `invalid_name`, as before. `default: undefined` keeps the catch value out of the document.
  */
 export const uploadQuerySchema = z.object({
-  name: z
-    .string()
-    .catch("")
-    .meta({ description: "The file name, with an extension.", default: undefined }),
+  name: z.string().catch('').meta({ description: 'The file name, with an extension.', default: undefined }),
 });

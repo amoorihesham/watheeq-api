@@ -1,28 +1,15 @@
-import type { z } from "zod";
-import type { AuthConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type {
-  informationRequests,
-  requestFiles,
-  requestStageRuns,
-  requestStates,
-  requests,
-} from "@/db/schema/index.js";
-import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
-import type { AnswerSnapshotType } from "@/modules/services/shared/answers.js";
-import type { FormFieldType } from "@/modules/services/shared/form.js";
-import type { FileStoreType } from "@/storage/index.js";
-import type { REQUEST_VIEWS } from "./requests.constants.js";
-import type { createRequestsController } from "./requests.controller.js";
-import type { createRequestsRepository } from "./requests.repository.js";
-import type {
-  activeStageResponseSchema,
-  catalogResponseSchema,
-  requestFileResponseSchema,
-  requestResponseSchema,
-  requestSummaryResponseSchema,
-  slaResponseSchema,
-} from "./requests.responses.js";
+import type { z } from 'zod';
+import type { AuthConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { informationRequests, requestFiles, requestStageRuns, requestStates, requests } from '@/db/schema/index.js';
+import type { AssigneeBuiltinType } from '@/modules/positions/index.js';
+import type { AnswerSnapshotType } from '@/modules/services/shared/answers.js';
+import type { FormFieldType } from '@/modules/services/shared/form.js';
+import type { FileStoreType } from '@/storage/index.js';
+import type { REQUEST_VIEWS } from './requests.constants.js';
+import type { createRequestsController } from './requests.controller.js';
+import type { createRequestsRepository } from './requests.repository.js';
+import type { activeStageResponseSchema, catalogResponseSchema, requestFileResponseSchema, requestResponseSchema, requestSummaryResponseSchema, slaResponseSchema } from './requests.responses.js';
 import type {
   acceptRequestSchema,
   answerInformationRequestSchema,
@@ -38,8 +25,8 @@ import type {
   refreshStageRequestSchema,
   returnStageRequestSchema,
   submitRequestSchema,
-} from "./requests.schemas.js";
-import type { createRequestsService } from "./requests.service.js";
+} from './requests.schemas.js';
+import type { createRequestsService } from './requests.service.js';
 
 export type RequestStateType = (typeof requestStates.enumValues)[number];
 export type RequestViewType = (typeof REQUEST_VIEWS)[number];
@@ -48,7 +35,7 @@ export type RequestViewType = (typeof REQUEST_VIEWS)[number];
 export type RequestRowType = typeof requests.$inferSelect;
 
 /** A request row for a list: the people's names, no answers. */
-export type RequestSummaryRowType = Omit<RequestRowType, "answers"> & {
+export type RequestSummaryRowType = Omit<RequestRowType, 'answers'> & {
   requesterName: string;
   handlerName: string | null;
 };
@@ -57,17 +44,7 @@ export type RequestSummaryRowType = Omit<RequestRowType, "answers"> & {
 export type RequestDetailRowType = RequestSummaryRowType & { answers: AnswerSnapshotType[] };
 
 /** What the SLA functions read: the acceptance, the priority's days, and the closure record once frozen. */
-export type SlaSourceType = Pick<
-  RequestRowType,
-  | "state"
-  | "acceptedAt"
-  | "priorityDays"
-  | "slaDeadline"
-  | "elapsedDays"
-  | "breachDays"
-  | "awaitingInfoDays"
-  | "slaMet"
->;
+export type SlaSourceType = Pick<RequestRowType, 'state' | 'acceptedAt' | 'priorityDays' | 'slaDeadline' | 'elapsedDays' | 'breachDays' | 'awaitingInfoDays' | 'slaMet'>;
 
 export type StageRunRowType = typeof requestStageRuns.$inferSelect;
 
@@ -89,7 +66,7 @@ export interface StageDefRowType {
   name: string;
   targetPositionId: string | null;
   targetBuiltin: AssigneeBuiltinType | null;
-  whenUnresolved: "escalate" | "skip" | "hold";
+  whenUnresolved: 'escalate' | 'skip' | 'hold';
   handlerMayNarrow: boolean;
   handlerMayEscalate: boolean;
   excludeParties: boolean;
@@ -167,11 +144,11 @@ export type ActiveStageType = z.output<typeof activeStageResponseSchema>;
 export type RequestSummaryType = z.output<typeof requestSummaryResponseSchema>;
 export type RequestFileType = z.output<typeof requestFileResponseSchema>;
 export type RequestType = z.output<typeof requestResponseSchema>;
-export type RequestAnswerType = RequestType["answers"][number];
-export type AnswerFileType = NonNullable<RequestAnswerType["files"]>[number];
-export type InformationRequestType = RequestType["informationRequests"][number];
-export type StageRunType = RequestType["stages"][number];
-export type EscalationFiringType = RequestType["escalations"][number];
+export type RequestAnswerType = RequestType['answers'][number];
+export type AnswerFileType = NonNullable<RequestAnswerType['files']>[number];
+export type InformationRequestType = RequestType['informationRequests'][number];
+export type StageRunType = RequestType['stages'][number];
+export type EscalationFiringType = RequestType['escalations'][number];
 export type CatalogType = z.output<typeof catalogResponseSchema>;
 
 export interface RequestsRouterDepsType {
@@ -191,7 +168,7 @@ export interface EscalationCandidateRowType {
   year: number;
   number: number;
   title: string;
-  state: "in_review" | "in_progress";
+  state: 'in_review' | 'in_progress';
   submittedAt: Date;
   acceptedAt: Date | null;
   priorityDays: number;

@@ -1,6 +1,6 @@
-import { z } from "zod";
-import { assigneeTargetResponseSchema } from "@/modules/positions/index.js";
-import { STAGE_FALLBACKS } from "./workflows.constants.js";
+import { z } from 'zod';
+import { assigneeTargetResponseSchema } from '@/modules/positions/index.js';
+import { STAGE_FALLBACKS } from './workflows.constants.js';
 
 const stage = z.strictObject({
   id: z.string(),
@@ -23,7 +23,7 @@ export const versionResponseSchema = z
     ...versionHeader,
     stages: z.array(stage),
   })
-  .meta({ id: "WorkflowVersion" });
+  .meta({ id: 'WorkflowVersion' });
 
 /** An item of `GET /workflows`: the current version's header, without stages. */
 export const workflowSummaryResponseSchema = z
@@ -34,7 +34,7 @@ export const workflowSummaryResponseSchema = z
     version: z.strictObject(versionHeader),
     versionCount: z.number(),
   })
-  .meta({ id: "WorkflowSummary" });
+  .meta({ id: 'WorkflowSummary' });
 
 export const workflowResponseSchema = z
   .strictObject({
@@ -44,4 +44,4 @@ export const workflowResponseSchema = z
     version: versionResponseSchema,
     versionCount: z.number(),
   })
-  .meta({ id: "Workflow" });
+  .meta({ id: 'Workflow' });

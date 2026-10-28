@@ -1,11 +1,11 @@
-import { randomUUID } from "node:crypto";
-import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
-import type { Db, Executor } from "@/db/pool.js";
-import { withTx } from "@/db/tx.js";
-import { AppError, type ErrorDetail } from "@/http/errors.js";
-import { listPage } from "@/http/list.js";
-import type { PageType } from "@/http/respond.js";
-import { WORKFLOW_SORT_KEYS } from "./workflows.repository.js";
+import { randomUUID } from 'node:crypto';
+import { type AuditContextType, writeAuditEntry } from '@/audit/index.js';
+import type { Db, Executor } from '@/db/pool.js';
+import { withTx } from '@/db/tx.js';
+import { AppError, type ErrorDetail } from '@/http/errors.js';
+import { listPage } from '@/http/list.js';
+import type { PageType } from '@/http/respond.js';
+import { WORKFLOW_SORT_KEYS } from './workflows.repository.js';
 import type {
   CreateWorkflowRequestType,
   ListWorkflowsQueryType,
@@ -18,7 +18,7 @@ import type {
   WorkflowSummaryType,
   WorkflowsRepositoryType,
   WorkflowType,
-} from "./workflows.types.js";
+} from './workflows.types.js';
 
 const toStage = (row: StageRowType): StageType => ({
   id: row.id,
@@ -28,7 +28,7 @@ const toStage = (row: StageRowType): StageType => ({
     : {
         position: null,
         name: null,
-        builtin: row.targetBuiltin as NonNullable<StageRowType["targetBuiltin"]>,
+        builtin: row.targetBuiltin as NonNullable<StageRowType['targetBuiltin']>,
       },
   whenUnresolved: row.whenUnresolved,
   handlerMayNarrow: row.handlerMayNarrow,
@@ -39,9 +39,7 @@ const toStage = (row: StageRowType): StageType => ({
 /** A stored stage in the shape a save sends, so a save can be compared with the current version. */
 const toStageInput = (row: StageRowType): StageInputType => ({
   name: row.name,
-  assignee: row.targetPositionId
-    ? { position: row.targetPositionId }
-    : { builtin: row.targetBuiltin as NonNullable<StageRowType["targetBuiltin"]> },
+  assignee: row.targetPositionId ? { position: row.targetPositionId } : { builtin: row.targetBuiltin as NonNullable<StageRowType['targetBuiltin']> },
   whenUnresolved: row.whenUnresolved,
   handlerMayNarrow: row.handlerMayNarrow,
   handlerMayEscalate: row.handlerMayEscalate,
@@ -53,9 +51,7 @@ const stagesKey = (stages: StageInputType[]) =>
   JSON.stringify(
     stages.map((stage) => [
       stage.name,
-      "position" in stage.assignee
-        ? ["position", stage.assignee.position]
-        : ["builtin", stage.assignee.builtin],
+      'position' in stage.assignee ? ['position', stage.assignee.position] : ['builtin', stage.assignee.builtin],
       stage.whenUnresolved,
       stage.handlerMayNarrow,
       stage.handlerMayEscalate,
@@ -77,14 +73,10 @@ const toSummary = (row: WorkflowRowType): WorkflowSummaryType => ({
 });
 
 export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRepositoryType }) {
-  async function loadWorkflow(
-    executor: Executor,
-    tenantId: string,
-    workflowId: string,
-  ): Promise<WorkflowType> {
+  async function loadWorkflow(executor: Executor, tenantId: string, workflowId: string): Promise<WorkflowType> {
     const [row] = await repo.findById(executor, tenantId, workflowId);
     if (!row) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     const stages = await repo.stagesOfVersion(executor, tenantId, row.currentVersionId);
     const { version, ...rest } = toSummary(row);
@@ -95,7 +87,7 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
   async function lockWorkflow(tx: Executor, tenantId: string, workflowId: string) {
     const [row] = await repo.findByIdForUpdate(tx, tenantId, workflowId);
     if (!row) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     return row;
   }
@@ -104,44 +96,32 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
    * Locks every tenant position the stages name, so none can be retired until this transaction ends, and reports
    * the unknown and the retired (R5.10). A position of another tenant is unknown (R5.19).
    */
-  async function lockStagePositions(
-    tx: Executor,
-    tenantId: string,
-    stages: StageInputType[],
-  ): Promise<ErrorDetail[]> {
-    const named = [
-      ...new Set(stages.flatMap((s) => ("position" in s.assignee ? [s.assignee.position] : []))),
-    ];
+  async function lockStagePositions(tx: Executor, tenantId: string, stages: StageInputType[]): Promise<ErrorDetail[]> {
+    const named = [...new Set(stages.flatMap((s) => ('position' in s.assignee ? [s.assignee.position] : [])))];
     if (named.length === 0) {
       return [];
     }
-    const states = new Map(
-      (await repo.lockPositions(tx, tenantId, named)).map((state) => [state.id, state]),
-    );
+    const states = new Map((await repo.lockPositions(tx, tenantId, named)).map((state) => [state.id, state]));
     const details: ErrorDetail[] = [];
     stages.forEach((stage, index) => {
-      if (!("position" in stage.assignee)) {
+      if (!('position' in stage.assignee)) {
         return;
       }
       const state = states.get(stage.assignee.position);
       const path = `stages.${index}.assignee.position`;
       if (!state) {
-        details.push({ path, code: "unknown_position" });
+        details.push({ path, code: 'unknown_position' });
       } else if (state.retiredAt) {
-        details.push({ path, code: "position_retired" });
+        details.push({ path, code: 'position_retired' });
       }
     });
     return details;
   }
 
-  async function assertStagePositionsActive(
-    tx: Executor,
-    tenantId: string,
-    stages: StageInputType[],
-  ) {
+  async function assertStagePositionsActive(tx: Executor, tenantId: string, stages: StageInputType[]) {
     const details = await lockStagePositions(tx, tenantId, stages);
     if (details.length > 0) {
-      throw new AppError("VALIDATION_FAILED", details);
+      throw new AppError('VALIDATION_FAILED', details);
     }
   }
 
@@ -162,23 +142,20 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
   }
 
   const actorOf = (context: AuditContextType) => {
-    if (context.actor.type !== "user" || !context.actor.id) {
-      throw new Error("a workflow is saved by a tenant user");
+    if (context.actor.type !== 'user' || !context.actor.id) {
+      throw new Error('a workflow is saved by a tenant user');
     }
     return context.actor.id;
   };
 
   return {
-    async list(
-      tenantId: string,
-      query: ListWorkflowsQueryType,
-    ): Promise<PageType<WorkflowSummaryType>> {
+    async list(tenantId: string, query: ListWorkflowsQueryType): Promise<PageType<WorkflowSummaryType>> {
       const page = await listPage({
         db,
-        list: "workflows",
+        list: 'workflows',
         query,
         keys: WORKFLOW_SORT_KEYS,
-        direction: "asc",
+        direction: 'asc',
         where: ({ retired }) => repo.listWhere(tenantId, retired),
         selectPage: (tx, request) => repo.selectPage(tx, request),
         count: (tx, where) => repo.count(tx, where),
@@ -194,7 +171,7 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
     async getVersion(tenantId: string, id: string, versionNumber: number): Promise<VersionType> {
       const [version] = await repo.versionByNumber(db, tenantId, id, versionNumber);
       if (!version) {
-        throw new AppError("NOT_FOUND");
+        throw new AppError('NOT_FOUND');
       }
       const stages = await repo.stagesOfVersion(db, tenantId, version.id);
       return {
@@ -206,11 +183,7 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
     },
 
     /** Creates the workflow with version 1. A duplicate name (any case) reaches the error handler as WORKFLOW_NAME_TAKEN. */
-    create(
-      tenantId: string,
-      body: CreateWorkflowRequestType,
-      context: AuditContextType,
-    ): Promise<WorkflowType> {
+    create(tenantId: string, body: CreateWorkflowRequestType, context: AuditContextType): Promise<WorkflowType> {
       const createdBy = actorOf(context);
       return withTx(db, async (tx) => {
         await assertStagePositionsActive(tx, tenantId, body.stages);
@@ -234,8 +207,8 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "workflow.created",
-          resourceType: "workflow",
+          action: 'workflow.created',
+          resourceType: 'workflow',
           resourceId: workflowId,
           details: { name: body.name, version: 1, stages: body.stages },
         });
@@ -247,24 +220,19 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
      * Saves a name and stages based on `baseVersion` (R5.9). Only changed stages create a version; a rename alone
      * does not; a save that changes nothing writes nothing.
      */
-    update(
-      tenantId: string,
-      id: string,
-      body: UpdateWorkflowRequestType,
-      context: AuditContextType,
-    ): Promise<WorkflowType> {
+    update(tenantId: string, id: string, body: UpdateWorkflowRequestType, context: AuditContextType): Promise<WorkflowType> {
       const createdBy = actorOf(context);
       return withTx(db, async (tx) => {
         const workflow = await lockWorkflow(tx, tenantId, id);
         if (workflow.retiredAt) {
-          throw new AppError("RESOURCE_RETIRED");
+          throw new AppError('RESOURCE_RETIRED');
         }
         const [current] = await repo.versionById(tx, tenantId, workflow.currentVersionId);
         if (!current) {
-          throw new Error("workflow has no current version");
+          throw new Error('workflow has no current version');
         }
         if (body.baseVersion !== current.number) {
-          throw new AppError("VERSION_CHANGED", [{ path: "baseVersion", code: "version_changed" }]);
+          throw new AppError('VERSION_CHANGED', [{ path: 'baseVersion', code: 'version_changed' }]);
         }
         await assertStagePositionsActive(tx, tenantId, body.stages);
 
@@ -293,8 +261,8 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "workflow.updated",
-          resourceType: "workflow",
+          action: 'workflow.updated',
+          resourceType: 'workflow',
           resourceId: id,
           details: {
             before: { name: workflow.name },
@@ -316,14 +284,14 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
         // The lock above pairs with the share lock a service save takes, so this check cannot miss a service
         // being saved (R5.16).
         if ((await repo.allowedByActiveService(tx, tenantId, id)).length > 0) {
-          throw new AppError("WORKFLOW_IN_USE");
+          throw new AppError('WORKFLOW_IN_USE');
         }
         await repo.setRetired(tx, tenantId, id, true);
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "workflow.retired",
-          resourceType: "workflow",
+          action: 'workflow.retired',
+          resourceType: 'workflow',
           resourceId: id,
         });
         return loadWorkflow(tx, tenantId, id);
@@ -341,14 +309,14 @@ export function createWorkflowsService({ db, repo }: { db: Db; repo: WorkflowsRe
         const stages = await repo.stagesOfVersion(tx, tenantId, workflow.currentVersionId);
         const retired = await lockStagePositions(tx, tenantId, stages.map(toStageInput));
         if (retired.length > 0) {
-          throw new AppError("WORKFLOW_POSITION_RETIRED", retired);
+          throw new AppError('WORKFLOW_POSITION_RETIRED', retired);
         }
         await repo.setRetired(tx, tenantId, id, false);
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "workflow.restored",
-          resourceType: "workflow",
+          action: 'workflow.restored',
+          resourceType: 'workflow',
           resourceId: id,
         });
         return loadWorkflow(tx, tenantId, id);

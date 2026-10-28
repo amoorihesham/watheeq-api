@@ -1,5 +1,5 @@
-import { Writable } from "node:stream";
-import { createLogger, type Logger } from "../../src/logging/logger.js";
+import { Writable } from 'node:stream';
+import { createLogger, type Logger } from '../../src/logging/logger.js';
 
 export interface LogCapture {
   logger: Logger;
@@ -7,7 +7,7 @@ export interface LogCapture {
 }
 
 /** A real pino logger (with the production redaction rules) writing JSON lines into memory. */
-export function captureLogs(level = "info"): LogCapture {
+export function captureLogs(level = 'info'): LogCapture {
   const chunks: string[] = [];
   const destination = new Writable({
     write(chunk: Buffer, _encoding, callback) {
@@ -19,8 +19,8 @@ export function captureLogs(level = "info"): LogCapture {
     logger: createLogger(level, destination),
     lines: () =>
       chunks
-        .join("")
-        .split("\n")
+        .join('')
+        .split('\n')
         .filter((line) => line.length > 0)
         .map((line) => JSON.parse(line) as Record<string, unknown>),
   };

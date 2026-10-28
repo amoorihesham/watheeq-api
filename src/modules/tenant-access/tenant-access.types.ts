@@ -1,6 +1,6 @@
-import type { permissionScopes } from "@/db/schema/index.js";
-import type { AuthUserType } from "@/modules/auth/auth.types.js";
-import type { PERMISSION_CATALOG } from "./tenant-access.constants.js";
+import type { permissionScopes } from '@/db/schema/index.js';
+import type { AuthUserType } from '@/modules/auth/auth.types.js';
+import type { PERMISSION_CATALOG } from './tenant-access.constants.js';
 
 export type TenantPermissionType = keyof typeof PERMISSION_CATALOG;
 export type PermissionScopeType = (typeof permissionScopes.enumValues)[number];

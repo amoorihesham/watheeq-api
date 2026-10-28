@@ -1,12 +1,12 @@
-import type { z } from "zod";
-import type { AuthConfigType, LinksConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { passwordTokenPurposes } from "@/db/schema/password-tokens.js";
-import type { userRoles } from "@/db/schema/users.js";
-import type { EmailSenderType } from "@/email/index.js";
-import type { createAuthController } from "./auth.controller.js";
-import type { createAuthRepository } from "./auth.repository.js";
-import type { authUserResponseSchema, sessionResponseSchema } from "./auth.responses.js";
+import type { z } from 'zod';
+import type { AuthConfigType, LinksConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { passwordTokenPurposes } from '@/db/schema/password-tokens.js';
+import type { userRoles } from '@/db/schema/users.js';
+import type { EmailSenderType } from '@/email/index.js';
+import type { createAuthController } from './auth.controller.js';
+import type { createAuthRepository } from './auth.repository.js';
+import type { authUserResponseSchema, sessionResponseSchema } from './auth.responses.js';
 import type {
   accessTokenPayloadSchema,
   changePasswordRequestSchema,
@@ -16,8 +16,8 @@ import type {
   resetPasswordRequestSchema,
   tenantClaimSchema,
   verifyEmailRequestSchema,
-} from "./auth.schemas.js";
-import type { createAuthService } from "./auth.service.js";
+} from './auth.schemas.js';
+import type { createAuthService } from './auth.service.js';
 
 export type UserRoleType = (typeof userRoles.enumValues)[number];
 

@@ -1,6 +1,6 @@
-import type { Tx } from "@/db/pool.js";
-import { AppError } from "@/http/errors.js";
-import { createSubscriptionsRepository } from "../subscriptions.repository.js";
+import type { Tx } from '@/db/pool.js';
+import { AppError } from '@/http/errors.js';
+import { createSubscriptionsRepository } from '../subscriptions.repository.js';
 
 const repo = createSubscriptionsRepository();
 
@@ -17,6 +17,6 @@ export async function assertSeatAvailable(tx: Tx, tenantId: string): Promise<voi
   }
   const [usage] = await repo.countActiveMembers(tx, tenantId);
   if ((usage?.activeUsers ?? 0) >= limit.userLimit) {
-    throw new AppError("USER_LIMIT_REACHED");
+    throw new AppError('USER_LIMIT_REACHED');
   }
 }

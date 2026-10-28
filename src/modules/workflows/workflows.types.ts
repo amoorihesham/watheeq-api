@@ -1,21 +1,13 @@
-import type { z } from "zod";
-import type { AuthConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
-import type { STAGE_FALLBACKS } from "./workflows.constants.js";
-import type { createWorkflowsController } from "./workflows.controller.js";
-import type { createWorkflowsRepository } from "./workflows.repository.js";
-import type {
-  versionResponseSchema,
-  workflowResponseSchema,
-  workflowSummaryResponseSchema,
-} from "./workflows.responses.js";
-import type {
-  createWorkflowRequestSchema,
-  listWorkflowsQuerySchema,
-  updateWorkflowRequestSchema,
-} from "./workflows.schemas.js";
-import type { createWorkflowsService } from "./workflows.service.js";
+import type { z } from 'zod';
+import type { AuthConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { AssigneeBuiltinType } from '@/modules/positions/index.js';
+import type { STAGE_FALLBACKS } from './workflows.constants.js';
+import type { createWorkflowsController } from './workflows.controller.js';
+import type { createWorkflowsRepository } from './workflows.repository.js';
+import type { versionResponseSchema, workflowResponseSchema, workflowSummaryResponseSchema } from './workflows.responses.js';
+import type { createWorkflowRequestSchema, listWorkflowsQuerySchema, updateWorkflowRequestSchema } from './workflows.schemas.js';
+import type { createWorkflowsService } from './workflows.service.js';
 
 export type StageFallbackType = (typeof STAGE_FALLBACKS)[number];
 
@@ -67,9 +59,9 @@ export interface PositionStateRowType {
 export type CreateWorkflowRequestType = z.output<typeof createWorkflowRequestSchema>;
 export type UpdateWorkflowRequestType = z.output<typeof updateWorkflowRequestSchema>;
 export type ListWorkflowsQueryType = z.output<typeof listWorkflowsQuerySchema>;
-export type StageInputType = z.output<typeof createWorkflowRequestSchema>["stages"][number];
+export type StageInputType = z.output<typeof createWorkflowRequestSchema>['stages'][number];
 
-export type StageType = z.output<typeof versionResponseSchema>["stages"][number];
+export type StageType = z.output<typeof versionResponseSchema>['stages'][number];
 export type VersionType = z.output<typeof versionResponseSchema>;
 export type WorkflowSummaryType = z.output<typeof workflowSummaryResponseSchema>;
 export type WorkflowType = z.output<typeof workflowResponseSchema>;

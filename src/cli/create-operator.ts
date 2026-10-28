@@ -1,15 +1,11 @@
-import pg from "pg";
-import { parseCliConfig } from "../config/config.js";
-import { createDb } from "../db/pool.js";
-import { AppError, fromDatabaseError } from "../http/errors.js";
-import { validate } from "../http/validate.js";
-import {
-  MAX_PASSWORD_LENGTH,
-  MAX_USER_NAME_LENGTH,
-  MIN_PASSWORD_LENGTH,
-} from "../modules/auth/auth.constants.js";
-import { createOperatorRequestSchema } from "../modules/auth/auth.schemas.js";
-import { createOperator } from "../modules/auth/auth.service.js";
+import pg from 'pg';
+import { parseCliConfig } from '../config/config.js';
+import { createDb } from '../db/pool.js';
+import { AppError, fromDatabaseError } from '../http/errors.js';
+import { validate } from '../http/validate.js';
+import { MAX_PASSWORD_LENGTH, MAX_USER_NAME_LENGTH, MIN_PASSWORD_LENGTH } from '../modules/auth/auth.constants.js';
+import { createOperatorRequestSchema } from '../modules/auth/auth.schemas.js';
+import { createOperator } from '../modules/auth/auth.service.js';
 
 const parsed = parseCliConfig(process.env);
 if (!parsed.ok) {
@@ -22,10 +18,8 @@ const userName = process.argv[3];
 
 if (!email || !userName || process.argv.length > 4) {
   console.error('Usage: pnpm operator:create <email> "<full name>"');
-  console.error(
-    "Reads the password from OPERATOR_PASSWORD, or prompts for it. Never pass it as an argument.",
-  );
-  console.error("Requires DATABASE_URL.");
+  console.error('Reads the password from OPERATOR_PASSWORD, or prompts for it. Never pass it as an argument.');
+  console.error('Requires DATABASE_URL.');
   process.exit(1);
 }
 
@@ -39,13 +33,13 @@ function promptHidden(label: string): Promise<string> {
     process.stderr.write(label);
     stdin.setRawMode(true);
     stdin.resume();
-    stdin.setEncoding("utf8");
-    let value = "";
+    stdin.setEncoding('utf8');
+    let value = '';
     const finish = (error?: Error) => {
       stdin.setRawMode(false);
       stdin.pause();
-      stdin.off("data", onData);
-      process.stderr.write("\n");
+      stdin.off('data', onData);
+      process.stderr.write('\n');
       if (error) {
         reject(error);
       } else {
@@ -54,22 +48,22 @@ function promptHidden(label: string): Promise<string> {
     };
     const onData = (chunk: string) => {
       for (const char of chunk) {
-        if (char === "\r" || char === "\n" || char === "\u0004") {
+        if (char === '\r' || char === '\n' || char === '\u0004') {
           finish();
           return;
         }
-        if (char === "\u0003") {
-          finish(new CliError("Cancelled."));
+        if (char === '\u0003') {
+          finish(new CliError('Cancelled.'));
           return;
         }
-        if (char === "\u007f" || char === "\b") {
+        if (char === '\u007f' || char === '\b') {
           value = value.slice(0, -1);
         } else {
           value += char;
         }
       }
     };
-    stdin.on("data", onData);
+    stdin.on('data', onData);
   });
 }
 
@@ -78,12 +72,12 @@ async function readPassword(): Promise<string> {
     return operatorPassword;
   }
   if (!process.stdin.isTTY) {
-    throw new CliError("Set OPERATOR_PASSWORD, or run this in an interactive terminal.");
+    throw new CliError('Set OPERATOR_PASSWORD, or run this in an interactive terminal.');
   }
-  const first = await promptHidden("Password: ");
-  const second = await promptHidden("Repeat password: ");
+  const first = await promptHidden('Password: ');
+  const second = await promptHidden('Repeat password: ');
   if (first !== second) {
-    throw new CliError("The passwords do not match.");
+    throw new CliError('The passwords do not match.');
   }
   return first;
 }
@@ -106,16 +100,16 @@ async function createWithConnection(databaseUrl: string, rawEmail: string, rawUs
 /** The message for an AppError from the service, or undefined for an unexpected error. */
 function messageFor(err: AppError): string | undefined {
   switch (err.code) {
-    case "VALIDATION_FAILED": {
+    case 'VALIDATION_FAILED': {
       const labels: Record<string, string> = {
-        email: "email",
-        userName: "name",
-        password: "password",
+        email: 'email',
+        userName: 'name',
+        password: 'password',
       };
       const fields = [...new Set((err.details ?? []).map((detail) => detail.path))];
-      return `Invalid ${fields.map((field) => labels[field] ?? field).join(" and ")}. The name must be 1-${MAX_USER_NAME_LENGTH} characters and the password ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH}.`;
+      return `Invalid ${fields.map((field) => labels[field] ?? field).join(' and ')}. The name must be 1-${MAX_USER_NAME_LENGTH} characters and the password ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH}.`;
     }
-    case "TAKEN":
+    case 'TAKEN':
       return `An account with email ${email?.trim().toLowerCase()} already exists.`;
     default:
       return undefined;
@@ -135,7 +129,7 @@ try {
   } else {
     // Not err.message: a failed query's message includes its parameters, which contain the password hash.
     const cause = (err as { cause?: { message?: string } }).cause;
-    console.error("Could not create the operator:", cause?.message ?? "unexpected error");
+    console.error('Could not create the operator:', cause?.message ?? 'unexpected error');
   }
   process.exit(1);
 }

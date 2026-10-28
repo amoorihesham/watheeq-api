@@ -1,16 +1,12 @@
-import type { z } from "zod";
-import type { AuthConfigType, LinksConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { EmailSenderType } from "@/email/index.js";
-import type { createTenantsController } from "./tenants.controller.js";
-import type { createTenantsRepository } from "./tenants.repository.js";
-import type { tenantDetailResponseSchema, tenantResponseSchema } from "./tenants.responses.js";
-import type {
-  changeSubscriptionRequestSchema,
-  createTenantRequestSchema,
-  listTenantsQuerySchema,
-} from "./tenants.schemas.js";
-import type { createTenantsService } from "./tenants.service.js";
+import type { z } from 'zod';
+import type { AuthConfigType, LinksConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { EmailSenderType } from '@/email/index.js';
+import type { createTenantsController } from './tenants.controller.js';
+import type { createTenantsRepository } from './tenants.repository.js';
+import type { tenantDetailResponseSchema, tenantResponseSchema } from './tenants.responses.js';
+import type { changeSubscriptionRequestSchema, createTenantRequestSchema, listTenantsQuerySchema } from './tenants.schemas.js';
+import type { createTenantsService } from './tenants.service.js';
 
 export type TenantType = z.output<typeof tenantResponseSchema>;
 

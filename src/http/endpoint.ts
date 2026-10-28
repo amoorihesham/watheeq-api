@@ -1,20 +1,17 @@
-import type { Readable } from "node:stream";
-import { type Request, type RequestHandler, type Response, Router } from "express";
-import type { z } from "zod";
-import type { Db } from "@/db/pool.js";
-import { noStore } from "@/middleware/no-store.js";
-import { authenticate, requireRole } from "@/modules/auth/shared/middlewares.js";
-import type { FileDownloadType } from "@/modules/files/files.types.js";
-import { sendDownload } from "@/modules/files/shared/download.js";
-import { requirePlatformPermission } from "@/modules/platform/shared/middlewares.js";
-import {
-  requireActiveSubscription,
-  subscriptionGuard,
-} from "@/modules/subscriptions/shared/middlewares.js";
-import { requireTenantPermission } from "@/modules/tenant-access/shared/middlewares.js";
-import { AppError, type ErrorCode } from "./errors.js";
-import { type PageType, sendData, sendNoContent, sendPage } from "./respond.js";
-import { validate } from "./validate.js";
+import type { Readable } from 'node:stream';
+import { type Request, type RequestHandler, type Response, Router } from 'express';
+import type { z } from 'zod';
+import type { Db } from '@/db/pool.js';
+import { noStore } from '@/middleware/no-store.js';
+import { authenticate, requireRole } from '@/modules/auth/shared/middlewares.js';
+import type { FileDownloadType } from '@/modules/files/files.types.js';
+import { sendDownload } from '@/modules/files/shared/download.js';
+import { requirePlatformPermission } from '@/modules/platform/shared/middlewares.js';
+import { requireActiveSubscription, subscriptionGuard } from '@/modules/subscriptions/shared/middlewares.js';
+import { requireTenantPermission } from '@/modules/tenant-access/shared/middlewares.js';
+import { AppError, type ErrorCode } from './errors.js';
+import { type PageType, sendData, sendNoContent, sendPage } from './respond.js';
+import { validate } from './validate.js';
 
 /**
  * Every endpoint is declared once as data (Phase 10 spec 4.3); the router, the input validation, the response, and
@@ -23,33 +20,27 @@ import { validate } from "./validate.js";
  */
 
 /** Which guards run before an endpoint; each realm is today's `router.use` chain of that kind of route. */
-export type RealmType = "open" | "public" | "session" | "operator" | "tenant" | "tenantInbox";
+export type RealmType = 'open' | 'public' | 'session' | 'operator' | 'tenant' | 'tenantInbox';
 
-type StepType = "noStore" | "authenticate" | "operator" | "user" | "subscription";
+type StepType = 'noStore' | 'authenticate' | 'operator' | 'user' | 'subscription';
 
 const REALM_STEPS: Record<RealmType, readonly StepType[]> = {
   open: [],
-  public: ["noStore"],
-  session: ["noStore", "authenticate"],
-  operator: ["noStore", "authenticate", "operator"],
-  tenant: ["noStore", "authenticate", "user", "subscription"],
-  tenantInbox: ["noStore", "authenticate", "user"],
+  public: ['noStore'],
+  session: ['noStore', 'authenticate'],
+  operator: ['noStore', 'authenticate', 'operator'],
+  tenant: ['noStore', 'authenticate', 'user', 'subscription'],
+  tenantInbox: ['noStore', 'authenticate', 'user'],
 };
 
-export type MethodType = "get" | "post" | "put" | "patch" | "delete";
+export type MethodType = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
-export type PermissionDeclType =
-  | { tenant: Parameters<typeof requireTenantPermission>[0] }
-  | { platform: Parameters<typeof requirePlatformPermission>[0] };
+export type PermissionDeclType = { tenant: Parameters<typeof requireTenantPermission>[0] } | { platform: Parameters<typeof requirePlatformPermission>[0] };
 
-export type ResponseDeclType =
-  | { kind: "data"; status: 200 | 201; schema: z.ZodType }
-  | { kind: "page"; schema: z.ZodType }
-  | { kind: "noContent" }
-  | { kind: "download" };
+export type ResponseDeclType = { kind: 'data'; status: 200 | 201; schema: z.ZodType } | { kind: 'page'; schema: z.ZodType } | { kind: 'noContent' } | { kind: 'download' };
 
 export interface BinaryBodyType {
-  kind: "binary";
+  kind: 'binary';
 }
 
 export interface EndpointType {
@@ -79,31 +70,22 @@ export interface ApiType<E extends Record<string, EndpointType> = Record<string,
 
 export const defineEndpoint = <const E extends EndpointType>(endpoint: E): E => endpoint;
 
-export const defineApi = <const E extends Record<string, EndpointType>>(
-  api: ApiType<E>,
-): ApiType<E> => api;
+export const defineApi = <const E extends Record<string, EndpointType>>(api: ApiType<E>): ApiType<E> => api;
 
-export const isBinaryBody = (body: EndpointType["body"]): body is BinaryBodyType =>
-  body !== undefined && "kind" in body && body.kind === "binary";
+export const isBinaryBody = (body: EndpointType['body']): body is BinaryBodyType => body !== undefined && 'kind' in body && body.kind === 'binary';
 
-export const realmOf = (api: ApiType, endpoint: EndpointType): RealmType =>
-  endpoint.realm ?? api.realm;
+export const realmOf = (api: ApiType, endpoint: EndpointType): RealmType => endpoint.realm ?? api.realm;
 
 /** Whether the realm requires the access cookie. */
-export const isAuthenticatedRealm = (realm: RealmType): boolean =>
-  REALM_STEPS[realm].includes("authenticate");
+export const isAuthenticatedRealm = (realm: RealmType): boolean => REALM_STEPS[realm].includes('authenticate');
 
 /** The path as the document and the route list write it: prefix and path joined, no trailing slash. */
-export const fullPathOf = (api: ApiType, endpoint: EndpointType): string =>
-  `${api.prefix}/${endpoint.path}`.replace(/\/+/g, "/").replace(/(.)\/$/, "$1");
+export const fullPathOf = (api: ApiType, endpoint: EndpointType): string => `${api.prefix}/${endpoint.path}`.replace(/\/+/g, '/').replace(/(.)\/$/, '$1');
 
-export const pathParamNames = (path: string): string[] =>
-  [...path.matchAll(/:([A-Za-z0-9_]+)/g)].map((match) => match[1] ?? "");
+export const pathParamNames = (path: string): string[] => [...path.matchAll(/:([A-Za-z0-9_]+)/g)].map((match) => match[1] ?? '');
 
 // What a handler receives and returns, inferred from the declaration.
-type InputOf<E extends EndpointType> = (E extends { params: infer P extends z.ZodType }
-  ? { params: z.output<P> }
-  : unknown) &
+type InputOf<E extends EndpointType> = (E extends { params: infer P extends z.ZodType } ? { params: z.output<P> } : unknown) &
   (E extends { query: infer Q extends z.ZodType } ? { query: z.output<Q> } : unknown) &
   (E extends { body: infer B extends z.ZodType } ? { body: z.output<B> } : unknown);
 
@@ -113,27 +95,23 @@ export interface DownloadResultType {
 }
 
 type ResultOf<E extends EndpointType> = E extends {
-  response: { kind: "data"; schema: infer S extends z.ZodType };
+  response: { kind: 'data'; schema: infer S extends z.ZodType };
 }
   ? z.output<S>
-  : E extends { response: { kind: "page"; schema: infer S extends z.ZodType } }
+  : E extends { response: { kind: 'page'; schema: infer S extends z.ZodType } }
     ? PageType<z.output<S>>
-    : E extends { response: { kind: "download" } }
+    : E extends { response: { kind: 'download' } }
       ? DownloadResultType
       : never;
 
 /** A handler gets the parsed input and returns what the builder sends; it keeps `req` and `res` for the caller and cookies. */
-export type HandlerOf<E extends EndpointType> = (
-  input: InputOf<E>,
-  req: Request,
-  res: Response,
-) => E extends { response: { kind: "noContent" } } ? Promise<void> : Promise<ResultOf<E>>;
+export type HandlerOf<E extends EndpointType> = (input: InputOf<E>, req: Request, res: Response) => E extends { response: { kind: 'noContent' } } ? Promise<void> : Promise<ResultOf<E>>;
 
 export type HandlersOf<A extends ApiType> = {
-  [K in keyof A["endpoints"]]: HandlerOf<A["endpoints"][K]>;
+  [K in keyof A['endpoints']]: HandlerOf<A['endpoints'][K]>;
 };
 
-type NoExtraKeys<H, A extends ApiType> = { [K in Exclude<keyof H, keyof A["endpoints"]>]: never };
+type NoExtraKeys<H, A extends ApiType> = { [K in Exclude<keyof H, keyof A['endpoints']>]: never };
 
 export interface EndpointDepsType {
   db: Db;
@@ -141,7 +119,7 @@ export interface EndpointDepsType {
 }
 
 function stepHandler(step: StepType, deps: EndpointDepsType | undefined): RequestHandler {
-  if (step === "noStore") {
+  if (step === 'noStore') {
     return noStore;
   }
   if (!deps) {
@@ -149,13 +127,13 @@ function stepHandler(step: StepType, deps: EndpointDepsType | undefined): Reques
   }
   const { db, jwtSecret } = deps;
   switch (step) {
-    case "authenticate":
+    case 'authenticate':
       return authenticate(jwtSecret);
-    case "operator":
-      return requireRole("operator");
-    case "user":
-      return requireRole("user");
-    case "subscription":
+    case 'operator':
+      return requireRole('operator');
+    case 'user':
+      return requireRole('user');
+    case 'subscription':
       return subscriptionGuard(db);
   }
 }
@@ -174,16 +152,12 @@ function checkDeclaration(api: ApiType, name: string, endpoint: EndpointType): v
   const declared = Object.keys(endpoint.params?.shape ?? {}).sort();
   const inPath = pathParamNames(endpoint.path).sort();
   if (declared.join() !== inPath.join()) {
-    throw new Error(
-      `${api.tag}.${name}: params [${declared.join(", ")}] do not match the path ${endpoint.path}`,
-    );
+    throw new Error(`${api.tag}.${name}: params [${declared.join(', ')}] do not match the path ${endpoint.path}`);
   }
 }
 
 function permissionGuard(permission: PermissionDeclType): RequestHandler {
-  return "tenant" in permission
-    ? requireTenantPermission(permission.tenant)
-    : requirePlatformPermission(permission.platform);
+  return 'tenant' in permission ? requireTenantPermission(permission.tenant) : requirePlatformPermission(permission.platform);
 }
 
 /**
@@ -191,10 +165,7 @@ function permissionGuard(permission: PermissionDeclType): RequestHandler {
  * result with the declared kind. The parsed input is passed on as an argument, never written back to `req`:
  * `req.query` is a getter in Express 5.
  */
-function inputStep(
-  endpoint: EndpointType,
-  handler: (input: object, req: Request, res: Response) => Promise<unknown>,
-): RequestHandler {
+function inputStep(endpoint: EndpointType, handler: (input: object, req: Request, res: Response) => Promise<unknown>): RequestHandler {
   const { params, query, body, response } = endpoint;
   return async (req, res) => {
     const input: { params?: unknown; query?: unknown; body?: unknown } = {};
@@ -202,7 +173,7 @@ function inputStep(
       const parsed = params.safeParse(req.params);
       // A malformed ID is answered like an unknown one.
       if (!parsed.success) {
-        throw new AppError("NOT_FOUND");
+        throw new AppError('NOT_FOUND');
       }
       input.params = parsed.data;
     }
@@ -214,16 +185,16 @@ function inputStep(
     }
     const result = await handler(input, req, res);
     switch (response.kind) {
-      case "data":
+      case 'data':
         sendData(res, response.status, response.schema, result);
         return;
-      case "page":
+      case 'page':
         sendPage(res, response.schema, result as PageType<unknown>);
         return;
-      case "noContent":
+      case 'noContent':
         sendNoContent(res);
         return;
-      case "download": {
+      case 'download': {
         const { file, body: stream } = result as DownloadResultType;
         await sendDownload(res, file, stream);
         return;
@@ -251,7 +222,7 @@ export function buildRouter<A extends ApiType, H extends HandlersOf<A>>(
   for (const [name, endpoint] of Object.entries(api.endpoints)) {
     checkDeclaration(api, name, endpoint);
     const handler = (handlers as Record<string, unknown>)[name];
-    if (typeof handler !== "function") {
+    if (typeof handler !== 'function') {
       throw new Error(`${api.tag}.${name} has no handler`);
     }
     router[endpoint.method](

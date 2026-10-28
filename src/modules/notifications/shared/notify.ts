@@ -1,6 +1,6 @@
-import type { Tx } from "@/db/pool.js";
-import { createNotificationsRepository } from "../notifications.repository.js";
-import type { NotifyInputType } from "../notifications.types.js";
+import type { Tx } from '@/db/pool.js';
+import { createNotificationsRepository } from '../notifications.repository.js';
+import type { NotifyInputType } from '../notifications.types.js';
 
 const repo = createNotificationsRepository();
 

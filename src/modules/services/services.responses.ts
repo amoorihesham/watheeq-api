@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { FIELD_TYPES } from "./services.constants.js";
+import { z } from 'zod';
+import { FIELD_TYPES } from './services.constants.js';
 
 const option = z.strictObject({ id: z.string(), label: z.string() });
 
@@ -17,7 +17,7 @@ export const formFieldResponseSchema = z
     options: z.array(option).nullable(),
     maxFiles: z.number().nullable(),
   })
-  .meta({ id: "ServiceFormField" });
+  .meta({ id: 'ServiceFormField' });
 
 export const serviceResponseSchema = z
   .strictObject({
@@ -35,4 +35,4 @@ export const serviceResponseSchema = z
       }),
     ),
   })
-  .meta({ id: "Service" });
+  .meta({ id: 'Service' });

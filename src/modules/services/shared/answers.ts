@@ -1,7 +1,7 @@
-import { z } from "zod";
-import type { DetailCode, ErrorDetail } from "@/http/errors.js";
-import { MAX_LONG_TEXT_LENGTH, MAX_SHORT_TEXT_LENGTH } from "../services.constants.js";
-import type { FormFieldType, FormOptionType } from "./form.js";
+import { z } from 'zod';
+import type { DetailCode, ErrorDetail } from '@/http/errors.js';
+import { MAX_LONG_TEXT_LENGTH, MAX_SHORT_TEXT_LENGTH } from '../services.constants.js';
+import type { FormFieldType, FormOptionType } from './form.js';
 
 export type AnswersType = Record<string, unknown>;
 
@@ -32,8 +32,8 @@ function isUnanswered(value: unknown): boolean {
   if (value === undefined || value === null) {
     return true;
   }
-  if (typeof value === "string") {
-    return value.trim() === "";
+  if (typeof value === 'string') {
+    return value.trim() === '';
   }
   return Array.isArray(value) && value.length === 0;
 }
@@ -41,55 +41,55 @@ function isUnanswered(value: unknown): boolean {
 /** The first problem with an answer to this field, as a detail code, or undefined when it is valid. */
 function problemWith(field: FormFieldType, value: unknown): DetailCode | undefined {
   switch (field.type) {
-    case "short_text":
-    case "long_text": {
-      if (typeof value !== "string") {
-        return "wrong_type";
+    case 'short_text':
+    case 'long_text': {
+      if (typeof value !== 'string') {
+        return 'wrong_type';
       }
-      const max = field.type === "short_text" ? MAX_SHORT_TEXT_LENGTH : MAX_LONG_TEXT_LENGTH;
-      return codePoints(value) > max ? "too_long" : undefined;
+      const max = field.type === 'short_text' ? MAX_SHORT_TEXT_LENGTH : MAX_LONG_TEXT_LENGTH;
+      return codePoints(value) > max ? 'too_long' : undefined;
     }
-    case "number": {
-      if (typeof value !== "number" || !Number.isFinite(value)) {
-        return "wrong_type";
+    case 'number': {
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return 'wrong_type';
       }
       if (field.integer && !Number.isInteger(value)) {
-        return "not_integer";
+        return 'not_integer';
       }
       if (field.min !== null && value < field.min) {
-        return "below_minimum";
+        return 'below_minimum';
       }
-      return field.max !== null && value > field.max ? "above_maximum" : undefined;
+      return field.max !== null && value > field.max ? 'above_maximum' : undefined;
     }
-    case "date": {
-      if (typeof value !== "string") {
-        return "wrong_type";
+    case 'date': {
+      if (typeof value !== 'string') {
+        return 'wrong_type';
       }
-      return isCalendarDate(value) ? undefined : "invalid_date";
+      return isCalendarDate(value) ? undefined : 'invalid_date';
     }
-    case "yes_no":
-      return typeof value === "boolean" ? undefined : "wrong_type";
-    case "single_choice": {
-      if (typeof value !== "string") {
-        return "wrong_type";
+    case 'yes_no':
+      return typeof value === 'boolean' ? undefined : 'wrong_type';
+    case 'single_choice': {
+      if (typeof value !== 'string') {
+        return 'wrong_type';
       }
-      return field.options.some((option) => option.id === value) ? undefined : "unknown_option";
+      return field.options.some((option) => option.id === value) ? undefined : 'unknown_option';
     }
-    case "multiple_choice": {
-      if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-        return "wrong_type";
+    case 'multiple_choice': {
+      if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+        return 'wrong_type';
       }
       const ids = value as string[];
       if (!ids.every((id) => field.options.some((option) => option.id === id))) {
-        return "unknown_option";
+        return 'unknown_option';
       }
-      return new Set(ids).size === ids.length ? undefined : "duplicate_option";
+      return new Set(ids).size === ids.length ? undefined : 'duplicate_option';
     }
-    case "file": {
+    case 'file': {
       if (!Array.isArray(value) || !value.every(isFileId) || new Set(value).size !== value.length) {
-        return "wrong_type";
+        return 'wrong_type';
       }
-      return value.length > field.maxFiles ? "too_many_files" : undefined;
+      return value.length > field.maxFiles ? 'too_many_files' : undefined;
     }
   }
 }
@@ -107,7 +107,7 @@ export function validateAnswers(form: FormFieldType[], answers: AnswersType): Er
     const value = answers[field.id];
     if (isUnanswered(value)) {
       if (field.required) {
-        details.push({ path, code: "required" });
+        details.push({ path, code: 'required' });
       }
       continue;
     }
@@ -118,7 +118,7 @@ export function validateAnswers(form: FormFieldType[], answers: AnswersType): Er
   }
   for (const key of Object.keys(answers)) {
     if (!known.has(key)) {
-      details.push({ path: `answers.${key}`, code: "unknown_field" });
+      details.push({ path: `answers.${key}`, code: 'unknown_field' });
     }
   }
   return details;
@@ -135,14 +135,14 @@ export function snapshotAnswers(form: FormFieldType[], answers: AnswersType): An
       return [];
     }
     const copy = structuredClone(field);
-    if (copy.type !== "single_choice" && copy.type !== "multiple_choice") {
+    if (copy.type !== 'single_choice' && copy.type !== 'multiple_choice') {
       return [{ field: copy, value }];
     }
     const chosenIds = Array.isArray(value) ? (value as string[]) : [value];
     const chosen = chosenIds.map((id) => {
       const option = copy.options.find((candidate) => candidate.id === id);
       if (!option) {
-        throw new Error("snapshotAnswers needs answers that passed validateAnswers");
+        throw new Error('snapshotAnswers needs answers that passed validateAnswers');
       }
       return option;
     });

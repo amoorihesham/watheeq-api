@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { assigneeTargetResponseSchema } from "@/modules/positions/index.js";
+import { z } from 'zod';
+import { assigneeTargetResponseSchema } from '@/modules/positions/index.js';
 
 const recipients = z.array(assigneeTargetResponseSchema);
 
@@ -9,7 +9,7 @@ export const escalationSettingsResponseSchema = z
     r1: z.strictObject({ enabled: z.boolean(), percent: z.number(), recipients }),
     r2: z.strictObject({ enabled: z.boolean(), recipients }),
   })
-  .meta({ id: "EscalationSettings" });
+  .meta({ id: 'EscalationSettings' });
 
 /** `settings` is `null` until the tenant has saved them (Q17). */
 export const escalationResponseSchema = z
@@ -17,4 +17,4 @@ export const escalationResponseSchema = z
     configured: z.boolean(),
     settings: escalationSettingsResponseSchema.nullable(),
   })
-  .meta({ id: "Escalation" });
+  .meta({ id: 'Escalation' });

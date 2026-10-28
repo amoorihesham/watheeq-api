@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const priorityResponseSchema = z
   .strictObject({
@@ -7,4 +7,4 @@ export const priorityResponseSchema = z
     days: z.number(),
     retired: z.boolean(),
   })
-  .meta({ id: "Priority" });
+  .meta({ id: 'Priority' });

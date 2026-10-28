@@ -1,36 +1,10 @@
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  getTableColumns,
-  inArray,
-  isNull,
-  lt,
-  type SQL,
-  sql,
-} from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
-import { byName } from "@/db/order.js";
-import type { Executor } from "@/db/pool.js";
-import { dateFromEpochMs } from "@/db/rows.js";
-import {
-  files,
-  informationRequests,
-  priorities,
-  requestFiles,
-  requestStageAssignees,
-  requestStageRuns,
-  requests,
-  services,
-  serviceWorkflows,
-  tenantMembers,
-  users,
-  workflowStages,
-  workflows,
-} from "@/db/schema/index.js";
-import type { PageRequestType, SortKeyType } from "@/http/list.js";
+import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, lt, type SQL, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { byName } from '@/db/order.js';
+import type { Executor } from '@/db/pool.js';
+import { dateFromEpochMs } from '@/db/rows.js';
+import { files, informationRequests, priorities, requestFiles, requestStageAssignees, requestStageRuns, requests, services, serviceWorkflows, tenantMembers, users, workflowStages, workflows } from '@/db/schema/index.js';
+import type { PageRequestType, SortKeyType } from '@/http/list.js';
 import type {
   InformationRequestListRowType,
   InformationRequestRowType,
@@ -49,10 +23,10 @@ import type {
   StageRunRowType,
   StageRunViewRowType,
   WorkflowRowType,
-} from "./requests.types.js";
-import { reviewableBy, waitingOnMe } from "./shared/visibility.js";
+} from './requests.types.js';
+import { reviewableBy, waitingOnMe } from './shared/visibility.js';
 
-const handlerUser = alias(users, "handler_user");
+const handlerUser = alias(users, 'handler_user');
 
 const { answers: _answers, ...summaryOwnColumns } = getTableColumns(requests);
 const summaryColumns = {
@@ -61,9 +35,9 @@ const summaryColumns = {
   handlerName: handlerUser.userName,
 };
 
-const attacher = alias(users, "attacher");
-const asker = alias(users, "asker");
-const ender = alias(users, "ender");
+const attacher = alias(users, 'attacher');
+const asker = alias(users, 'asker');
+const ender = alias(users, 'ender');
 
 const fileColumns = {
   id: files.id,
@@ -81,17 +55,16 @@ const fileColumns = {
 
 /** Newest submission first, the ID descending so a row comparison can continue from the last item. */
 export const REQUEST_SORT_KEYS: SortKeyType[] = [
-  { expr: sql`${requests.submittedAt}`, type: "timestamptz" },
-  { expr: sql`${requests.id}`, type: "uuid" },
+  { expr: sql`${requests.submittedAt}`, type: 'timestamptz' },
+  { expr: sql`${requests.id}`, type: 'uuid' },
 ];
 
-const ofTenant = (tenantId: string, requestId: string) =>
-  and(eq(requests.tenantId, tenantId), eq(requests.id, requestId));
+const ofTenant = (tenantId: string, requestId: string) => and(eq(requests.tenantId, tenantId), eq(requests.id, requestId));
 
 /** The state change that closes a request, with the closure record of an accepted one (Phase 6 spec, 4.3). */
 export interface ClosureType {
   closedAt: Date;
-  state: "completed" | "rejected" | "rejected_no_response" | "withdrawn";
+  state: 'completed' | 'rejected' | 'rejected_no_response' | 'withdrawn';
   closedBy: string;
   closeReason: string | null;
   record: {
@@ -107,48 +80,36 @@ export interface ClosureType {
 export function createRequestsRepository() {
   function viewFilter(view: RequestViewType, tenantId: string, callerId: string): SQL {
     switch (view) {
-      case "waiting_on_me":
+      case 'waiting_on_me':
         return waitingOnMe(tenantId, callerId);
-      case "handling":
+      case 'handling':
         return eq(requests.handlerId, callerId);
-      case "requested":
+      case 'requested':
         return eq(requests.requesterId, callerId);
-      case "review_queue":
+      case 'review_queue':
         return reviewableBy(tenantId, callerId);
     }
   }
 
-  function listFilter(
-    tenantId: string,
-    callerId: string,
-    filters: Omit<ListRequestsQueryType, "cursor" | "limit">,
-    visible: SQL,
-  ): SQL | undefined {
+  function listFilter(tenantId: string, callerId: string, filters: Omit<ListRequestsQueryType, 'cursor' | 'limit'>, visible: SQL): SQL | undefined {
     return and(
       eq(requests.tenantId, tenantId),
       visible,
       filters.view ? viewFilter(filters.view, tenantId, callerId) : undefined,
-      filters.state === "all" ? undefined : eq(requests.state, filters.state),
-      filters.serviceId === "all" ? undefined : eq(requests.serviceId, filters.serviceId),
+      filters.state === 'all' ? undefined : eq(requests.state, filters.state),
+      filters.serviceId === 'all' ? undefined : eq(requests.serviceId, filters.serviceId),
     );
   }
 
   return {
     /** The database clock, in the transaction's own time, so a closure and its audit entry agree. */
     async now(db: Executor): Promise<Date> {
-      const { rows } = await db.execute<{ ms: number }>(
-        sql`select (extract(epoch from now()) * 1000)::float8 as ms`,
-      );
+      const { rows } = await db.execute<{ ms: number }>(sql`select (extract(epoch from now()) * 1000)::float8 as ms`);
       return dateFromEpochMs(rows[0]?.ms ?? 0);
     },
 
     /** The requests the caller sees that match the filters (R6.7, R6.8). */
-    listWhere(
-      tenantId: string,
-      callerId: string,
-      filters: Omit<ListRequestsQueryType, "cursor" | "limit">,
-      visible: SQL,
-    ): SQL | undefined {
+    listWhere(tenantId: string, callerId: string, filters: Omit<ListRequestsQueryType, 'cursor' | 'limit'>, visible: SQL): SQL | undefined {
       return listFilter(tenantId, callerId, filters, visible);
     },
 
@@ -170,12 +131,7 @@ export function createRequestsRepository() {
     },
 
     /** `visible` limits the lookup to requests the caller may see (R6.7). */
-    findById(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-      visible?: SQL,
-    ): Promise<RequestDetailRowType[]> {
+    findById(db: Executor, tenantId: string, requestId: string, visible?: SQL): Promise<RequestDetailRowType[]> {
       return db
         .select({ ...summaryColumns, answers: requests.answers })
         .from(requests)
@@ -188,29 +144,19 @@ export function createRequestsRepository() {
      * Locks a visible request before any check of its state, so two actions on one request run one after the
      * other and the second sees the first's result (P6.8).
      */
-    lockVisible(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-      visible: SQL,
-    ): Promise<RequestRowType[]> {
+    lockVisible(db: Executor, tenantId: string, requestId: string, visible: SQL): Promise<RequestRowType[]> {
       return db
         .select()
         .from(requests)
         .where(and(ofTenant(tenantId, requestId), visible))
-        .for("update", { of: requests });
+        .for('update', { of: requests });
     },
 
     insert(db: Executor, values: typeof requests.$inferInsert): Promise<RequestRowType[]> {
       return db.insert(requests).values(values).returning();
     },
 
-    update(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-      patch: Partial<typeof requests.$inferInsert>,
-    ): Promise<RequestRowType[]> {
+    update(db: Executor, tenantId: string, requestId: string, patch: Partial<typeof requests.$inferInsert>): Promise<RequestRowType[]> {
       return db.update(requests).set(patch).where(ofTenant(tenantId, requestId)).returning();
     },
 
@@ -239,13 +185,7 @@ export function createRequestsRepository() {
         .select({ id: users.id })
         .from(tenantMembers)
         .innerJoin(users, eq(users.id, tenantMembers.userId))
-        .where(
-          and(
-            eq(tenantMembers.tenantId, tenantId),
-            eq(tenantMembers.userId, userId),
-            eq(users.isActive, true),
-          ),
-        );
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId), eq(users.isActive, true)));
     },
 
     countFiles(db: Executor, tenantId: string, requestId: string): Promise<{ total: number }[]> {
@@ -263,81 +203,40 @@ export function createRequestsRepository() {
       return db
         .select(fileColumns)
         .from(requestFiles)
-        .innerJoin(
-          files,
-          and(eq(files.tenantId, requestFiles.tenantId), eq(files.id, requestFiles.fileId)),
-        )
+        .innerJoin(files, and(eq(files.tenantId, requestFiles.tenantId), eq(files.id, requestFiles.fileId)))
         .innerJoin(attacher, eq(attacher.id, requestFiles.attachedBy))
         .where(and(eq(requestFiles.tenantId, tenantId), eq(requestFiles.requestId, requestId)))
         .orderBy(asc(requestFiles.attachedAt), asc(files.name), asc(files.id));
     },
 
     /** One of the request's attached files; none for a file of another request, or one already removed. */
-    findFile(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-      fileId: string,
-    ): Promise<RequestFileRowType[]> {
+    findFile(db: Executor, tenantId: string, requestId: string, fileId: string): Promise<RequestFileRowType[]> {
       return db
         .select(fileColumns)
         .from(requestFiles)
-        .innerJoin(
-          files,
-          and(eq(files.tenantId, requestFiles.tenantId), eq(files.id, requestFiles.fileId)),
-        )
+        .innerJoin(files, and(eq(files.tenantId, requestFiles.tenantId), eq(files.id, requestFiles.fileId)))
         .innerJoin(attacher, eq(attacher.id, requestFiles.attachedBy))
-        .where(
-          and(
-            eq(requestFiles.tenantId, tenantId),
-            eq(requestFiles.requestId, requestId),
-            eq(requestFiles.fileId, fileId),
-          ),
-        );
+        .where(and(eq(requestFiles.tenantId, tenantId), eq(requestFiles.requestId, requestId), eq(requestFiles.fileId, fileId)));
     },
 
     /** The request's open question, if any. */
-    openInformation(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-    ): Promise<InformationRequestRowType[]> {
+    openInformation(db: Executor, tenantId: string, requestId: string): Promise<InformationRequestRowType[]> {
       return db
         .select()
         .from(informationRequests)
-        .where(
-          and(
-            eq(informationRequests.tenantId, tenantId),
-            eq(informationRequests.requestId, requestId),
-            eq(informationRequests.state, "open"),
-          ),
-        );
+        .where(and(eq(informationRequests.tenantId, tenantId), eq(informationRequests.requestId, requestId), eq(informationRequests.state, 'open')));
     },
 
-    insertInformation(
-      db: Executor,
-      values: NewInformationRequestType,
-    ): Promise<InformationRequestRowType[]> {
+    insertInformation(db: Executor, values: NewInformationRequestType): Promise<InformationRequestRowType[]> {
       return db.insert(informationRequests).values(values).returning();
     },
 
     /** One of the request's questions; none for another request's. */
-    findInformation(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-      informationId: string,
-    ): Promise<InformationRequestRowType[]> {
+    findInformation(db: Executor, tenantId: string, requestId: string, informationId: string): Promise<InformationRequestRowType[]> {
       return db
         .select()
         .from(informationRequests)
-        .where(
-          and(
-            eq(informationRequests.tenantId, tenantId),
-            eq(informationRequests.requestId, requestId),
-            eq(informationRequests.id, informationId),
-          ),
-        );
+        .where(and(eq(informationRequests.tenantId, tenantId), eq(informationRequests.requestId, requestId), eq(informationRequests.id, informationId)));
     },
 
     endInformation(
@@ -345,7 +244,7 @@ export function createRequestsRepository() {
       tenantId: string,
       informationId: string,
       patch: {
-        state: "answered" | "cancelled";
+        state: 'answered' | 'cancelled';
         answer?: string;
         endedAt: Date;
         endedBy: string;
@@ -354,39 +253,18 @@ export function createRequestsRepository() {
       return db
         .update(informationRequests)
         .set(patch)
-        .where(
-          and(
-            eq(informationRequests.tenantId, tenantId),
-            eq(informationRequests.id, informationId),
-          ),
-        );
+        .where(and(eq(informationRequests.tenantId, tenantId), eq(informationRequests.id, informationId)));
     },
 
     /** Marks a question that is still open as `closed`, because its request closed. */
-    closeOpenInformation(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-      endedAt: Date,
-      endedBy: string,
-    ) {
+    closeOpenInformation(db: Executor, tenantId: string, requestId: string, endedAt: Date, endedBy: string) {
       return db
         .update(informationRequests)
-        .set({ state: "closed", endedAt, endedBy })
-        .where(
-          and(
-            eq(informationRequests.tenantId, tenantId),
-            eq(informationRequests.requestId, requestId),
-            eq(informationRequests.state, "open"),
-          ),
-        );
+        .set({ state: 'closed', endedAt, endedBy })
+        .where(and(eq(informationRequests.tenantId, tenantId), eq(informationRequests.requestId, requestId), eq(informationRequests.state, 'open')));
     },
 
-    informationOf(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-    ): Promise<InformationRequestListRowType[]> {
+    informationOf(db: Executor, tenantId: string, requestId: string): Promise<InformationRequestListRowType[]> {
       return db
         .select({
           ...getTableColumns(informationRequests),
@@ -396,19 +274,12 @@ export function createRequestsRepository() {
         .from(informationRequests)
         .innerJoin(asker, eq(asker.id, informationRequests.askedBy))
         .leftJoin(ender, eq(ender.id, informationRequests.endedBy))
-        .where(
-          and(
-            eq(informationRequests.tenantId, tenantId),
-            eq(informationRequests.requestId, requestId),
-          ),
-        )
+        .where(and(eq(informationRequests.tenantId, tenantId), eq(informationRequests.requestId, requestId)))
         .orderBy(asc(informationRequests.askedAt), asc(informationRequests.id));
     },
 
     deleteFileLink(db: Executor, tenantId: string, fileId: string) {
-      return db
-        .delete(requestFiles)
-        .where(and(eq(requestFiles.tenantId, tenantId), eq(requestFiles.fileId, fileId)));
+      return db.delete(requestFiles).where(and(eq(requestFiles.tenantId, tenantId), eq(requestFiles.fileId, fileId)));
     },
 
     /** The member's unit now; no row for a user outside the tenant. */
@@ -432,7 +303,7 @@ export function createRequestsRepository() {
         })
         .from(services)
         .where(and(eq(services.tenantId, tenantId), eq(services.id, serviceId)))
-        .for("share");
+        .for('share');
     },
 
     lockPriority(db: Executor, tenantId: string, priorityId: string): Promise<PriorityRowType[]> {
@@ -445,7 +316,7 @@ export function createRequestsRepository() {
         })
         .from(priorities)
         .where(and(eq(priorities.tenantId, tenantId), eq(priorities.id, priorityId)))
-        .for("share");
+        .for('share');
     },
 
     lockWorkflow(db: Executor, tenantId: string, workflowId: string): Promise<WorkflowRowType[]> {
@@ -457,26 +328,15 @@ export function createRequestsRepository() {
         })
         .from(workflows)
         .where(and(eq(workflows.tenantId, tenantId), eq(workflows.id, workflowId)))
-        .for("share");
+        .for('share');
     },
 
     /** Whether the service currently allows the workflow. */
-    serviceAllows(
-      db: Executor,
-      tenantId: string,
-      serviceId: string,
-      workflowId: string,
-    ): Promise<{ workflowId: string }[]> {
+    serviceAllows(db: Executor, tenantId: string, serviceId: string, workflowId: string): Promise<{ workflowId: string }[]> {
       return db
         .select({ workflowId: serviceWorkflows.workflowId })
         .from(serviceWorkflows)
-        .where(
-          and(
-            eq(serviceWorkflows.tenantId, tenantId),
-            eq(serviceWorkflows.serviceId, serviceId),
-            eq(serviceWorkflows.workflowId, workflowId),
-          ),
-        );
+        .where(and(eq(serviceWorkflows.tenantId, tenantId), eq(serviceWorkflows.serviceId, serviceId), eq(serviceWorkflows.workflowId, workflowId)));
     },
 
     /** The stages of one workflow version, in order. */
@@ -503,22 +363,11 @@ export function createRequestsRepository() {
       return db
         .select()
         .from(requestStageRuns)
-        .where(
-          and(
-            eq(requestStageRuns.tenantId, tenantId),
-            eq(requestStageRuns.requestId, requestId),
-            inArray(requestStageRuns.state, ["active", "held"]),
-          ),
-        );
+        .where(and(eq(requestStageRuns.tenantId, tenantId), eq(requestStageRuns.requestId, requestId), inArray(requestStageRuns.state, ['active', 'held'])));
     },
 
     /** Every run of the requests, in the order they started, with the stage's name. */
-    runsOf(
-      db: Executor,
-      tenantId: string,
-      requestIds: string[],
-      liveOnly = false,
-    ): Promise<StageRunViewRowType[]> {
+    runsOf(db: Executor, tenantId: string, requestIds: string[], liveOnly = false): Promise<StageRunViewRowType[]> {
       if (requestIds.length === 0) {
         return Promise.resolve([]);
       }
@@ -529,21 +378,9 @@ export function createRequestsRepository() {
           endedByName: users.userName,
         })
         .from(requestStageRuns)
-        .innerJoin(
-          workflowStages,
-          and(
-            eq(workflowStages.tenantId, requestStageRuns.tenantId),
-            eq(workflowStages.id, requestStageRuns.workflowStageId),
-          ),
-        )
+        .innerJoin(workflowStages, and(eq(workflowStages.tenantId, requestStageRuns.tenantId), eq(workflowStages.id, requestStageRuns.workflowStageId)))
         .leftJoin(users, eq(users.id, requestStageRuns.endedBy))
-        .where(
-          and(
-            eq(requestStageRuns.tenantId, tenantId),
-            inArray(requestStageRuns.requestId, requestIds),
-            liveOnly ? inArray(requestStageRuns.state, ["active", "held"]) : undefined,
-          ),
-        )
+        .where(and(eq(requestStageRuns.tenantId, tenantId), inArray(requestStageRuns.requestId, requestIds), liveOnly ? inArray(requestStageRuns.state, ['active', 'held']) : undefined))
         .orderBy(requestStageRuns.startedAt, requestStageRuns.ordinal);
     },
 
@@ -559,28 +396,15 @@ export function createRequestsRepository() {
         })
         .from(requestStageAssignees)
         .innerJoin(users, eq(users.id, requestStageAssignees.userId))
-        .where(
-          and(
-            eq(requestStageAssignees.tenantId, tenantId),
-            inArray(requestStageAssignees.runId, runIds),
-          ),
-        )
+        .where(and(eq(requestStageAssignees.tenantId, tenantId), inArray(requestStageAssignees.runId, runIds)))
         .orderBy(byName(users.userName), users.id);
     },
 
-    insertRun(
-      db: Executor,
-      values: typeof requestStageRuns.$inferInsert,
-    ): Promise<StageRunRowType[]> {
+    insertRun(db: Executor, values: typeof requestStageRuns.$inferInsert): Promise<StageRunRowType[]> {
       return db.insert(requestStageRuns).values(values).returning();
     },
 
-    updateRun(
-      db: Executor,
-      tenantId: string,
-      runId: string,
-      patch: Partial<typeof requestStageRuns.$inferInsert>,
-    ) {
+    updateRun(db: Executor, tenantId: string, runId: string, patch: Partial<typeof requestStageRuns.$inferInsert>) {
       return db
         .update(requestStageRuns)
         .set(patch)
@@ -588,58 +412,28 @@ export function createRequestsRepository() {
     },
 
     async replaceAssignees(db: Executor, tenantId: string, runId: string, userIds: string[]) {
-      await db
-        .delete(requestStageAssignees)
-        .where(
-          and(eq(requestStageAssignees.tenantId, tenantId), eq(requestStageAssignees.runId, runId)),
-        );
+      await db.delete(requestStageAssignees).where(and(eq(requestStageAssignees.tenantId, tenantId), eq(requestStageAssignees.runId, runId)));
       if (userIds.length > 0) {
-        await db
-          .insert(requestStageAssignees)
-          .values(userIds.map((userId) => ({ tenantId, runId, userId })));
+        await db.insert(requestStageAssignees).values(userIds.map((userId) => ({ tenantId, runId, userId })));
       }
     },
 
     /** The nearest earlier stage that ran to completion: skipped and returned runs are passed over (Q18). */
-    latestCompletedBefore(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-      ordinal: number,
-    ): Promise<StageRunRowType[]> {
+    latestCompletedBefore(db: Executor, tenantId: string, requestId: string, ordinal: number): Promise<StageRunRowType[]> {
       return db
         .select()
         .from(requestStageRuns)
-        .where(
-          and(
-            eq(requestStageRuns.tenantId, tenantId),
-            eq(requestStageRuns.requestId, requestId),
-            eq(requestStageRuns.state, "completed"),
-            lt(requestStageRuns.ordinal, ordinal),
-          ),
-        )
+        .where(and(eq(requestStageRuns.tenantId, tenantId), eq(requestStageRuns.requestId, requestId), eq(requestStageRuns.state, 'completed'), lt(requestStageRuns.ordinal, ordinal)))
         .orderBy(desc(requestStageRuns.ordinal), desc(requestStageRuns.startedAt))
         .limit(1);
     },
 
     /** Ends the live run, if there is one, because the request closed. */
-    cancelLiveRun(
-      db: Executor,
-      tenantId: string,
-      requestId: string,
-      endedAt: Date,
-      endedBy: string,
-    ) {
+    cancelLiveRun(db: Executor, tenantId: string, requestId: string, endedAt: Date, endedBy: string) {
       return db
         .update(requestStageRuns)
-        .set({ state: "cancelled", endedAt, endedBy })
-        .where(
-          and(
-            eq(requestStageRuns.tenantId, tenantId),
-            eq(requestStageRuns.requestId, requestId),
-            inArray(requestStageRuns.state, ["active", "held"]),
-          ),
-        );
+        .set({ state: 'cancelled', endedAt, endedBy })
+        .where(and(eq(requestStageRuns.tenantId, tenantId), eq(requestStageRuns.requestId, requestId), inArray(requestStageRuns.state, ['active', 'held'])));
     },
 
     activeServices(db: Executor, tenantId: string): Promise<ServiceRowType[]> {

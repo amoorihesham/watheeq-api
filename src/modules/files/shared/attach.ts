@@ -1,8 +1,8 @@
-import type { Tx } from "@/db/pool.js";
-import { AppError, type DetailCode, type ErrorDetail } from "@/http/errors.js";
-import { createFilesRepository } from "../files.repository.js";
-import { fileIdSchema } from "../files.schemas.js";
-import type { AttachedFileType, FileRowType } from "../files.types.js";
+import type { Tx } from '@/db/pool.js';
+import { AppError, type DetailCode, type ErrorDetail } from '@/http/errors.js';
+import { createFilesRepository } from '../files.repository.js';
+import { fileIdSchema } from '../files.schemas.js';
+import type { AttachedFileType, FileRowType } from '../files.types.js';
 
 const repo = createFilesRepository();
 
@@ -27,12 +27,7 @@ const toAttached = (row: FileRowType): AttachedFileType => {
  * tenant's, another person's, or not pending, so nothing is revealed), `file_expired`, or `file_attached` (also for a
  * file named twice). Returns the files in the order named.
  */
-export async function attachFiles(
-  tx: Tx,
-  tenantId: string,
-  userId: string,
-  fileIds: string[],
-): Promise<AttachedFileType[]> {
+export async function attachFiles(tx: Tx, tenantId: string, userId: string, fileIds: string[]): Promise<AttachedFileType[]> {
   if (fileIds.length === 0) {
     return [];
   }
@@ -41,12 +36,7 @@ export async function attachFiles(
     return parsed.success ? parsed.data : undefined;
   });
   const valid = ids.filter((id): id is string => id !== undefined);
-  const locked = new Map(
-    (valid.length > 0 ? await repo.lockForAttach(tx, tenantId, valid) : []).map((row) => [
-      row.id,
-      row,
-    ]),
-  );
+  const locked = new Map((valid.length > 0 ? await repo.lockForAttach(tx, tenantId, valid) : []).map((row) => [row.id, row]));
 
   const details: ErrorDetail[] = [];
   const seen = new Set<string>();
@@ -54,13 +44,13 @@ export async function attachFiles(
     const row = id === undefined ? undefined : locked.get(id);
     let code: DetailCode | undefined;
     if (!id || !row || row.uploadedBy !== userId) {
-      code = "unknown_file";
-    } else if (row.state === "attached" || seen.has(id)) {
-      code = "file_attached";
-    } else if (row.state !== "pending") {
-      code = "unknown_file";
+      code = 'unknown_file';
+    } else if (row.state === 'attached' || seen.has(id)) {
+      code = 'file_attached';
+    } else if (row.state !== 'pending') {
+      code = 'unknown_file';
     } else if (row.expired) {
-      code = "file_expired";
+      code = 'file_expired';
     }
     if (code) {
       details.push({ path: `fileIds.${index}`, code });
@@ -69,14 +59,14 @@ export async function attachFiles(
     }
   }
   if (details.length > 0) {
-    throw new AppError("VALIDATION_FAILED", details);
+    throw new AppError('VALIDATION_FAILED', details);
   }
 
   const attached = new Map((await repo.markAttached(tx, [...seen])).map((row) => [row.id, row]));
   return ids.map((id) => {
     const row = id === undefined ? undefined : attached.get(id);
     if (!row) {
-      throw new Error("attach returned no row for a locked file");
+      throw new Error('attach returned no row for a locked file');
     }
     return toAttached(row);
   });

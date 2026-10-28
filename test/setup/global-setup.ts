@@ -1,19 +1,14 @@
-import {
-  CreateBucketCommand,
-  DeleteObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
-import type { TestProject } from "vitest/node";
-import { runMigrations } from "../../src/db/migrate.js";
-import { type StorageSettingsType, s3ClientConfigOf } from "../../src/storage/index.js";
+import { CreateBucketCommand, DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
+import type { TestProject } from 'vitest/node';
+import { runMigrations } from '../../src/db/migrate.js';
+import { type StorageSettingsType, s3ClientConfigOf } from '../../src/storage/index.js';
 
 const S3_PORT = 8333;
-const BUCKET = "watheeq-test";
+const BUCKET = 'watheeq-test';
 // Keep in step with docker-compose.yml, which runs the same image for local development.
-const S3_IMAGE = "chrislusf/seaweedfs:4.50";
+const S3_IMAGE = 'chrislusf/seaweedfs:4.50';
 
 let postgres: StartedPostgreSqlContainer | undefined;
 let objectStore: StartedTestContainer | undefined;
@@ -35,17 +30,17 @@ async function createBucket(settings: StorageSettingsType): Promise<void> {
 }
 
 async function startObjectStore(): Promise<StorageSettingsType> {
-  const accessKey = "test-access-key";
-  const secretKey = "test-secret-key";
+  const accessKey = 'test-access-key';
+  const secretKey = 'test-secret-key';
   objectStore = await new GenericContainer(S3_IMAGE)
-    .withCommand(["server", "-filer", "-s3", "-dir=/data"])
+    .withCommand(['server', '-filer', '-s3', '-dir=/data'])
     .withEnvironment({ AWS_ACCESS_KEY_ID: accessKey, AWS_SECRET_ACCESS_KEY: secretKey })
     .withExposedPorts(S3_PORT)
     .withWaitStrategy(Wait.forListeningPorts())
     .start();
   const settings: StorageSettingsType = {
     endpoint: `http://${objectStore.getHost()}:${objectStore.getMappedPort(S3_PORT)}`,
-    region: "us-east-1",
+    region: 'us-east-1',
     bucket: BUCKET,
     accessKey,
     secretKey,
@@ -63,28 +58,25 @@ async function startObjectStore(): Promise<StorageSettingsType> {
  */
 async function warmUp(settings: StorageSettingsType): Promise<void> {
   const client = new S3Client(s3ClientConfigOf(settings));
-  const key = "warm-up";
-  await client.send(new PutObjectCommand({ Bucket: settings.bucket, Key: key, Body: "x" }));
+  const key = 'warm-up';
+  await client.send(new PutObjectCommand({ Bucket: settings.bucket, Key: key, Body: 'x' }));
   await client.send(new DeleteObjectCommand({ Bucket: settings.bucket, Key: key }));
 }
 
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
-  const [started, storage] = await Promise.all([
-    new PostgreSqlContainer("postgres:18").start(),
-    startObjectStore(),
-  ]);
+  const [started, storage] = await Promise.all([new PostgreSqlContainer('postgres:18').start(), startObjectStore()]);
   postgres = started;
   const databaseUrl = started.getConnectionUri();
   await runMigrations(databaseUrl);
 
-  project.provide("databaseUrl", databaseUrl);
-  project.provide("storage", storage);
+  project.provide('databaseUrl', databaseUrl);
+  project.provide('storage', storage);
   return async () => {
     await Promise.all([postgres?.stop(), objectStore?.stop()]);
   };
 }
 
-declare module "vitest" {
+declare module 'vitest' {
   export interface ProvidedContext {
     /** The one database role the app, migrations, and the CLI use (T2). */
     databaseUrl: string;

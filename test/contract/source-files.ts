@@ -1,7 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-export const MODULES_DIR = "src/modules";
+export const MODULES_DIR = 'src/modules';
 
 export interface SourceFileType {
   path: string;
@@ -19,5 +19,5 @@ function walk(dir: string): string[] {
 export function moduleFiles(suffix: string, root = MODULES_DIR): SourceFileType[] {
   return walk(root)
     .filter((path) => path.endsWith(suffix))
-    .map((path) => ({ path, text: readFileSync(path, "utf8") }));
+    .map((path) => ({ path, text: readFileSync(path, 'utf8') }));
 }

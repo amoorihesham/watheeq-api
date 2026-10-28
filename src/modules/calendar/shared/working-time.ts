@@ -1,14 +1,14 @@
-import { addDays } from "@/modules/subscriptions/index.js";
-import { MAX_WORKING_DAY_SEARCH_DAYS } from "../calendar.constants.js";
-import type { CalendarType, DayHoursType } from "../calendar.types.js";
-import { fromRiyadh, toRiyadh } from "./riyadh-time.js";
-import { dayHours } from "./week.js";
+import { addDays } from '@/modules/subscriptions/index.js';
+import { MAX_WORKING_DAY_SEARCH_DAYS } from '../calendar.constants.js';
+import type { CalendarType, DayHoursType } from '../calendar.types.js';
+import { fromRiyadh, toRiyadh } from './riyadh-time.js';
+import { dayHours } from './week.js';
 
 /** No working day within the search bound: a defect, since validation guarantees working days (P4.12). */
 export class CalendarExhaustedError extends Error {
   constructor(from: string) {
     super(`no working day within ${MAX_WORKING_DAY_SEARCH_DAYS} days after ${from}`);
-    this.name = "CalendarExhaustedError";
+    this.name = 'CalendarExhaustedError';
   }
 }
 

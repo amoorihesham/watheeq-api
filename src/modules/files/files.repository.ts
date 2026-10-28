@@ -1,17 +1,12 @@
-import { and, count, eq, inArray, sql } from "drizzle-orm";
-import type { Executor } from "@/db/pool.js";
-import { files, tenantMembers, users } from "@/db/schema/index.js";
-import {
-  ABANDONED_AFTER_HOURS,
-  OVERDUE_AFTER_HOURS,
-  PENDING_LIFETIME_HOURS,
-} from "./files.constants.js";
-import type { DueFileRowType, FileRowType, LockedFileRowType, NewFileType } from "./files.types.js";
+import { and, count, eq, inArray, sql } from 'drizzle-orm';
+import type { Executor } from '@/db/pool.js';
+import { files, tenantMembers, users } from '@/db/schema/index.js';
+import { ABANDONED_AFTER_HOURS, OVERDUE_AFTER_HOURS, PENDING_LIFETIME_HOURS } from './files.constants.js';
+import type { DueFileRowType, FileRowType, LockedFileRowType, NewFileType } from './files.types.js';
 
 const hours = (value: number) => sql`make_interval(hours => ${value})`;
 
-const ofUploader = (tenantId: string, userId: string, fileId: string) =>
-  and(eq(files.tenantId, tenantId), eq(files.uploadedBy, userId), eq(files.id, fileId));
+const ofUploader = (tenantId: string, userId: string, fileId: string) => and(eq(files.tenantId, tenantId), eq(files.uploadedBy, userId), eq(files.id, fileId));
 
 /** Tenant code: every query is filtered by the caller's tenant (T2), except the sweep, which serves all tenants. */
 export function createFilesRepository() {
@@ -21,9 +16,7 @@ export function createFilesRepository() {
      * reservation (Phase 5.5 spec, 4.3). Keyed apart from the seat lock, which uses the bare tenant id.
      */
     lockUploads(db: Executor, tenantId: string) {
-      return db.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${`uploads:${tenantId}`}, 0))`,
-      );
+      return db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`uploads:${tenantId}`}, 0))`);
     },
 
     findUploader(db: Executor, tenantId: string, userId: string): Promise<{ isActive: boolean }[]> {
@@ -38,7 +31,7 @@ export function createFilesRepository() {
       return db
         .select({ open: count() })
         .from(files)
-        .where(and(eq(files.uploadedBy, userId), inArray(files.state, ["uploading", "pending"])));
+        .where(and(eq(files.uploadedBy, userId), inArray(files.state, ['uploading', 'pending'])));
     },
 
     insert(db: Executor, values: NewFileType): Promise<FileRowType[]> {
@@ -46,15 +39,11 @@ export function createFilesRepository() {
     },
 
     /** Only an `uploading` row moves on: a row the sweep already deleted stays gone. */
-    markPending(
-      db: Executor,
-      fileId: string,
-      detected: { contentType: string; sha256: string },
-    ): Promise<FileRowType[]> {
+    markPending(db: Executor, fileId: string, detected: { contentType: string; sha256: string }): Promise<FileRowType[]> {
       return db
         .update(files)
-        .set({ state: "pending", ...detected })
-        .where(and(eq(files.id, fileId), eq(files.state, "uploading")))
+        .set({ state: 'pending', ...detected })
+        .where(and(eq(files.id, fileId), eq(files.state, 'uploading')))
         .returning();
     },
 
@@ -62,28 +51,18 @@ export function createFilesRepository() {
       return db.delete(files).where(eq(files.id, fileId));
     },
 
-    findPendingOf(
-      db: Executor,
-      tenantId: string,
-      userId: string,
-      fileId: string,
-    ): Promise<FileRowType[]> {
+    findPendingOf(db: Executor, tenantId: string, userId: string, fileId: string): Promise<FileRowType[]> {
       return db
         .select()
         .from(files)
-        .where(and(ofUploader(tenantId, userId, fileId), eq(files.state, "pending")));
+        .where(and(ofUploader(tenantId, userId, fileId), eq(files.state, 'pending')));
     },
 
-    discardPendingOf(
-      db: Executor,
-      tenantId: string,
-      userId: string,
-      fileId: string,
-    ): Promise<{ id: string }[]> {
+    discardPendingOf(db: Executor, tenantId: string, userId: string, fileId: string): Promise<{ id: string }[]> {
       return db
         .update(files)
-        .set({ state: "discarded" })
-        .where(and(ofUploader(tenantId, userId, fileId), eq(files.state, "pending")))
+        .set({ state: 'discarded' })
+        .where(and(ofUploader(tenantId, userId, fileId), eq(files.state, 'pending')))
         .returning({ id: files.id });
     },
 
@@ -99,28 +78,18 @@ export function createFilesRepository() {
         .from(files)
         .where(and(eq(files.tenantId, tenantId), inArray(files.id, fileIds)))
         .orderBy(files.id)
-        .for("update");
+        .for('update');
     },
 
     markAttached(db: Executor, fileIds: string[]): Promise<FileRowType[]> {
-      return db
-        .update(files)
-        .set({ state: "attached", attachedAt: sql`now()` })
-        .where(inArray(files.id, fileIds))
-        .returning();
+      return db.update(files).set({ state: 'attached', attachedAt: sql`now()` }).where(inArray(files.id, fileIds)).returning();
     },
 
     markDiscarded(db: Executor, tenantId: string, fileIds: string[]): Promise<{ id: string }[]> {
       return db
         .update(files)
-        .set({ state: "discarded", attachedAt: null })
-        .where(
-          and(
-            eq(files.tenantId, tenantId),
-            inArray(files.id, fileIds),
-            inArray(files.state, ["pending", "attached"]),
-          ),
-        )
+        .set({ state: 'discarded', attachedAt: null })
+        .where(and(eq(files.tenantId, tenantId), inArray(files.id, fileIds), inArray(files.state, ['pending', 'attached'])))
         .returning({ id: files.id });
     },
 
@@ -130,7 +99,7 @@ export function createFilesRepository() {
      * returned, so a file attached a moment ago is never deleted (Phase 5.5 spec, 4.3 "Races with requests").
      */
     lockDue(db: Executor, limit: number) {
-      return db.execute<{ id: string; tenant_id: string; kind: DueFileRowType["kind"] }>(sql`
+      return db.execute<{ id: string; tenant_id: string; kind: DueFileRowType['kind'] }>(sql`
         select id, tenant_id,
           case state when 'discarded' then 'discarded' when 'pending' then 'expired' else 'abandoned' end as kind
         from files

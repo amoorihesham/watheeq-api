@@ -1,5 +1,5 @@
-import { hash, verify } from "@node-rs/argon2";
-import { PASSWORD_HASH_PARAMS } from "../auth.constants.js";
+import { hash, verify } from '@node-rs/argon2';
+import { PASSWORD_HASH_PARAMS } from '../auth.constants.js';
 
 export function hashPassword(password: string): Promise<string> {
   return hash(password, PASSWORD_HASH_PARAMS);

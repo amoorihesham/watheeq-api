@@ -1,5 +1,5 @@
-import { parseCliConfig } from "../config/config.js";
-import { runMigrations } from "../db/migrate.js";
+import { parseCliConfig } from '../config/config.js';
+import { runMigrations } from '../db/migrate.js';
 
 const parsed = parseCliConfig(process.env);
 if (!parsed.ok) {
@@ -9,7 +9,7 @@ if (!parsed.ok) {
 
 try {
   await runMigrations(parsed.config.database.url);
-  console.log("migrations applied");
+  console.log('migrations applied');
 } catch (err) {
   console.error(err);
   process.exit(1);

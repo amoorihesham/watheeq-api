@@ -1,17 +1,17 @@
-import { addDays } from "@/modules/subscriptions/index.js";
-import { HIJRI_MAX_YEAR, HIJRI_MIN_YEAR } from "../calendar.constants.js";
-import type { HijriDateType } from "../calendar.types.js";
+import { addDays } from '@/modules/subscriptions/index.js';
+import { HIJRI_MAX_YEAR, HIJRI_MIN_YEAR } from '../calendar.constants.js';
+import type { HijriDateType } from '../calendar.types.js';
 
 // Umm al-Qura, the Saudi civil calendar, from the runtime's ICU data (P4.6).
-const hijriFormat = new Intl.DateTimeFormat("en-US-u-ca-islamic-umalqura-nu-latn", {
-  timeZone: "UTC",
-  year: "numeric",
-  month: "numeric",
-  day: "numeric",
+const hijriFormat = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura-nu-latn', {
+  timeZone: 'UTC',
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
 });
 
 /** 1 Muharram 1 AH in the proleptic Gregorian calendar, and the mean month length: only for a first guess. */
-const HIJRI_EPOCH = "0622-07-19";
+const HIJRI_EPOCH = '0622-07-19';
 const MEAN_MONTH_DAYS = 29.530589;
 
 // Conversions are pure, and a server only ever asks about a few thousand dates.
@@ -24,9 +24,8 @@ export function toHijri(date: string): HijriDateType {
     return cached;
   }
   const parts = hijriFormat.formatToParts(new Date(`${date}T00:00:00Z`));
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((p) => p.type === type)?.value);
-  const hijri = { year: value("year"), month: value("month"), day: value("day") };
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  const hijri = { year: value('year'), month: value('month'), day: value('day') };
   hijriCache.set(date, hijri);
   return hijri;
 }

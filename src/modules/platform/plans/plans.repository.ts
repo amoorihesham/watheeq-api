@@ -1,8 +1,8 @@
-import { count, eq, getTableColumns, type SQL, sql } from "drizzle-orm";
-import type { Executor } from "@/db/pool.js";
-import { plans } from "@/db/schema/index.js";
-import type { PageRequestType } from "@/http/list.js";
-import type { NewPlanType, PlanChangesType, PlanType } from "./plans.types.js";
+import { count, eq, getTableColumns, type SQL, sql } from 'drizzle-orm';
+import type { Executor } from '@/db/pool.js';
+import { plans } from '@/db/schema/index.js';
+import type { PageRequestType } from '@/http/list.js';
+import type { NewPlanType, PlanChangesType, PlanType } from './plans.types.js';
 
 export function createPlansRepository() {
   return {
@@ -30,7 +30,7 @@ export function createPlansRepository() {
 
     /** Locks the row, so the audited "before" is the state this transaction replaces. */
     findByIdForUpdate(db: Executor, planId: string): Promise<PlanType[]> {
-      return db.select().from(plans).where(eq(plans.id, planId)).for("update");
+      return db.select().from(plans).where(eq(plans.id, planId)).for('update');
     },
 
     update(db: Executor, planId: string, changes: PlanChangesType): Promise<PlanType[]> {

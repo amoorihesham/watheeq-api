@@ -1,16 +1,15 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import type { Executor } from "@/db/pool.js";
-import { calendarPeriodOverrides, calendarPeriods, workingHours } from "@/db/schema/index.js";
-import { riyadhToday } from "@/modules/subscriptions/index.js";
-import type { HoursVersionType, WeekShapeType } from "./calendar.types.js";
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import type { Executor } from '@/db/pool.js';
+import { calendarPeriodOverrides, calendarPeriods, workingHours } from '@/db/schema/index.js';
+import { riyadhToday } from '@/modules/subscriptions/index.js';
+import type { HoursVersionType, WeekShapeType } from './calendar.types.js';
 
 type NewPeriodRowType = typeof calendarPeriods.$inferInsert;
 type NewOverrideRowType = typeof calendarPeriodOverrides.$inferInsert;
 
 const hoursColumns = { effectiveFrom: workingHours.effectiveFrom, week: workingHours.week };
 
-const ofVersion = (tenantId: string, effectiveFrom: string) =>
-  and(eq(workingHours.tenantId, tenantId), eq(workingHours.effectiveFrom, effectiveFrom));
+const ofVersion = (tenantId: string, effectiveFrom: string) => and(eq(workingHours.tenantId, tenantId), eq(workingHours.effectiveFrom, effectiveFrom));
 
 /** Tenant code: every query is filtered by the caller's tenant (T2). */
 export function createCalendarRepository() {
@@ -20,9 +19,7 @@ export function createCalendarRepository() {
      * the seat lock's, so a calendar edit never waits for an invitation.
      */
     lock(db: Executor, tenantId: string) {
-      return db.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${`calendar:${tenantId}`}, 0))`,
-      );
+      return db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`calendar:${tenantId}`}, 0))`);
     },
 
     today(db: Executor) {
@@ -30,23 +27,14 @@ export function createCalendarRepository() {
     },
 
     listHours(db: Executor, tenantId: string): Promise<HoursVersionType[]> {
-      return db
-        .select(hoursColumns)
-        .from(workingHours)
-        .where(eq(workingHours.tenantId, tenantId))
-        .orderBy(asc(workingHours.effectiveFrom));
+      return db.select(hoursColumns).from(workingHours).where(eq(workingHours.tenantId, tenantId)).orderBy(asc(workingHours.effectiveFrom));
     },
 
     findHours(db: Executor, tenantId: string, effectiveFrom: string): Promise<HoursVersionType[]> {
       return db.select(hoursColumns).from(workingHours).where(ofVersion(tenantId, effectiveFrom));
     },
 
-    upsertHours(
-      db: Executor,
-      tenantId: string,
-      effectiveFrom: string,
-      week: WeekShapeType,
-    ): Promise<HoursVersionType[]> {
+    upsertHours(db: Executor, tenantId: string, effectiveFrom: string, week: WeekShapeType): Promise<HoursVersionType[]> {
       return db
         .insert(workingHours)
         .values({ tenantId, effectiveFrom, week })
@@ -62,11 +50,7 @@ export function createCalendarRepository() {
     },
 
     listPeriods(db: Executor, tenantId: string) {
-      return db
-        .select()
-        .from(calendarPeriods)
-        .where(eq(calendarPeriods.tenantId, tenantId))
-        .orderBy(asc(calendarPeriods.createdAt), asc(calendarPeriods.id));
+      return db.select().from(calendarPeriods).where(eq(calendarPeriods.tenantId, tenantId)).orderBy(asc(calendarPeriods.createdAt), asc(calendarPeriods.id));
     },
 
     findPeriod(db: Executor, tenantId: string, periodId: string) {
@@ -80,12 +64,7 @@ export function createCalendarRepository() {
       return db.insert(calendarPeriods).values(values).returning();
     },
 
-    updatePeriod(
-      db: Executor,
-      tenantId: string,
-      periodId: string,
-      values: Partial<NewPeriodRowType>,
-    ) {
+    updatePeriod(db: Executor, tenantId: string, periodId: string, values: Partial<NewPeriodRowType>) {
       return db
         .update(calendarPeriods)
         .set({ ...values, updatedAt: sql`now()` })
@@ -94,9 +73,7 @@ export function createCalendarRepository() {
     },
 
     deletePeriod(db: Executor, tenantId: string, periodId: string) {
-      return db
-        .delete(calendarPeriods)
-        .where(and(eq(calendarPeriods.tenantId, tenantId), eq(calendarPeriods.id, periodId)));
+      return db.delete(calendarPeriods).where(and(eq(calendarPeriods.tenantId, tenantId), eq(calendarPeriods.id, periodId)));
     },
 
     upsertOverride(db: Executor, values: NewOverrideRowType) {
@@ -110,44 +87,20 @@ export function createCalendarRepository() {
     },
 
     deleteOverride(db: Executor, tenantId: string, periodId: string, year: number) {
-      return db
-        .delete(calendarPeriodOverrides)
-        .where(
-          and(
-            eq(calendarPeriodOverrides.tenantId, tenantId),
-            eq(calendarPeriodOverrides.periodId, periodId),
-            eq(calendarPeriodOverrides.year, year),
-          ),
-        );
+      return db.delete(calendarPeriodOverrides).where(and(eq(calendarPeriodOverrides.tenantId, tenantId), eq(calendarPeriodOverrides.periodId, periodId), eq(calendarPeriodOverrides.year, year)));
     },
 
     /** Moves adjustments to a replacement version (P4.8), or deletes them when `toPeriodId` is null. */
-    async moveOverrides(
-      db: Executor,
-      tenantId: string,
-      fromPeriodId: string,
-      years: number[],
-      toPeriodId: string | null,
-    ) {
+    async moveOverrides(db: Executor, tenantId: string, fromPeriodId: string, years: number[], toPeriodId: string | null) {
       if (years.length === 0) {
         return;
       }
-      const ofYears = and(
-        eq(calendarPeriodOverrides.tenantId, tenantId),
-        eq(calendarPeriodOverrides.periodId, fromPeriodId),
-        inArray(calendarPeriodOverrides.year, years),
-      );
-      await (toPeriodId === null
-        ? db.delete(calendarPeriodOverrides).where(ofYears)
-        : db.update(calendarPeriodOverrides).set({ periodId: toPeriodId }).where(ofYears));
+      const ofYears = and(eq(calendarPeriodOverrides.tenantId, tenantId), eq(calendarPeriodOverrides.periodId, fromPeriodId), inArray(calendarPeriodOverrides.year, years));
+      await (toPeriodId === null ? db.delete(calendarPeriodOverrides).where(ofYears) : db.update(calendarPeriodOverrides).set({ periodId: toPeriodId }).where(ofYears));
     },
 
     listOverrides(db: Executor, tenantId: string) {
-      return db
-        .select()
-        .from(calendarPeriodOverrides)
-        .where(eq(calendarPeriodOverrides.tenantId, tenantId))
-        .orderBy(asc(calendarPeriodOverrides.year));
+      return db.select().from(calendarPeriodOverrides).where(eq(calendarPeriodOverrides.tenantId, tenantId)).orderBy(asc(calendarPeriodOverrides.year));
     },
   };
 }

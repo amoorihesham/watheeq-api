@@ -1,12 +1,12 @@
-import type { Request, RequestHandler } from "express";
-import type { Db } from "@/db/pool.js";
-import { AppError } from "@/http/errors.js";
-import { createSubscriptionsRepository } from "../subscriptions.repository.js";
-import type { SubscriptionContextType } from "../subscriptions.types.js";
-import { toSubscriptionView } from "./view.js";
+import type { Request, RequestHandler } from 'express';
+import type { Db } from '@/db/pool.js';
+import { AppError } from '@/http/errors.js';
+import { createSubscriptionsRepository } from '../subscriptions.repository.js';
+import type { SubscriptionContextType } from '../subscriptions.types.js';
+import { toSubscriptionView } from './view.js';
 
 const repo = createSubscriptionsRepository();
-const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
  * Mount on every tenant router after `authenticate()` and `requireRole("user")`. Loads the caller's subscription
@@ -18,16 +18,16 @@ export function subscriptionGuard(db: Db): RequestHandler {
   return async (req, _res, next) => {
     const tenantId = req.auth?.tenant?.id;
     if (!tenantId) {
-      throw new AppError("FORBIDDEN");
+      throw new AppError('FORBIDDEN');
     }
     const [row] = await repo.findByTenantId(db, tenantId);
     if (!row) {
       throw new Error(`tenant ${tenantId} has no subscription`);
     }
-    const today = (await repo.today(db)).rows[0]?.today ?? "";
+    const today = (await repo.today(db)).rows[0]?.today ?? '';
     const subscription = toSubscriptionView(row, today);
-    if (subscription.state === "read_only" && !SAFE_METHODS.has(req.method)) {
-      throw new AppError("SUBSCRIPTION_READ_ONLY");
+    if (subscription.state === 'read_only' && !SAFE_METHODS.has(req.method)) {
+      throw new AppError('SUBSCRIPTION_READ_ONLY');
     }
     req.subscription = { tenantId, subscription };
     next();
@@ -37,8 +37,8 @@ export function subscriptionGuard(db: Db): RequestHandler {
 /** Mount after `subscriptionGuard` on routes that need Active, such as request submission (R1.10). */
 export function requireActiveSubscription(): RequestHandler {
   return (req, _res, next) => {
-    if (subscriptionOf(req).subscription.state !== "active") {
-      throw new AppError("SUBSCRIPTION_NOT_ACTIVE");
+    if (subscriptionOf(req).subscription.state !== 'active') {
+      throw new AppError('SUBSCRIPTION_NOT_ACTIVE');
     }
     next();
   };
@@ -47,7 +47,7 @@ export function requireActiveSubscription(): RequestHandler {
 /** The guarded request's subscription; reaching this without `subscriptionGuard` is a wiring bug. */
 export function subscriptionOf(req: Request): SubscriptionContextType {
   if (!req.subscription) {
-    throw new Error("subscriptionGuard is not mounted on this route");
+    throw new Error('subscriptionGuard is not mounted on this route');
   }
   return req.subscription;
 }

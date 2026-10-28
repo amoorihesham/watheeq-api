@@ -1,23 +1,9 @@
-import { and, asc, count, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
-import { byName } from "@/db/order.js";
-import type { Executor } from "@/db/pool.js";
-import {
-  positions,
-  services,
-  serviceWorkflows,
-  workflowStages,
-  workflows,
-  workflowVersions,
-} from "@/db/schema/index.js";
-import type { PageRequestType, SortKeyType } from "@/http/list.js";
-import type {
-  LockedWorkflowRowType,
-  PositionStateRowType,
-  StageInputType,
-  StageRowType,
-  VersionRowType,
-  WorkflowRowType,
-} from "./workflows.types.js";
+import { and, asc, count, eq, inArray, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
+import { byName } from '@/db/order.js';
+import type { Executor } from '@/db/pool.js';
+import { positions, services, serviceWorkflows, workflowStages, workflows, workflowVersions } from '@/db/schema/index.js';
+import type { PageRequestType, SortKeyType } from '@/http/list.js';
+import type { LockedWorkflowRowType, PositionStateRowType, StageInputType, StageRowType, VersionRowType, WorkflowRowType } from './workflows.types.js';
 
 const workflowColumns = {
   id: workflows.id,
@@ -38,26 +24,18 @@ const versionColumns = {
 
 /** By name, then ID (T20). */
 export const WORKFLOW_SORT_KEYS: SortKeyType[] = [
-  { expr: byName(workflows.name), type: "text" },
-  { expr: sql`${workflows.id}`, type: "uuid" },
+  { expr: byName(workflows.name), type: 'text' },
+  { expr: sql`${workflows.id}`, type: 'uuid' },
 ];
 
-const ofTenant = (tenantId: string, workflowId: string) =>
-  and(eq(workflows.tenantId, tenantId), eq(workflows.id, workflowId));
+const ofTenant = (tenantId: string, workflowId: string) => and(eq(workflows.tenantId, tenantId), eq(workflows.id, workflowId));
 
 /** Tenant code: every query is filtered by the caller's tenant (T2). */
 export function createWorkflowsRepository() {
   return {
     /** The tenant's workflows that match the `retired` filter. */
     listWhere(tenantId: string, retired: string): SQL | undefined {
-      return and(
-        eq(workflows.tenantId, tenantId),
-        retired === "all"
-          ? undefined
-          : retired === "true"
-            ? isNotNull(workflows.retiredAt)
-            : isNull(workflows.retiredAt),
-      );
+      return and(eq(workflows.tenantId, tenantId), retired === 'all' ? undefined : retired === 'true' ? isNotNull(workflows.retiredAt) : isNull(workflows.retiredAt));
     },
 
     selectPage(db: Executor, page: PageRequestType) {
@@ -76,19 +54,11 @@ export function createWorkflowsRepository() {
     },
 
     findById(db: Executor, tenantId: string, workflowId: string): Promise<WorkflowRowType[]> {
-      return db
-        .select(workflowColumns)
-        .from(workflows)
-        .innerJoin(workflowVersions, eq(workflowVersions.id, workflows.currentVersionId))
-        .where(ofTenant(tenantId, workflowId));
+      return db.select(workflowColumns).from(workflows).innerJoin(workflowVersions, eq(workflowVersions.id, workflows.currentVersionId)).where(ofTenant(tenantId, workflowId));
     },
 
     /** Locks the workflow, so saves, retiring, and restoring of it run one after the other (Phase 5 spec, 4.3). */
-    findByIdForUpdate(
-      db: Executor,
-      tenantId: string,
-      workflowId: string,
-    ): Promise<LockedWorkflowRowType[]> {
+    findByIdForUpdate(db: Executor, tenantId: string, workflowId: string): Promise<LockedWorkflowRowType[]> {
       return db
         .select({
           id: workflows.id,
@@ -98,7 +68,7 @@ export function createWorkflowsRepository() {
         })
         .from(workflows)
         .where(ofTenant(tenantId, workflowId))
-        .for("update");
+        .for('update');
     },
 
     versionById(db: Executor, tenantId: string, versionId: string): Promise<VersionRowType[]> {
@@ -108,22 +78,11 @@ export function createWorkflowsRepository() {
         .where(and(eq(workflowVersions.tenantId, tenantId), eq(workflowVersions.id, versionId)));
     },
 
-    versionByNumber(
-      db: Executor,
-      tenantId: string,
-      workflowId: string,
-      number: number,
-    ): Promise<VersionRowType[]> {
+    versionByNumber(db: Executor, tenantId: string, workflowId: string, number: number): Promise<VersionRowType[]> {
       return db
         .select(versionColumns)
         .from(workflowVersions)
-        .where(
-          and(
-            eq(workflowVersions.tenantId, tenantId),
-            eq(workflowVersions.workflowId, workflowId),
-            eq(workflowVersions.number, number),
-          ),
-        );
+        .where(and(eq(workflowVersions.tenantId, tenantId), eq(workflowVersions.workflowId, workflowId), eq(workflowVersions.number, number)));
     },
 
     /** The stages of one version, in order, with the names of the positions they name. */
@@ -141,13 +100,7 @@ export function createWorkflowsRepository() {
           excludeParties: workflowStages.excludeParties,
         })
         .from(workflowStages)
-        .leftJoin(
-          positions,
-          and(
-            eq(positions.tenantId, workflowStages.tenantId),
-            eq(positions.id, workflowStages.targetPositionId),
-          ),
-        )
+        .leftJoin(positions, and(eq(positions.tenantId, workflowStages.tenantId), eq(positions.id, workflowStages.targetPositionId)))
         .where(and(eq(workflowStages.tenantId, tenantId), eq(workflowStages.versionId, versionId)))
         .orderBy(asc(workflowStages.ordinal));
     },
@@ -156,48 +109,25 @@ export function createWorkflowsRepository() {
      * Locks the named positions against retiring (`FOR SHARE` pairs with the retire's `FOR UPDATE`) and returns
      * their state; a missing or foreign id is absent from the result. Ordered by id so two saves cannot deadlock.
      */
-    lockPositions(
-      db: Executor,
-      tenantId: string,
-      positionIds: string[],
-    ): Promise<PositionStateRowType[]> {
+    lockPositions(db: Executor, tenantId: string, positionIds: string[]): Promise<PositionStateRowType[]> {
       return db
         .select({ id: positions.id, retiredAt: positions.retiredAt })
         .from(positions)
         .where(and(eq(positions.tenantId, tenantId), inArray(positions.id, positionIds)))
         .orderBy(positions.id)
-        .for("share");
+        .for('share');
     },
 
     /** The active services that allow the workflow; any of them makes retiring it refuse (R5.16). */
-    allowedByActiveService(
-      db: Executor,
-      tenantId: string,
-      workflowId: string,
-    ): Promise<{ id: string }[]> {
+    allowedByActiveService(db: Executor, tenantId: string, workflowId: string): Promise<{ id: string }[]> {
       return db
         .select({ id: services.id })
         .from(serviceWorkflows)
-        .innerJoin(
-          services,
-          and(
-            eq(services.tenantId, serviceWorkflows.tenantId),
-            eq(services.id, serviceWorkflows.serviceId),
-          ),
-        )
-        .where(
-          and(
-            eq(serviceWorkflows.tenantId, tenantId),
-            eq(serviceWorkflows.workflowId, workflowId),
-            isNull(services.retiredAt),
-          ),
-        );
+        .innerJoin(services, and(eq(services.tenantId, serviceWorkflows.tenantId), eq(services.id, serviceWorkflows.serviceId)))
+        .where(and(eq(serviceWorkflows.tenantId, tenantId), eq(serviceWorkflows.workflowId, workflowId), isNull(services.retiredAt)));
     },
 
-    insertWorkflow(
-      db: Executor,
-      values: { id: string; tenantId: string; name: string; currentVersionId: string },
-    ) {
+    insertWorkflow(db: Executor, values: { id: string; tenantId: string; name: string; currentVersionId: string }) {
       return db.insert(workflows).values(values);
     },
 
@@ -221,8 +151,8 @@ export function createWorkflowsRepository() {
           versionId,
           ordinal: index + 1,
           name: stage.name,
-          targetPositionId: "position" in stage.assignee ? stage.assignee.position : null,
-          targetBuiltin: "builtin" in stage.assignee ? stage.assignee.builtin : null,
+          targetPositionId: 'position' in stage.assignee ? stage.assignee.position : null,
+          targetBuiltin: 'builtin' in stage.assignee ? stage.assignee.builtin : null,
           whenUnresolved: stage.whenUnresolved,
           handlerMayNarrow: stage.handlerMayNarrow,
           handlerMayEscalate: stage.handlerMayEscalate,
@@ -232,12 +162,7 @@ export function createWorkflowsRepository() {
     },
 
     /** Renames the workflow and/or points it at a newer version. */
-    update(
-      db: Executor,
-      tenantId: string,
-      workflowId: string,
-      patch: { name?: string; currentVersionId?: string },
-    ) {
+    update(db: Executor, tenantId: string, workflowId: string, patch: { name?: string; currentVersionId?: string }) {
       return db
         .update(workflows)
         .set({ ...patch, updatedAt: sql`now()` })

@@ -1,12 +1,12 @@
-import { z } from "zod";
-import { subscriptionStatusResponseSchema } from "@/modules/subscriptions/subscriptions.responses.js";
+import { z } from 'zod';
+import { subscriptionStatusResponseSchema } from '@/modules/subscriptions/subscriptions.responses.js';
 
 export const authUserResponseSchema = z
   .strictObject({
     id: z.string(),
     email: z.string(),
     userName: z.string(),
-    role: z.enum(["user", "operator"]),
+    role: z.enum(['user', 'operator']),
     tenant: z
       .strictObject({
         id: z.string(),
@@ -16,7 +16,7 @@ export const authUserResponseSchema = z
       })
       .nullable(),
   })
-  .meta({ id: "AuthUser" });
+  .meta({ id: 'AuthUser' });
 
 /** The session: what `GET /auth/me` answers, and what login and refresh answer too (Q17). */
 export const sessionResponseSchema = z
@@ -25,4 +25,4 @@ export const sessionResponseSchema = z
     /** Null for an operator. Lets the client explain why actions are disabled in Grace or Read-only (R1.11). */
     subscription: subscriptionStatusResponseSchema.nullable(),
   })
-  .meta({ id: "Session" });
+  .meta({ id: 'Session' });

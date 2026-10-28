@@ -1,9 +1,9 @@
-import type { Db } from "@/db/pool.js";
-import { withTx } from "@/db/tx.js";
-import type { FileStoreType } from "@/storage/index.js";
-import { createFilesRepository } from "../files.repository.js";
-import type { SweepOptionsType, SweepResultType } from "../files.types.js";
-import { storageKeyOf } from "./keys.js";
+import type { Db } from '@/db/pool.js';
+import { withTx } from '@/db/tx.js';
+import type { FileStoreType } from '@/storage/index.js';
+import { createFilesRepository } from '../files.repository.js';
+import type { SweepOptionsType, SweepResultType } from '../files.types.js';
+import { storageKeyOf } from './keys.js';
 
 const repo = createFilesRepository();
 
@@ -14,11 +14,7 @@ const repo = createFilesRepository();
  * store fails the batch rolls back and no row disappears while its bytes remain. Stops when a batch comes up short
  * or the time budget is spent; the rest waits for the next run.
  */
-export async function sweepFiles(
-  db: Db,
-  store: FileStoreType,
-  { batchSize, budgetMs, signal }: SweepOptionsType,
-): Promise<SweepResultType> {
+export async function sweepFiles(db: Db, store: FileStoreType, { batchSize, budgetMs, signal }: SweepOptionsType): Promise<SweepResultType> {
   const result: SweepResultType = { discarded: 0, expired: 0, abandoned: 0 };
   const startedAt = Date.now();
   while (!signal?.aborted && Date.now() - startedAt < budgetMs) {

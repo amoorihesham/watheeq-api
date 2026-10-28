@@ -1,12 +1,12 @@
-import { eq, sql } from "drizzle-orm";
-import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
-import { byName } from "@/db/order.js";
-import type { Db, Executor } from "@/db/pool.js";
-import { roles } from "@/db/schema/index.js";
-import { withTx } from "@/db/tx.js";
-import { AppError, type ErrorDetail } from "@/http/errors.js";
-import { listInMemory, listPage } from "@/http/list.js";
-import type { PageType } from "@/http/respond.js";
+import { eq, sql } from 'drizzle-orm';
+import { type AuditContextType, writeAuditEntry } from '@/audit/index.js';
+import { byName } from '@/db/order.js';
+import type { Db, Executor } from '@/db/pool.js';
+import { roles } from '@/db/schema/index.js';
+import { withTx } from '@/db/tx.js';
+import { AppError, type ErrorDetail } from '@/http/errors.js';
+import { listInMemory, listPage } from '@/http/list.js';
+import type { PageType } from '@/http/respond.js';
 import {
   assertGrantsHeld,
   type GrantMapType,
@@ -18,23 +18,12 @@ import {
   TENANT_PERMISSIONS,
   type TenantPermissionType,
   type WantedGrantType,
-} from "@/modules/tenant-access/index.js";
-import type {
-  CreateRoleRequestType,
-  GrantRowType,
-  ListPermissionsQueryType,
-  ListRolesQueryType,
-  PermissionType,
-  RoleRowType,
-  RolesRepositoryType,
-  RoleType,
-  UpdateRoleRequestType,
-} from "./roles.types.js";
+} from '@/modules/tenant-access/index.js';
+import type { CreateRoleRequestType, GrantRowType, ListPermissionsQueryType, ListRolesQueryType, PermissionType, RoleRowType, RolesRepositoryType, RoleType, UpdateRoleRequestType } from './roles.types.js';
 
 const sameGrants = (a: GrantType[], b: GrantType[]) => JSON.stringify(a) === JSON.stringify(b);
 
-const grantsOfRole = (role: RoleRowType, rows: GrantRowType[]): GrantMapType =>
-  grantMapOf({ isSystem: role.isSystem, grants: rows.filter((row) => row.roleId === role.id) });
+const grantsOfRole = (role: RoleRowType, rows: GrantRowType[]): GrantMapType => grantMapOf({ isSystem: role.isSystem, grants: rows.filter((row) => row.roleId === role.id) });
 
 const toRole = (role: RoleRowType, rows: GrantRowType[], memberCount: number): RoleType => ({
   ...role,
@@ -42,8 +31,7 @@ const toRole = (role: RoleRowType, rows: GrantRowType[], memberCount: number): R
   memberCount,
 });
 
-const isCatalogKey = (key: string): key is TenantPermissionType =>
-  Object.hasOwn(PERMISSION_CATALOG, key);
+const isCatalogKey = (key: string): key is TenantPermissionType => Object.hasOwn(PERMISSION_CATALOG, key);
 
 /** Checks each requested grant against the catalog (R3.4); every problem is reported, by index. */
 function catalogGrants(requested: { key: string; scope: PermissionScopeType }[]): GrantType[] {
@@ -51,17 +39,17 @@ function catalogGrants(requested: { key: string; scope: PermissionScopeType }[])
   const grants = new Map<TenantPermissionType, PermissionScopeType>();
   requested.forEach(({ key, scope }, index) => {
     if (!isCatalogKey(key)) {
-      details.push({ path: `permissions.${index}.key`, code: "unknown_permission" });
+      details.push({ path: `permissions.${index}.key`, code: 'unknown_permission' });
     } else if (grants.has(key)) {
-      details.push({ path: `permissions.${index}.key`, code: "duplicate_permission" });
+      details.push({ path: `permissions.${index}.key`, code: 'duplicate_permission' });
     } else if (!(PERMISSION_CATALOG[key] as readonly string[]).includes(scope)) {
-      details.push({ path: `permissions.${index}.scope`, code: "scope_not_allowed" });
+      details.push({ path: `permissions.${index}.scope`, code: 'scope_not_allowed' });
     } else {
       grants.set(key, scope);
     }
   });
   if (details.length > 0) {
-    throw new AppError("VALIDATION_FAILED", details);
+    throw new AppError('VALIDATION_FAILED', details);
   }
   return grantListOf(grants);
 }
@@ -75,26 +63,14 @@ const askedAt = (requested: { key: string }[], grants: GrantType[]): WantedGrant
 
 export function createRolesService({ db, repo }: { db: Db; repo: RolesRepositoryType }) {
   /** The subset rule (R3.8), including the route's own permission (P3.4). */
-  const assertWithinActor = (
-    executor: Executor,
-    tenantId: string,
-    actorId: string,
-    wanted: WantedGrantType[],
-  ) =>
-    assertGrantsHeld(executor, tenantId, actorId, [
-      { key: "role.manage", scope: "organization" },
-      ...wanted,
-    ]);
+  const assertWithinActor = (executor: Executor, tenantId: string, actorId: string, wanted: WantedGrantType[]) => assertGrantsHeld(executor, tenantId, actorId, [{ key: 'role.manage', scope: 'organization' }, ...wanted]);
 
   async function loadRole(executor: Executor, tenantId: string, roleId: string) {
     const [role] = await repo.findById(executor, tenantId, roleId);
     if (!role) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
-    const [grants, [counted]] = await Promise.all([
-      repo.listGrants(executor, tenantId, roleId),
-      repo.countMembersByRole(executor, tenantId, roleId),
-    ]);
+    const [grants, [counted]] = await Promise.all([repo.listGrants(executor, tenantId, roleId), repo.countMembersByRole(executor, tenantId, roleId)]);
     return toRole(role, grants, counted?.memberCount ?? 0);
   }
 
@@ -102,21 +78,19 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
   async function lockEditableRole(executor: Executor, tenantId: string, roleId: string) {
     const [role] = await repo.findByIdForUpdate(executor, tenantId, roleId);
     if (!role) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     if (role.isSystem) {
-      throw new AppError("ROLE_PROTECTED");
+      throw new AppError('ROLE_PROTECTED');
     }
-    const grants = grantListOf(
-      grantsOfRole(role, await repo.listGrants(executor, tenantId, roleId)),
-    );
+    const grants = grantListOf(grantsOfRole(role, await repo.listGrants(executor, tenantId, roleId)));
     return { role, grants };
   }
 
   return {
     permissions(query: ListPermissionsQueryType): PageType<PermissionType> {
       return listInMemory({
-        list: "permissions",
+        list: 'permissions',
         query,
         items: TENANT_PERMISSIONS.map((key) => ({ key, scopes: [...PERMISSION_CATALOG[key]] })),
         keyOf: (permission) => permission.key,
@@ -126,21 +100,18 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
     async list(tenantId: string, query: ListRolesQueryType): Promise<PageType<RoleType>> {
       const page = await listPage({
         db,
-        list: "roles",
+        list: 'roles',
         query,
         keys: [
-          { expr: byName(roles.name), type: "text" },
-          { expr: sql`${roles.id}`, type: "uuid" },
+          { expr: byName(roles.name), type: 'text' },
+          { expr: sql`${roles.id}`, type: 'uuid' },
         ],
-        direction: "asc",
+        direction: 'asc',
         where: () => eq(roles.tenantId, tenantId),
         selectPage: repo.page,
         count: repo.count,
       });
-      const [grants, counts] = await Promise.all([
-        repo.listGrants(db, tenantId),
-        repo.countMembersByRole(db, tenantId),
-      ]);
+      const [grants, counts] = await Promise.all([repo.listGrants(db, tenantId), repo.countMembersByRole(db, tenantId)]);
       const memberCount = new Map(counts.map((row) => [row.roleId, row.memberCount]));
       return {
         ...page,
@@ -153,18 +124,13 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
     },
 
     /** A duplicate name (any case) reaches the error handler as ROLE_NAME_TAKEN (R3.5). */
-    create(
-      tenantId: string,
-      actorId: string,
-      body: CreateRoleRequestType,
-      context: AuditContextType,
-    ): Promise<RoleType> {
+    create(tenantId: string, actorId: string, body: CreateRoleRequestType, context: AuditContextType): Promise<RoleType> {
       const grants = catalogGrants(body.permissions);
       return withTx(db, async (tx) => {
         await assertWithinActor(tx, tenantId, actorId, askedAt(body.permissions, grants));
         const [role] = await repo.insert(tx, tenantId, body.name);
         if (!role) {
-          throw new Error("insert returned no row");
+          throw new Error('insert returned no row');
         }
         if (grants.length > 0) {
           await repo.insertGrants(tx, tenantId, role.id, grants);
@@ -172,8 +138,8 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "role.created",
-          resourceType: "role",
+          action: 'role.created',
+          resourceType: 'role',
           resourceId: role.id,
           details: { name: role.name, isSystem: false, permissions: grants },
         });
@@ -185,23 +151,13 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
      * Renames a role or replaces its grants (R3.6). Both the current and the new grants must be within the
      * actor's (R3.8), so nobody takes away powers they do not hold. A change reaches holders at their next refresh.
      */
-    update(
-      tenantId: string,
-      id: string,
-      actorId: string,
-      body: UpdateRoleRequestType,
-      context: AuditContextType,
-    ): Promise<RoleType> {
-      const requested =
-        body.permissions === undefined ? undefined : catalogGrants(body.permissions);
+    update(tenantId: string, id: string, actorId: string, body: UpdateRoleRequestType, context: AuditContextType): Promise<RoleType> {
+      const requested = body.permissions === undefined ? undefined : catalogGrants(body.permissions);
       return withTx(db, async (tx) => {
         const { role: before, grants: beforeGrants } = await lockEditableRole(tx, tenantId, id);
         const name = body.name ?? before.name;
         const grants = requested ?? beforeGrants;
-        await assertWithinActor(tx, tenantId, actorId, [
-          ...beforeGrants,
-          ...(body.permissions === undefined ? grants : askedAt(body.permissions, grants)),
-        ]);
+        await assertWithinActor(tx, tenantId, actorId, [...beforeGrants, ...(body.permissions === undefined ? grants : askedAt(body.permissions, grants))]);
 
         const nameChanged = name !== before.name;
         const grantsChanged = !sameGrants(grants, beforeGrants);
@@ -218,8 +174,8 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "role.updated",
-          resourceType: "role",
+          action: 'role.updated',
+          resourceType: 'role',
           resourceId: id,
           details: {
             before: {
@@ -237,25 +193,20 @@ export function createRolesService({ db, repo }: { db: Db; repo: RolesRepository
     },
 
     /** Deletes a role nobody holds, active or not (R3.7). The lock makes the check hold under concurrency. */
-    delete(
-      tenantId: string,
-      id: string,
-      actorId: string,
-      context: AuditContextType,
-    ): Promise<void> {
+    delete(tenantId: string, id: string, actorId: string, context: AuditContextType): Promise<void> {
       return withTx(db, async (tx) => {
         const { role, grants } = await lockEditableRole(tx, tenantId, id);
         await assertWithinActor(tx, tenantId, actorId, grants);
         const [holders] = await repo.countMembersByRole(tx, tenantId, id);
         if ((holders?.memberCount ?? 0) > 0) {
-          throw new AppError("ROLE_IN_USE");
+          throw new AppError('ROLE_IN_USE');
         }
         await repo.delete(tx, tenantId, id);
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "role.deleted",
-          resourceType: "role",
+          action: 'role.deleted',
+          resourceType: 'role',
           resourceId: id,
           details: { name: role.name, permissions: grants },
         });

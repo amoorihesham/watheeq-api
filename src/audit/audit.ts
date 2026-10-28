@@ -1,6 +1,6 @@
-import type { Tx } from "@/db/pool.js";
-import { auditLog } from "@/db/schema/index.js";
-import type { AuditEntryType } from "./audit.types.js";
+import type { Tx } from '@/db/pool.js';
+import { auditLog } from '@/db/schema/index.js';
+import type { AuditEntryType } from './audit.types.js';
 
 /** Accepts only a transaction, so the entry commits or rolls back together with the change it describes (T8). */
 export async function writeAuditEntry(tx: Tx, entry: AuditEntryType): Promise<void> {

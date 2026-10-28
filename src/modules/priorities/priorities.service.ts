@@ -1,20 +1,12 @@
-import { randomUUID } from "node:crypto";
-import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
-import type { Db, Executor } from "@/db/pool.js";
-import { withTx } from "@/db/tx.js";
-import { AppError } from "@/http/errors.js";
-import { listPage } from "@/http/list.js";
-import type { PageType } from "@/http/respond.js";
-import { PRIORITY_SORT_KEYS } from "./priorities.repository.js";
-import type {
-  CreatePriorityRequestType,
-  ListPrioritiesQueryType,
-  PrioritiesRepositoryType,
-  PriorityRowType,
-  PriorityType,
-  ReorderPrioritiesRequestType,
-  UpdatePriorityRequestType,
-} from "./priorities.types.js";
+import { randomUUID } from 'node:crypto';
+import { type AuditContextType, writeAuditEntry } from '@/audit/index.js';
+import type { Db, Executor } from '@/db/pool.js';
+import { withTx } from '@/db/tx.js';
+import { AppError } from '@/http/errors.js';
+import { listPage } from '@/http/list.js';
+import type { PageType } from '@/http/respond.js';
+import { PRIORITY_SORT_KEYS } from './priorities.repository.js';
+import type { CreatePriorityRequestType, ListPrioritiesQueryType, PrioritiesRepositoryType, PriorityRowType, PriorityType, ReorderPrioritiesRequestType, UpdatePriorityRequestType } from './priorities.types.js';
 
 const toPriority = (row: PriorityRowType): PriorityType => ({
   id: row.id,
@@ -24,14 +16,10 @@ const toPriority = (row: PriorityRowType): PriorityType => ({
 });
 
 export function createPrioritiesService({ db, repo }: { db: Db; repo: PrioritiesRepositoryType }) {
-  async function loadPriority(
-    executor: Executor,
-    tenantId: string,
-    priorityId: string,
-  ): Promise<PriorityType> {
+  async function loadPriority(executor: Executor, tenantId: string, priorityId: string): Promise<PriorityType> {
     const [row] = await repo.findById(executor, tenantId, priorityId);
     if (!row) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     return toPriority(row);
   }
@@ -40,7 +28,7 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
   async function lockPriority(tx: Executor, tenantId: string, priorityId: string) {
     const [row] = await repo.findByIdForUpdate(tx, tenantId, priorityId);
     if (!row) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     return row;
   }
@@ -49,10 +37,10 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
     async list(tenantId: string, query: ListPrioritiesQueryType): Promise<PageType<PriorityType>> {
       const page = await listPage({
         db,
-        list: "priorities",
+        list: 'priorities',
         query,
         keys: PRIORITY_SORT_KEYS,
-        direction: "asc",
+        direction: 'asc',
         where: ({ retired }) => repo.listWhere(tenantId, retired),
         selectPage: (tx, request) => repo.selectPage(tx, request),
         count: (tx, where) => repo.count(tx, where),
@@ -61,11 +49,7 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
     },
 
     /** Appends the priority to the end of the order (R5.12). A duplicate name reaches the error handler as PRIORITY_NAME_TAKEN. */
-    create(
-      tenantId: string,
-      body: CreatePriorityRequestType,
-      context: AuditContextType,
-    ): Promise<PriorityType> {
+    create(tenantId: string, body: CreatePriorityRequestType, context: AuditContextType): Promise<PriorityType> {
       return withTx(db, async (tx) => {
         await repo.lockOrder(tx, tenantId);
         const id = randomUUID();
@@ -79,8 +63,8 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "priority.created",
-          resourceType: "priority",
+          action: 'priority.created',
+          resourceType: 'priority',
           resourceId: id,
           details: { name: body.name, days: body.days },
         });
@@ -89,16 +73,11 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
     },
 
     /** Changes the name and/or the days; a save that changes nothing writes nothing. */
-    update(
-      tenantId: string,
-      id: string,
-      body: UpdatePriorityRequestType,
-      context: AuditContextType,
-    ): Promise<PriorityType> {
+    update(tenantId: string, id: string, body: UpdatePriorityRequestType, context: AuditContextType): Promise<PriorityType> {
       return withTx(db, async (tx) => {
         const priority = await lockPriority(tx, tenantId, id);
         if (priority.retiredAt) {
-          throw new AppError("RESOURCE_RETIRED");
+          throw new AppError('RESOURCE_RETIRED');
         }
         const patch: { name?: string; days?: number } = {};
         const before: Record<string, unknown> = {};
@@ -120,8 +99,8 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "priority.updated",
-          resourceType: "priority",
+          action: 'priority.updated',
+          resourceType: 'priority',
           resourceId: id,
           details: { before, after },
         });
@@ -133,29 +112,22 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
      * Sets the display order as a whole list of the active priorities (R5.12). The order lock serializes it with
      * creates, retires, and restores, so "exactly the active priorities" cannot go stale mid-save.
      */
-    reorder(
-      tenantId: string,
-      input: ReorderPrioritiesRequestType,
-      context: AuditContextType,
-    ): Promise<void> {
+    reorder(tenantId: string, input: ReorderPrioritiesRequestType, context: AuditContextType): Promise<void> {
       const { ids } = input;
       return withTx(db, async (tx) => {
         await repo.lockOrder(tx, tenantId);
         const before = await repo.activeIds(tx, tenantId);
-        const sameSet =
-          ids.length === before.length &&
-          new Set(ids).size === ids.length &&
-          before.every((id) => ids.includes(id));
+        const sameSet = ids.length === before.length && new Set(ids).size === ids.length && before.every((id) => ids.includes(id));
         if (!sameSet) {
-          throw new AppError("VALIDATION_FAILED", [{ path: "ids", code: "order_mismatch" }]);
+          throw new AppError('VALIDATION_FAILED', [{ path: 'ids', code: 'order_mismatch' }]);
         }
         if (ids.some((id, index) => id !== before[index])) {
           await repo.setOrder(tx, tenantId, ids);
           await writeAuditEntry(tx, {
             tenantId,
             ...context,
-            action: "priority.reordered",
-            resourceType: "priority",
+            action: 'priority.reordered',
+            resourceType: 'priority',
             resourceId: tenantId,
             details: { before, after: ids },
           });
@@ -175,8 +147,8 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "priority.retired",
-          resourceType: "priority",
+          action: 'priority.retired',
+          resourceType: 'priority',
           resourceId: id,
         });
         return loadPriority(tx, tenantId, id);
@@ -198,8 +170,8 @@ export function createPrioritiesService({ db, repo }: { db: Db; repo: Priorities
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "priority.restored",
-          resourceType: "priority",
+          action: 'priority.restored',
+          resourceType: 'priority',
           resourceId: id,
         });
         return loadPriority(tx, tenantId, id);

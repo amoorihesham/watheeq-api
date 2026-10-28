@@ -1,5 +1,5 @@
-import type { ErrorRequestHandler } from "express";
-import { AppError, type ErrorDetail, fromDatabaseError } from "../http/errors.js";
+import type { ErrorRequestHandler } from 'express';
+import { AppError, type ErrorDetail, fromDatabaseError } from '../http/errors.js';
 
 interface ErrorBody {
   error: { code: string; requestId: string; details: ErrorDetail[] };
@@ -12,26 +12,23 @@ interface ErrorBody {
  * error that merely has a `status` field a 500.
  */
 function fromExpressError(err: unknown): AppError | undefined {
-  if (typeof err !== "object" || err === null) {
+  if (typeof err !== 'object' || err === null) {
     return undefined;
   }
   const { status, expose, type } = err as { status?: unknown; expose?: unknown; type?: unknown };
   if (err instanceof URIError && status === 400) {
-    return new AppError("NOT_FOUND");
+    return new AppError('NOT_FOUND');
   }
   if (expose !== true) {
     return undefined;
   }
   switch (status) {
     case 400:
-      return new AppError(
-        "VALIDATION_FAILED",
-        type === "entity.parse.failed" ? [{ path: "", code: "invalid_json" }] : undefined,
-      );
+      return new AppError('VALIDATION_FAILED', type === 'entity.parse.failed' ? [{ path: '', code: 'invalid_json' }] : undefined);
     case 413:
-      return new AppError("PAYLOAD_TOO_LARGE");
+      return new AppError('PAYLOAD_TOO_LARGE');
     case 415:
-      return new AppError("UNSUPPORTED_MEDIA_TYPE");
+      return new AppError('UNSUPPORTED_MEDIA_TYPE');
     default:
       return undefined;
   }
@@ -47,7 +44,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     return;
   }
   const known = err instanceof AppError ? err : (fromExpressError(err) ?? fromDatabaseError(err));
-  const resolved = known ?? new AppError("INTERNAL");
+  const resolved = known ?? new AppError('INTERNAL');
   if (!known) {
     // pino-http logs the response line at error level and serializes `res.err` with its stack.
     res.err = err instanceof Error ? err : new Error(String(err));

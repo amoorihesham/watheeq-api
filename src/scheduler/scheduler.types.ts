@@ -1,5 +1,5 @@
-import type { Db } from "@/db/pool.js";
-import type { Logger } from "@/logging/logger.js";
+import type { Db } from '@/db/pool.js';
+import type { Logger } from '@/logging/logger.js';
 
 export interface JobContextType {
   db: Db;
@@ -33,4 +33,4 @@ export interface SchedulerType {
 }
 
 /** The parsed `JOBS` setting. */
-export type JobsSettingType = "all" | "none" | string[];
+export type JobsSettingType = 'all' | 'none' | string[];

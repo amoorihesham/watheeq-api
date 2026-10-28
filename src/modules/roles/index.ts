@@ -1,1 +1,1 @@
-export { createPermissionsRouter, createRolesRouter } from "./roles.routes.js";
+export { createPermissionsRouter, createRolesRouter } from './roles.routes.js';

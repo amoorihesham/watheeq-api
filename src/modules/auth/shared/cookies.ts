@@ -1,17 +1,8 @@
-import type { Response } from "express";
-import {
-  ACCESS_COOKIE,
-  ACCESS_COOKIE_FLAGS,
-  REFRESH_COOKIE,
-  REFRESH_COOKIE_FLAGS,
-} from "../auth.constants.js";
-import type { AuthSettingsType, AuthTokensType } from "../auth.types.js";
+import type { Response } from 'express';
+import { ACCESS_COOKIE, ACCESS_COOKIE_FLAGS, REFRESH_COOKIE, REFRESH_COOKIE_FLAGS } from '../auth.constants.js';
+import type { AuthSettingsType, AuthTokensType } from '../auth.types.js';
 
-export function setAuthCookies(
-  res: Response,
-  tokens: AuthTokensType,
-  settings: AuthSettingsType,
-): void {
+export function setAuthCookies(res: Response, tokens: AuthTokensType, settings: AuthSettingsType): void {
   res.cookie(ACCESS_COOKIE, tokens.accessToken, {
     ...ACCESS_COOKIE_FLAGS,
     maxAge: settings.accessTokenTtlSeconds * 1000,

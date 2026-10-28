@@ -1,13 +1,7 @@
-import { z } from "zod";
-import { booleanFilter, pageQuery } from "@/http/filters.js";
-import { assigneeTargetSchema } from "@/modules/positions/index.js";
-import {
-  MAX_STAGE_NAME_LENGTH,
-  MAX_STAGES,
-  MAX_WORKFLOW_NAME_LENGTH,
-  PARTY_BUILTINS,
-  STAGE_FALLBACKS,
-} from "./workflows.constants.js";
+import { z } from 'zod';
+import { booleanFilter, pageQuery } from '@/http/filters.js';
+import { assigneeTargetSchema } from '@/modules/positions/index.js';
+import { MAX_STAGE_NAME_LENGTH, MAX_STAGES, MAX_WORKFLOW_NAME_LENGTH, PARTY_BUILTINS, STAGE_FALLBACKS } from './workflows.constants.js';
 
 const workflowName = z.string().trim().min(1).max(MAX_WORKFLOW_NAME_LENGTH);
 
@@ -26,29 +20,26 @@ const stagesSchema = z
   .min(1)
   .superRefine((stages, ctx) => {
     if (stages.length > MAX_STAGES) {
-      ctx.addIssue({ code: "custom", params: { code: "too_many_stages" } });
+      ctx.addIssue({ code: 'custom', params: { code: 'too_many_stages' } });
     }
     const seen = new Set<string>();
     stages.forEach((stage, index) => {
       const key = stage.name.toLowerCase();
       if (seen.has(key)) {
         ctx.addIssue({
-          code: "custom",
-          path: [index, "name"],
-          params: { code: "duplicate_name" },
+          code: 'custom',
+          path: [index, 'name'],
+          params: { code: 'duplicate_name' },
         });
       }
       seen.add(key);
-      if (
-        "builtin" in stage.assignee &&
-        (PARTY_BUILTINS as readonly string[]).includes(stage.assignee.builtin)
-      ) {
-        for (const field of ["handlerMayNarrow", "excludeParties"] as const) {
+      if ('builtin' in stage.assignee && (PARTY_BUILTINS as readonly string[]).includes(stage.assignee.builtin)) {
+        for (const field of ['handlerMayNarrow', 'excludeParties'] as const) {
           if (stage[field]) {
             ctx.addIssue({
-              code: "custom",
+              code: 'custom',
               path: [index, field],
-              params: { code: "not_allowed" },
+              params: { code: 'not_allowed' },
             });
           }
         }
@@ -61,7 +52,7 @@ export const createWorkflowRequestSchema = z
     name: workflowName,
     stages: stagesSchema,
   })
-  .meta({ id: "CreateWorkflowRequest" });
+  .meta({ id: 'CreateWorkflowRequest' });
 
 export const updateWorkflowRequestSchema = z
   .strictObject({
@@ -69,11 +60,11 @@ export const updateWorkflowRequestSchema = z
     baseVersion: z.int().min(1),
     stages: stagesSchema,
   })
-  .meta({ id: "UpdateWorkflowRequest" });
+  .meta({ id: 'UpdateWorkflowRequest' });
 
 // Query strings stay lenient: links and proxies add parameters the API does not control.
 export const listWorkflowsQuerySchema = z.object({
-  retired: booleanFilter("false"),
+  retired: booleanFilter('false'),
   ...pageQuery,
 });
 

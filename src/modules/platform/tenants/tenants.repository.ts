@@ -1,9 +1,9 @@
-import { count, eq, type SQL, sql } from "drizzle-orm";
-import type { Executor } from "@/db/pool.js";
-import { files, roles, subscriptions, tenantMembers, tenants, users } from "@/db/schema/index.js";
-import type { PageRequestType } from "@/http/list.js";
-import { riyadhToday } from "@/modules/subscriptions/index.js";
-import type { NewTenantType, TenantOwnerType, TenantType } from "./tenants.types.js";
+import { count, eq, type SQL, sql } from 'drizzle-orm';
+import type { Executor } from '@/db/pool.js';
+import { files, roles, subscriptions, tenantMembers, tenants, users } from '@/db/schema/index.js';
+import type { PageRequestType } from '@/http/list.js';
+import { riyadhToday } from '@/modules/subscriptions/index.js';
+import type { NewTenantType, TenantOwnerType, TenantType } from './tenants.types.js';
 
 const activeMembers = sql<number>`(
   select count(*)::int from ${tenantMembers}
@@ -31,10 +31,7 @@ export function createTenantsRepository() {
     },
 
     insertSystemRole(db: Executor, tenantId: string, name: string): Promise<{ id: string }[]> {
-      return db
-        .insert(roles)
-        .values({ tenantId, name, isSystem: true })
-        .returning({ id: roles.id });
+      return db.insert(roles).values({ tenantId, name, isSystem: true }).returning({ id: roles.id });
     },
 
     insertAdminMember(db: Executor, tenantId: string, userId: string, roleId: string) {
@@ -52,20 +49,12 @@ export function createTenantsRepository() {
     },
 
     async count(db: Executor, where: SQL | undefined): Promise<number> {
-      const [row] = await db
-        .select({ total: count() })
-        .from(tenants)
-        .innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
-        .where(where);
+      const [row] = await db.select({ total: count() }).from(tenants).innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id)).where(where);
       return row?.total ?? 0;
     },
 
     findById(db: Executor, tenantId: string) {
-      return db
-        .select(detailColumns)
-        .from(tenants)
-        .innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
-        .where(eq(tenants.id, tenantId));
+      return db.select(detailColumns).from(tenants).innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id)).where(eq(tenants.id, tenantId));
     },
 
     findOwner(db: Executor, tenantId: string): Promise<TenantOwnerType[]> {

@@ -1,14 +1,8 @@
-import { z } from "zod";
-import {
-  escalationRules,
-  informationAskedIn,
-  informationRequestStates,
-  requestStates,
-  stageRunStates,
-} from "@/db/schema/index.js";
-import { formFieldResponseSchema } from "@/modules/services/services.responses.js";
+import { z } from 'zod';
+import { escalationRules, informationAskedIn, informationRequestStates, requestStates, stageRunStates } from '@/db/schema/index.js';
+import { formFieldResponseSchema } from '@/modules/services/services.responses.js';
 
-const person = z.strictObject({ id: z.string(), name: z.string() }).meta({ id: "RequestPerson" });
+const person = z.strictObject({ id: z.string(), name: z.string() }).meta({ id: 'RequestPerson' });
 
 /** The SLA: live while in progress, the frozen record once closed (R6.22, R6.23). */
 export const slaResponseSchema = z.strictObject({
@@ -41,7 +35,7 @@ export const requestSummaryResponseSchema = z
     deadline: z.date().nullable(),
     activeStage: activeStageResponseSchema.nullable(),
   })
-  .meta({ id: "RequestSummary" });
+  .meta({ id: 'RequestSummary' });
 
 export const requestFileResponseSchema = z
   .strictObject({
@@ -55,7 +49,7 @@ export const requestFileResponseSchema = z
     attachedBy: person,
     attachedAt: z.date(),
   })
-  .meta({ id: "RequestFile" });
+  .meta({ id: 'RequestFile' });
 
 /** A file named in a form answer; once removed only its ID is known, and the rest is `null` (R6.25). */
 const answerFileResponseSchema = z.strictObject({
@@ -122,7 +116,7 @@ export const requestResponseSchema = requestSummaryResponseSchema
     escalations: z.array(escalationFiringResponseSchema),
     allowedActions: z.array(z.string()),
   })
-  .meta({ id: "Request" });
+  .meta({ id: 'Request' });
 
 /** What the submit screen needs: the services with their forms, and the priorities to choose from. */
 export const catalogResponseSchema = z
@@ -137,4 +131,4 @@ export const catalogResponseSchema = z
     ),
     priorities: z.array(z.strictObject({ id: z.string(), name: z.string(), days: z.number() })),
   })
-  .meta({ id: "RequestCatalog" });
+  .meta({ id: 'RequestCatalog' });

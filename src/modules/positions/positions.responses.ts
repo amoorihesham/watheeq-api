@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { ASSIGNEE_BUILTINS } from "./positions.constants.js";
+import { z } from 'zod';
+import { ASSIGNEE_BUILTINS } from './positions.constants.js';
 
 export const positionResponseSchema = z
   .strictObject({
@@ -9,7 +9,7 @@ export const positionResponseSchema = z
     retired: z.boolean(),
     holders: z.array(z.strictObject({ userId: z.string(), name: z.string() })),
   })
-  .meta({ id: "Position" });
+  .meta({ id: 'Position' });
 
 /**
  * What a stage or an escalation recipient points at, as the API returns it: a position (with its name) or a
@@ -21,4 +21,4 @@ export const assigneeTargetResponseSchema = z
     name: z.string().nullable(),
     builtin: z.enum(ASSIGNEE_BUILTINS).nullable(),
   })
-  .meta({ id: "AssigneeTarget" });
+  .meta({ id: 'AssigneeTarget' });

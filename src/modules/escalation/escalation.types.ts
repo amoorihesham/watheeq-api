@@ -1,22 +1,20 @@
-import type { z } from "zod";
-import type { AuthConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { AssigneeBuiltinType } from "@/modules/positions/index.js";
-import type { createEscalationController } from "./escalation.controller.js";
-import type { createEscalationRepository } from "./escalation.repository.js";
-import type { escalationResponseSchema } from "./escalation.responses.js";
-import type { putEscalationRequestSchema } from "./escalation.schemas.js";
-import type { createEscalationService } from "./escalation.service.js";
+import type { z } from 'zod';
+import type { AuthConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { AssigneeBuiltinType } from '@/modules/positions/index.js';
+import type { createEscalationController } from './escalation.controller.js';
+import type { createEscalationRepository } from './escalation.repository.js';
+import type { escalationResponseSchema } from './escalation.responses.js';
+import type { putEscalationRequestSchema } from './escalation.schemas.js';
+import type { createEscalationService } from './escalation.service.js';
 
 export type PutEscalationRequestType = z.output<typeof putEscalationRequestSchema>;
 export type EscalationInputType = z.output<typeof putEscalationRequestSchema>;
 
-export type EscalationRuleType = "r0" | "r1" | "r2";
+export type EscalationRuleType = 'r0' | 'r1' | 'r2';
 
 /** A recipient as the settings are read inside the API; `toResponse` gives it its response shape. */
-export type RecipientType =
-  | { position: string; name: string | null }
-  | { builtin: AssigneeBuiltinType };
+export type RecipientType = { position: string; name: string | null } | { builtin: AssigneeBuiltinType };
 
 export interface EscalationType {
   r0: { enabled: boolean; days: number; recipients: RecipientType[] };

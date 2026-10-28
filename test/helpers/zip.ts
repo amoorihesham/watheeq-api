@@ -1,4 +1,4 @@
-import { crc32 } from "node:zlib";
+import { crc32 } from 'node:zlib';
 
 export interface ZipEntryType {
   name: string;
@@ -44,27 +44,23 @@ export function zipOf(entries: ZipEntryType[]): Buffer {
   return Buffer.concat([...parts, centralBytes, end]);
 }
 
-const mainType = (mime: string) =>
-  Buffer.from(
-    `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/x" ContentType="${mime}.main+xml"/></Types>`,
-  );
+const mainType = (mime: string) => Buffer.from(`<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/x" ContentType="${mime}.main+xml"/></Types>`);
 
-export const WORD_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+export const WORD_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /** A Word file as Word writes it: `[Content_Types].xml` first. */
 export const wordContentTypesFirst = (padding = 0): Buffer =>
   zipOf([
-    { name: "[Content_Types].xml", data: mainType(WORD_MIME) },
-    { name: "word/document.xml", data: Buffer.alloc(padding, "x") },
+    { name: '[Content_Types].xml', data: mainType(WORD_MIME) },
+    { name: 'word/document.xml', data: Buffer.alloc(padding, 'x') },
   ]);
 
 /** A Word file as LibreOffice writes it: the content first, `[Content_Types].xml` last. */
 export const wordContentTypesLast = (padding = 0): Buffer =>
   zipOf([
-    { name: "_rels/.rels", data: Buffer.from("<Relationships/>") },
-    { name: "word/document.xml", data: Buffer.alloc(padding, "x") },
-    { name: "[Content_Types].xml", data: mainType(WORD_MIME) },
+    { name: '_rels/.rels', data: Buffer.from('<Relationships/>') },
+    { name: 'word/document.xml', data: Buffer.alloc(padding, 'x') },
+    { name: '[Content_Types].xml', data: mainType(WORD_MIME) },
   ]);
 
-export const plainZip = (): Buffer =>
-  zipOf([{ name: "notes/readme.txt", data: Buffer.from("not an office file") }]);
+export const plainZip = (): Buffer => zipOf([{ name: 'notes/readme.txt', data: Buffer.from('not an office file') }]);

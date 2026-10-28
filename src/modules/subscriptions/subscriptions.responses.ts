@@ -1,17 +1,17 @@
-import { z } from "zod";
-import { SUBSCRIPTION_STATES } from "./subscriptions.constants.js";
+import { z } from 'zod';
+import { SUBSCRIPTION_STATES } from './subscriptions.constants.js';
 
 const subscriptionState = z.enum(SUBSCRIPTION_STATES);
 
 export const pricingResponseSchema = z
   .strictObject({
     priceHalalas: z.number(),
-    paymentPeriod: z.enum(["monthly", "yearly"]),
+    paymentPeriod: z.enum(['monthly', 'yearly']),
     planDiscountPercent: z.number(),
     customerDiscountPercent: z.number(),
     effectivePriceHalalas: z.number(),
   })
-  .meta({ id: "Pricing" });
+  .meta({ id: 'Pricing' });
 
 /** A subscription as every API response shows it (R1.11). */
 export const subscriptionViewResponseSchema = z
@@ -27,7 +27,7 @@ export const subscriptionViewResponseSchema = z
     state: subscriptionState,
     pricing: pricingResponseSchema,
   })
-  .meta({ id: "SubscriptionView" });
+  .meta({ id: 'SubscriptionView' });
 
 /** What every tenant user sees about the subscription in `/auth/me`, so the client can explain disabled actions. */
 export const subscriptionStatusResponseSchema = z
@@ -36,7 +36,7 @@ export const subscriptionStatusResponseSchema = z
     endDate: z.string(),
     graceEndsOn: z.string(),
   })
-  .meta({ id: "SubscriptionStatus" });
+  .meta({ id: 'SubscriptionStatus' });
 
 export const usageResponseSchema = z
   .strictObject({
@@ -49,11 +49,11 @@ export const usageResponseSchema = z
       overLimit: z.boolean(),
     }),
   })
-  .meta({ id: "SubscriptionUsage" });
+  .meta({ id: 'SubscriptionUsage' });
 
 export const getSubscriptionResponseSchema = z
   .strictObject({
     subscription: subscriptionViewResponseSchema,
     usage: usageResponseSchema,
   })
-  .meta({ id: "TenantSubscription" });
+  .meta({ id: 'TenantSubscription' });

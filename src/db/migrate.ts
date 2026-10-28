@@ -1,9 +1,9 @@
-import { fileURLToPath } from "node:url";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import pg from "pg";
+import { fileURLToPath } from 'node:url';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import pg from 'pg';
 
-const MIGRATIONS_FOLDER = fileURLToPath(new URL("../../db/migrations", import.meta.url));
+const MIGRATIONS_FOLDER = fileURLToPath(new URL('../../db/migrations', import.meta.url));
 
 /** Applies pending migrations. Called by `pnpm db:migrate` and by the test setup, never by the application at startup. */
 export async function runMigrations(connectionString: string): Promise<void> {

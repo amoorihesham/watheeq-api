@@ -1,11 +1,6 @@
-import { z } from "zod";
-import { idSchema } from "@/http/validate.js";
-import {
-  MAX_EMAIL_LENGTH,
-  MAX_PASSWORD_LENGTH,
-  MAX_USER_NAME_LENGTH,
-  MIN_PASSWORD_LENGTH,
-} from "./auth.constants.js";
+import { z } from 'zod';
+import { idSchema } from '@/http/validate.js';
+import { MAX_EMAIL_LENGTH, MAX_PASSWORD_LENGTH, MAX_USER_NAME_LENGTH, MIN_PASSWORD_LENGTH } from './auth.constants.js';
 
 // The database check requires lower(btrim(email)), so every email is normalized before it reaches a query.
 export const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(MAX_EMAIL_LENGTH));
@@ -26,31 +21,25 @@ export const loginRequestSchema = z
     email: emailSchema,
     password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
   })
-  .meta({ id: "LoginRequest" });
+  .meta({ id: 'LoginRequest' });
 
 const tokenAndPasswordShape = {
   token: z.string().min(1).max(200),
   password: newPasswordSchema,
 };
 
-export const verifyEmailRequestSchema = z
-  .strictObject(tokenAndPasswordShape)
-  .meta({ id: "VerifyEmailRequest" });
+export const verifyEmailRequestSchema = z.strictObject(tokenAndPasswordShape).meta({ id: 'VerifyEmailRequest' });
 
 export const changePasswordRequestSchema = z
   .strictObject({
     currentPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH),
     newPassword: newPasswordSchema,
   })
-  .meta({ id: "ChangePasswordRequest" });
+  .meta({ id: 'ChangePasswordRequest' });
 
-export const passwordResetRequestSchema = z
-  .strictObject({ email: emailSchema })
-  .meta({ id: "PasswordResetRequest" });
+export const passwordResetRequestSchema = z.strictObject({ email: emailSchema }).meta({ id: 'PasswordResetRequest' });
 
-export const resetPasswordRequestSchema = z
-  .strictObject(tokenAndPasswordShape)
-  .meta({ id: "ResetPasswordRequest" });
+export const resetPasswordRequestSchema = z.strictObject(tokenAndPasswordShape).meta({ id: 'ResetPasswordRequest' });
 
 // Token schemas stay lenient: a JWT carries standard claims (iss, iat, exp) these do not list.
 export const tenantClaimSchema = z.object({
@@ -65,6 +54,6 @@ export const accessTokenPayloadSchema = z.object({
   sub: idSchema,
   username: z.string(),
   email: z.string(),
-  role: z.enum(["user", "operator"]),
+  role: z.enum(['user', 'operator']),
   tenant: tenantClaimSchema.nullable(),
 });

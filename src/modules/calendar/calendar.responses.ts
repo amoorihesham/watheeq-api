@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { DAY_MODES } from "./calendar.constants.js";
+import { z } from 'zod';
+import { DAY_MODES } from './calendar.constants.js';
 
 const dayRule = z
   .strictObject({
@@ -7,7 +7,7 @@ const dayRule = z
     start: z.string().nullable(),
     end: z.string().nullable(),
   })
-  .meta({ id: "DayRule" });
+  .meta({ id: 'DayRule' });
 
 export const weekShapeResponseSchema = z
   .strictObject({
@@ -23,7 +23,7 @@ export const weekShapeResponseSchema = z
       sat: dayRule,
     }),
   })
-  .meta({ id: "WeekShape" });
+  .meta({ id: 'WeekShape' });
 
 /** An entry of `GET /calendar`'s `hours`, and what the hours writes return. */
 export const hoursVersionResponseSchema = z
@@ -31,7 +31,7 @@ export const hoursVersionResponseSchema = z
     effectiveFrom: z.string(),
     week: weekShapeResponseSchema,
   })
-  .meta({ id: "HoursVersion" });
+  .meta({ id: 'HoursVersion' });
 
 const monthDay = z.strictObject({ month: z.number(), day: z.number() });
 const dateRange = z.strictObject({ startDate: z.string(), endDate: z.string() });
@@ -45,8 +45,8 @@ export const periodResponseSchema = z
   .strictObject({
     id: z.string(),
     name: z.string(),
-    kind: z.enum(["holiday", "season"]),
-    recurrence: z.enum(["once", "gregorian", "hijri"]),
+    kind: z.enum(['holiday', 'season']),
+    recurrence: z.enum(['once', 'gregorian', 'hijri']),
     startDate: z.string().nullable(),
     endDate: z.string().nullable(),
     start: monthDay.nullable(),
@@ -56,7 +56,7 @@ export const periodResponseSchema = z
     overrides: z.array(
       z.strictObject({
         year: z.number(),
-        action: z.enum(["skip", "move"]),
+        action: z.enum(['skip', 'move']),
         startDate: z.string().nullable(),
         endDate: z.string().nullable(),
       }),
@@ -66,7 +66,7 @@ export const periodResponseSchema = z
     replacesId: z.string().nullable(),
     next: dateRange.nullable(),
   })
-  .meta({ id: "CalendarPeriod" });
+  .meta({ id: 'CalendarPeriod' });
 
 export const calendarResponseSchema = z
   .strictObject({
@@ -74,7 +74,7 @@ export const calendarResponseSchema = z
     hours: z.array(hoursVersionResponseSchema),
     periods: z.array(periodResponseSchema),
   })
-  .meta({ id: "Calendar" });
+  .meta({ id: 'Calendar' });
 
 const idAndName = z.strictObject({ id: z.string(), name: z.string() });
 
@@ -94,4 +94,4 @@ export const calendarDaysResponseSchema = z
       }),
     ),
   })
-  .meta({ id: "CalendarDays" });
+  .meta({ id: 'CalendarDays' });

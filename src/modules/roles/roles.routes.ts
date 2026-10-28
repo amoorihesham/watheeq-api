@@ -1,10 +1,10 @@
-import type { Router } from "express";
-import { buildRouter } from "@/http/endpoint.js";
-import { createRolesController } from "./roles.controller.js";
-import { permissionsApi, rolesApi } from "./roles.endpoints.js";
-import { createRolesRepository } from "./roles.repository.js";
-import { createRolesService } from "./roles.service.js";
-import type { RolesRouterDepsType } from "./roles.types.js";
+import type { Router } from 'express';
+import { buildRouter } from '@/http/endpoint.js';
+import { createRolesController } from './roles.controller.js';
+import { permissionsApi, rolesApi } from './roles.endpoints.js';
+import { createRolesRepository } from './roles.repository.js';
+import { createRolesService } from './roles.service.js';
+import type { RolesRouterDepsType } from './roles.types.js';
 
 /** The roles module's composition root, shared by its two routers. */
 function composeController({ db }: RolesRouterDepsType) {

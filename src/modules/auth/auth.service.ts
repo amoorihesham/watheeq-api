@@ -1,13 +1,13 @@
-import { writeAuditEntry } from "@/audit/index.js";
-import type { Db, Executor } from "@/db/pool.js";
-import { withTx } from "@/db/tx.js";
-import type { EmailSenderType } from "@/email/index.js";
-import { AppError } from "@/http/errors.js";
-import type { Logger } from "@/logging/logger.js";
-import { toSubscriptionStatus } from "@/modules/subscriptions/index.js";
-import { grantedPermissions } from "@/modules/tenant-access/index.js";
-import { DUMMY_PASSWORD_HASH } from "./auth.constants.js";
-import { createAuthRepository } from "./auth.repository.js";
+import { writeAuditEntry } from '@/audit/index.js';
+import type { Db, Executor } from '@/db/pool.js';
+import { withTx } from '@/db/tx.js';
+import type { EmailSenderType } from '@/email/index.js';
+import { AppError } from '@/http/errors.js';
+import type { Logger } from '@/logging/logger.js';
+import { toSubscriptionStatus } from '@/modules/subscriptions/index.js';
+import { grantedPermissions } from '@/modules/tenant-access/index.js';
+import { DUMMY_PASSWORD_HASH } from './auth.constants.js';
+import { createAuthRepository } from './auth.repository.js';
 import type {
   AccountType,
   AuthRepositoryType,
@@ -22,10 +22,10 @@ import type {
   SessionResponseType,
   UserSummaryType,
   VerifyEmailRequestType,
-} from "./auth.types.js";
-import { issuePasswordToken, passwordResetEmail } from "./shared/onboarding.js";
-import { hashPassword, verifyPassword } from "./shared/passwords.js";
-import { generateOpaqueToken, hashToken, signAccessToken } from "./shared/tokens.js";
+} from './auth.types.js';
+import { issuePasswordToken, passwordResetEmail } from './shared/onboarding.js';
+import { hashPassword, verifyPassword } from './shared/passwords.js';
+import { generateOpaqueToken, hashToken, signAccessToken } from './shared/tokens.js';
 
 const toAuthUser = (account: AccountType): AuthUserType => ({
   id: account.id,
@@ -46,32 +46,16 @@ const toAuthUser = (account: AccountType): AuthUserType => ({
       : null,
 });
 
-export function createAuthService({
-  db,
-  repo,
-  settings,
-  emailSender,
-}: {
-  db: Db;
-  repo: AuthRepositoryType;
-  settings: AuthSettingsType;
-  emailSender: EmailSenderType;
-}) {
+export function createAuthService({ db, repo, settings, emailSender }: { db: Db; repo: AuthRepositoryType; settings: AuthSettingsType; emailSender: EmailSenderType }) {
   /** Null for an operator, who has no tenant. */
   async function subscriptionStatusOf(executor: Executor, account: AccountType) {
-    const [status] = account.tenantId
-      ? await repo.findSubscriptionStatus(executor, account.tenantId)
-      : [];
+    const [status] = account.tenantId ? await repo.findSubscriptionStatus(executor, account.tenantId) : [];
     return status ? toSubscriptionStatus(status, status.today) : null;
   }
 
   async function issueSession(executor: Executor, account: AccountType): Promise<AuthSessionType> {
     const user = toAuthUser(account);
-    const accessToken = await signAccessToken(
-      user,
-      settings.jwtSecret,
-      settings.accessTokenTtlSeconds,
-    );
+    const accessToken = await signAccessToken(user, settings.jwtSecret, settings.accessTokenTtlSeconds);
     const refreshToken = generateOpaqueToken();
     await repo.insertRefreshToken(executor, {
       userId: account.id,
@@ -93,11 +77,11 @@ export function createAuthService({
       // An unverified Tenant Admin has no password yet, and is answered exactly like an unknown email (P1.17).
       if (!account?.passwordHash || !account.emailVerifiedAt) {
         await verifyPassword(DUMMY_PASSWORD_HASH, password);
-        throw new AppError("INVALID_CREDENTIALS");
+        throw new AppError('INVALID_CREDENTIALS');
       }
       const passwordMatches = await verifyPassword(account.passwordHash, password);
       if (!passwordMatches || !account.isActive) {
-        throw new AppError("INVALID_CREDENTIALS");
+        throw new AppError('INVALID_CREDENTIALS');
       }
       return issueSession(db, account);
     },
@@ -137,20 +121,20 @@ export function createAuthService({
       const { token, password } = input;
       const passwordHash = await hashPassword(password);
       await withTx(db, async (tx) => {
-        const [link] = await repo.consumePasswordToken(tx, hashToken(token), "invitation");
+        const [link] = await repo.consumePasswordToken(tx, hashToken(token), 'invitation');
         if (!link) {
-          throw new AppError("VERIFICATION_INVALID");
+          throw new AppError('VERIFICATION_INVALID');
         }
         const [verified] = await repo.setVerifiedPassword(tx, link.userId, passwordHash);
         if (!verified) {
-          throw new AppError("VERIFICATION_INVALID");
+          throw new AppError('VERIFICATION_INVALID');
         }
         const [account] = await repo.findAccountById(tx, link.userId);
         await writeAuditEntry(tx, {
           tenantId: account?.tenantId ?? null,
-          actor: { type: "user", id: link.userId },
-          action: "user.email_verified",
-          resourceType: "user",
+          actor: { type: 'user', id: link.userId },
+          action: 'user.email_verified',
+          resourceType: 'user',
           resourceId: link.userId,
           requestId,
         });
@@ -161,29 +145,21 @@ export function createAuthService({
      * Sets a new password after checking the current one, and signs out the user's other sessions (R2.16).
      * The session making the request keeps its refresh token.
      */
-    async changePassword(
-      user: AuthUserType,
-      input: ChangePasswordRequestType,
-      refreshToken: string | undefined,
-      requestId: string,
-    ): Promise<void> {
+    async changePassword(user: AuthUserType, input: ChangePasswordRequestType, refreshToken: string | undefined, requestId: string): Promise<void> {
       const { currentPassword, newPassword } = input;
       const [account] = await repo.findAccountById(db, user.id);
-      if (
-        !account?.passwordHash ||
-        !(await verifyPassword(account.passwordHash, currentPassword))
-      ) {
-        throw new AppError("INVALID_CREDENTIALS");
+      if (!account?.passwordHash || !(await verifyPassword(account.passwordHash, currentPassword))) {
+        throw new AppError('INVALID_CREDENTIALS');
       }
       const passwordHash = await hashPassword(newPassword);
       await withTx(db, async (tx) => {
         await repo.setPassword(tx, account.id, passwordHash);
-        await repo.revokeOtherRefreshTokens(tx, account.id, hashToken(refreshToken ?? ""));
+        await repo.revokeOtherRefreshTokens(tx, account.id, hashToken(refreshToken ?? ''));
         await writeAuditEntry(tx, {
           tenantId: account.tenantId,
           actor: { type: account.role, id: account.id },
-          action: "user.password_changed",
-          resourceType: "user",
+          action: 'user.password_changed',
+          resourceType: 'user',
           resourceId: account.id,
           requestId,
         });
@@ -203,13 +179,11 @@ export function createAuthService({
           if (!account?.isActive || !account.emailVerifiedAt || !account.passwordHash) {
             return;
           }
-          const token = await withTx(db, (tx) =>
-            issuePasswordToken(tx, account.id, "reset", settings.passwordResetTtlSeconds),
-          );
+          const token = await withTx(db, (tx) => issuePasswordToken(tx, account.id, 'reset', settings.passwordResetTtlSeconds));
           await emailSender.send(passwordResetEmail(account, token, settings.appBaseUrl));
         } catch (err) {
           // The response is already sent; the token is never logged.
-          log.warn({ err }, "password reset email failed");
+          log.warn({ err }, 'password reset email failed');
         }
       };
     },
@@ -219,19 +193,19 @@ export function createAuthService({
       const { token, password } = input;
       const passwordHash = await hashPassword(password);
       await withTx(db, async (tx) => {
-        const [link] = await repo.consumePasswordToken(tx, hashToken(token), "reset");
+        const [link] = await repo.consumePasswordToken(tx, hashToken(token), 'reset');
         const [account] = link ? await repo.findAccountById(tx, link.userId) : [];
         // A user deactivated after requesting the link cannot use it; the rollback leaves the link unused.
         if (!account?.isActive) {
-          throw new AppError("VERIFICATION_INVALID");
+          throw new AppError('VERIFICATION_INVALID');
         }
         await repo.setPassword(tx, account.id, passwordHash);
         await repo.revokeUserRefreshTokens(tx, account.id);
         await writeAuditEntry(tx, {
           tenantId: account.tenantId,
           actor: { type: account.role, id: account.id },
-          action: "user.password_reset",
-          resourceType: "user",
+          action: 'user.password_reset',
+          resourceType: 'user',
           resourceId: account.id,
           requestId,
         });
@@ -241,7 +215,7 @@ export function createAuthService({
     async me(user: AuthUserType): Promise<SessionResponseType> {
       const [account] = await repo.findAccountById(db, user.id);
       if (!account) {
-        throw new AppError("UNAUTHENTICATED");
+        throw new AppError('UNAUTHENTICATED');
       }
       return {
         user: toAuthUser(account),
@@ -256,21 +230,18 @@ export function createAuthService({
  * endpoint creates operators (T13).
  * A taken email surfaces as the database's unique violation, translated centrally to EMAIL_TAKEN.
  */
-export async function createOperator(
-  db: Db,
-  input: CreateOperatorRequestType,
-): Promise<UserSummaryType> {
+export async function createOperator(db: Db, input: CreateOperatorRequestType): Promise<UserSummaryType> {
   const { email, userName, password } = input;
   const [operator] = await createAuthRepository().insertUser(db, {
     email,
     userName,
     passwordHash: await hashPassword(password),
-    role: "operator",
+    role: 'operator',
     // The deployer typed the address on the server; there is no link to confirm.
     emailVerifiedAt: new Date(),
   });
   if (!operator) {
-    throw new Error("insert returned no row");
+    throw new Error('insert returned no row');
   }
   return operator;
 }

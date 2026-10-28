@@ -1,29 +1,18 @@
-import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
-import type { Db, Executor } from "@/db/pool.js";
-import { withTx } from "@/db/tx.js";
-import { AppError, type ErrorDetail } from "@/http/errors.js";
-import { listPage } from "@/http/list.js";
-import type { PageType } from "@/http/respond.js";
-import { POSITION_SORT_KEYS } from "./positions.repository.js";
-import type {
-  CreatePositionRequestType,
-  HolderRowType,
-  ListPositionsQueryType,
-  PositionRowType,
-  PositionsRepositoryType,
-  PositionType,
-  RenamePositionRequestType,
-  SetHoldersRequestType,
-} from "./positions.types.js";
+import { type AuditContextType, writeAuditEntry } from '@/audit/index.js';
+import type { Db, Executor } from '@/db/pool.js';
+import { withTx } from '@/db/tx.js';
+import { AppError, type ErrorDetail } from '@/http/errors.js';
+import { listPage } from '@/http/list.js';
+import type { PageType } from '@/http/respond.js';
+import { POSITION_SORT_KEYS } from './positions.repository.js';
+import type { CreatePositionRequestType, HolderRowType, ListPositionsQueryType, PositionRowType, PositionsRepositoryType, PositionType, RenamePositionRequestType, SetHoldersRequestType } from './positions.types.js';
 
 const toPosition = (row: PositionRowType, holders: HolderRowType[]): PositionType => ({
   id: row.id,
   unitId: row.unitId,
   name: row.name,
   retired: row.retiredAt !== null,
-  holders: holders
-    .filter((holder) => holder.positionId === row.id)
-    .map(({ userId, name }) => ({ userId, name })),
+  holders: holders.filter((holder) => holder.positionId === row.id).map(({ userId, name }) => ({ userId, name })),
 });
 
 const sorted = (ids: string[]) => [...ids].sort();
@@ -32,7 +21,7 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
   async function loadPosition(executor: Executor, tenantId: string, positionId: string) {
     const [row] = await repo.findById(executor, tenantId, positionId);
     if (!row) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     return toPosition(row, await repo.listHolders(executor, tenantId, positionId));
   }
@@ -41,14 +30,14 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
   async function lockPosition(tx: Executor, tenantId: string, positionId: string) {
     const [row] = await repo.findByIdForUpdate(tx, tenantId, positionId);
     if (!row) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     return row;
   }
 
   const assertActive = (row: PositionRowType) => {
     if (row.retiredAt) {
-      throw new AppError("RESOURCE_RETIRED");
+      throw new AppError('RESOURCE_RETIRED');
     }
   };
 
@@ -56,10 +45,10 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
     async list(tenantId: string, query: ListPositionsQueryType): Promise<PageType<PositionType>> {
       const page = await listPage({
         db,
-        list: "positions",
+        list: 'positions',
         query,
         keys: POSITION_SORT_KEYS,
-        direction: "asc",
+        direction: 'asc',
         where: (filters) => repo.listWhere(tenantId, filters),
         selectPage: (tx, request) => repo.selectPage(tx, request),
         count: (tx, where) => repo.count(tx, where),
@@ -73,24 +62,20 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
     },
 
     /** A duplicate name (any case) among active positions reaches the error handler as POSITION_NAME_TAKEN (R5.1). */
-    create(
-      tenantId: string,
-      body: CreatePositionRequestType,
-      context: AuditContextType,
-    ): Promise<PositionType> {
+    create(tenantId: string, body: CreatePositionRequestType, context: AuditContextType): Promise<PositionType> {
       return withTx(db, async (tx) => {
         if (!(await repo.findUnit(tx, tenantId, body.unitId)).length) {
-          throw new AppError("VALIDATION_FAILED", [{ path: "unitId", code: "unknown_unit" }]);
+          throw new AppError('VALIDATION_FAILED', [{ path: 'unitId', code: 'unknown_unit' }]);
         }
         const [row] = await repo.insert(tx, { tenantId, unitId: body.unitId, name: body.name });
         if (!row) {
-          throw new Error("insert returned no row");
+          throw new Error('insert returned no row');
         }
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "position.created",
-          resourceType: "position",
+          action: 'position.created',
+          resourceType: 'position',
           resourceId: row.id,
           details: { name: row.name, unitId: row.unitId },
         });
@@ -98,12 +83,7 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
       });
     },
 
-    rename(
-      tenantId: string,
-      id: string,
-      input: RenamePositionRequestType,
-      context: AuditContextType,
-    ): Promise<PositionType> {
+    rename(tenantId: string, id: string, input: RenamePositionRequestType, context: AuditContextType): Promise<PositionType> {
       const { name } = input;
       return withTx(db, async (tx) => {
         const before = await lockPosition(tx, tenantId, id);
@@ -115,8 +95,8 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "position.updated",
-          resourceType: "position",
+          action: 'position.updated',
+          resourceType: 'position',
           resourceId: id,
           details: { before: { name: before.name }, after: { name } },
         });
@@ -128,40 +108,31 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
      * Replaces the position's holders (R5.2). The memberships are locked before they are read, so a concurrent
      * deactivation is seen; a concurrent move is refused by the holder foreign key (R5.3).
      */
-    setHolders(
-      tenantId: string,
-      id: string,
-      input: SetHoldersRequestType,
-      context: AuditContextType,
-    ): Promise<PositionType> {
+    setHolders(tenantId: string, id: string, input: SetHoldersRequestType, context: AuditContextType): Promise<PositionType> {
       const { userIds } = input;
       const wanted = [...new Set(userIds)];
       return withTx(db, async (tx) => {
         const position = await lockPosition(tx, tenantId, id);
         assertActive(position);
         await repo.lockMembers(tx, tenantId, wanted);
-        const states = new Map(
-          (await repo.memberStates(tx, tenantId, wanted)).map((state) => [state.userId, state]),
-        );
+        const states = new Map((await repo.memberStates(tx, tenantId, wanted)).map((state) => [state.userId, state]));
         const details: ErrorDetail[] = [];
         wanted.forEach((userId, index) => {
           const state = states.get(userId);
           const path = `userIds.${index}`;
           if (!state || state.unitId !== position.unitId) {
-            details.push({ path, code: "not_unit_member" });
+            details.push({ path, code: 'not_unit_member' });
           } else if (!state.isActive) {
-            details.push({ path, code: "user_inactive" });
+            details.push({ path, code: 'user_inactive' });
           } else if (state.positionId && state.positionId !== id) {
-            details.push({ path, code: "holds_other_position" });
+            details.push({ path, code: 'holds_other_position' });
           }
         });
         if (details.length > 0) {
-          throw new AppError("VALIDATION_FAILED", details);
+          throw new AppError('VALIDATION_FAILED', details);
         }
 
-        const before = sorted(
-          (await repo.listHolders(tx, tenantId, id)).map((holder) => holder.userId),
-        );
+        const before = sorted((await repo.listHolders(tx, tenantId, id)).map((holder) => holder.userId));
         const after = sorted(wanted);
         if (JSON.stringify(before) === JSON.stringify(after)) {
           return loadPosition(tx, tenantId, id);
@@ -173,8 +144,8 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "position.holders_set",
-          resourceType: "position",
+          action: 'position.holders_set',
+          resourceType: 'position',
           resourceId: id,
           details: { before, after },
         });
@@ -191,19 +162,16 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
         }
         // The lock above pairs with the share lock a workflow or escalation save takes, so these checks cannot
         // miss a save in flight (R5.16).
-        if (
-          (await repo.namedByActiveWorkflow(tx, tenantId, id)).length > 0 ||
-          (await repo.namedByEscalation(tx, tenantId, id)).length > 0
-        ) {
-          throw new AppError("POSITION_IN_USE");
+        if ((await repo.namedByActiveWorkflow(tx, tenantId, id)).length > 0 || (await repo.namedByEscalation(tx, tenantId, id)).length > 0) {
+          throw new AppError('POSITION_IN_USE');
         }
         const removed = await repo.release(tx, tenantId, id, []);
         await repo.setRetired(tx, tenantId, id, true);
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "position.retired",
-          resourceType: "position",
+          action: 'position.retired',
+          resourceType: 'position',
           resourceId: id,
           details: { removedHolders: sorted(removed.map((holder) => holder.userId)) },
         });
@@ -224,14 +192,14 @@ export function createPositionsService({ db, repo }: { db: Db; repo: PositionsRe
           return loadPosition(tx, tenantId, id);
         }
         if (!position.unitId) {
-          throw new AppError("POSITION_UNIT_GONE");
+          throw new AppError('POSITION_UNIT_GONE');
         }
         await repo.setRetired(tx, tenantId, id, false);
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "position.restored",
-          resourceType: "position",
+          action: 'position.restored',
+          resourceType: 'position',
           resourceId: id,
         });
         return loadPosition(tx, tenantId, id);

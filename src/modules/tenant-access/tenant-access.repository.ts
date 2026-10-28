@@ -1,6 +1,6 @@
-import { and, eq, exists, or } from "drizzle-orm";
-import type { Executor } from "@/db/pool.js";
-import { rolePermissions, roles, tenantMembers, users } from "@/db/schema/index.js";
+import { and, eq, exists, or } from 'drizzle-orm';
+import type { Executor } from '@/db/pool.js';
+import { rolePermissions, roles, tenantMembers, users } from '@/db/schema/index.js';
 
 export function createTenantAccessRepository() {
   return {
@@ -13,7 +13,7 @@ export function createTenantAccessRepository() {
       {
         isSystem: boolean;
         permission: string | null;
-        scope: (typeof rolePermissions.$inferSelect)["scope"] | null;
+        scope: (typeof rolePermissions.$inferSelect)['scope'] | null;
       }[]
     > {
       return db
@@ -37,7 +37,7 @@ export function createTenantAccessRepository() {
         isActive: boolean;
         isSystem: boolean;
         permission: string | null;
-        scope: (typeof rolePermissions.$inferSelect)["scope"] | null;
+        scope: (typeof rolePermissions.$inferSelect)['scope'] | null;
       }[]
     > {
       return db
@@ -49,10 +49,7 @@ export function createTenantAccessRepository() {
         })
         .from(tenantMembers)
         .innerJoin(users, eq(users.id, tenantMembers.userId))
-        .innerJoin(
-          roles,
-          and(eq(roles.tenantId, tenantMembers.tenantId), eq(roles.id, tenantMembers.roleId)),
-        )
+        .innerJoin(roles, and(eq(roles.tenantId, tenantMembers.tenantId), eq(roles.id, tenantMembers.roleId)))
         .leftJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
         .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)));
     },
@@ -63,10 +60,7 @@ export function createTenantAccessRepository() {
         .select({ userId: tenantMembers.userId })
         .from(tenantMembers)
         .innerJoin(users, eq(users.id, tenantMembers.userId))
-        .innerJoin(
-          roles,
-          and(eq(roles.tenantId, tenantMembers.tenantId), eq(roles.id, tenantMembers.roleId)),
-        )
+        .innerJoin(roles, and(eq(roles.tenantId, tenantMembers.tenantId), eq(roles.id, tenantMembers.roleId)))
         .where(
           and(
             eq(tenantMembers.tenantId, tenantId),
@@ -77,12 +71,7 @@ export function createTenantAccessRepository() {
                 db
                   .select({ one: rolePermissions.roleId })
                   .from(rolePermissions)
-                  .where(
-                    and(
-                      eq(rolePermissions.roleId, roles.id),
-                      eq(rolePermissions.permission, permission),
-                    ),
-                  ),
+                  .where(and(eq(rolePermissions.roleId, roles.id), eq(rolePermissions.permission, permission))),
               ),
             ),
           ),

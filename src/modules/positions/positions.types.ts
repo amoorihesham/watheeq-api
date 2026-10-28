@@ -1,21 +1,12 @@
-import type { z } from "zod";
-import type { AuthConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { ASSIGNEE_BUILTINS } from "./positions.constants.js";
-import type { createPositionsController } from "./positions.controller.js";
-import type { createPositionsRepository } from "./positions.repository.js";
-import type {
-  assigneeTargetResponseSchema,
-  positionResponseSchema,
-} from "./positions.responses.js";
-import type {
-  assigneeTargetSchema,
-  createPositionRequestSchema,
-  listPositionsQuerySchema,
-  renamePositionRequestSchema,
-  setHoldersRequestSchema,
-} from "./positions.schemas.js";
-import type { createPositionsService } from "./positions.service.js";
+import type { z } from 'zod';
+import type { AuthConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { ASSIGNEE_BUILTINS } from './positions.constants.js';
+import type { createPositionsController } from './positions.controller.js';
+import type { createPositionsRepository } from './positions.repository.js';
+import type { assigneeTargetResponseSchema, positionResponseSchema } from './positions.responses.js';
+import type { assigneeTargetSchema, createPositionRequestSchema, listPositionsQuerySchema, renamePositionRequestSchema, setHoldersRequestSchema } from './positions.schemas.js';
+import type { createPositionsService } from './positions.service.js';
 
 export type AssigneeBuiltinType = (typeof ASSIGNEE_BUILTINS)[number];
 export type AssigneeTargetType = z.output<typeof assigneeTargetSchema>;
@@ -45,7 +36,7 @@ export interface MemberStateRowType {
 
 export interface UnitRowType {
   id: string;
-  kind: "department" | "section";
+  kind: 'department' | 'section';
   parentId: string | null;
 }
 
@@ -63,16 +54,13 @@ export interface AssigneeContextType {
   requesterId: string;
 }
 
-export type PartyType = "handler" | "requester";
+export type PartyType = 'handler' | 'requester';
 
 /**
  * One rung of the chain a stage climbs. `anchor` is the person a managers level is relative to, who is never
  * among those managers.
  */
-export type AssigneeLevelType =
-  | { kind: "position"; positionId: string }
-  | { kind: "person"; party: PartyType }
-  | { kind: "managers"; unitId: string | null; anchor?: PartyType };
+export type AssigneeLevelType = { kind: 'position'; positionId: string } | { kind: 'person'; party: PartyType } | { kind: 'managers'; unitId: string | null; anchor?: PartyType };
 
 export interface ResolvedAssigneesType {
   level: AssigneeLevelType;

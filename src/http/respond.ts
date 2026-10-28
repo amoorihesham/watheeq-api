@@ -1,6 +1,6 @@
-import type { Response } from "express";
-import type { z } from "zod";
-import { contractChecksEnabled } from "./checks.js";
+import type { Response } from 'express';
+import type { z } from 'zod';
+import { contractChecksEnabled } from './checks.js';
 
 export interface PageType<T> {
   items: T[];
@@ -18,20 +18,13 @@ function check<T>(schema: z.ZodType<T>, value: unknown): void {
   }
   const result = schema.safeParse(value);
   if (!result.success) {
-    const issues = result.error.issues.map(
-      (issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`,
-    );
-    throw new Error(`response does not match its schema: ${issues.join("; ")}`);
+    const issues = result.error.issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`);
+    throw new Error(`response does not match its schema: ${issues.join('; ')}`);
   }
 }
 
 /** The only way to answer with one item or a composite view: `{data}` (Phase 8 spec 4.2.1). */
-export function sendData<T>(
-  res: Response,
-  status: 200 | 201,
-  schema: z.ZodType<T>,
-  value: T,
-): void {
+export function sendData<T>(res: Response, status: 200 | 201, schema: z.ZodType<T>, value: T): void {
   check(schema, value);
   res.status(status).json({ data: value });
 }
@@ -41,9 +34,7 @@ export function sendPage<T>(res: Response, itemSchema: z.ZodType<T>, page: PageT
   for (const item of page.items) {
     check(itemSchema, item);
   }
-  res
-    .status(200)
-    .json({ data: page.items, page: { nextCursor: page.nextCursor, total: page.total } });
+  res.status(200).json({ data: page.items, page: { nextCursor: page.nextCursor, total: page.total } });
 }
 
 /** The only way to answer when there is nothing left to show. */

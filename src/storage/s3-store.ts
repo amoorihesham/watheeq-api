@@ -1,13 +1,8 @@
-import type { Readable } from "node:stream";
-import {
-  DeleteObjectsCommand,
-  GetObjectCommand,
-  S3Client,
-  type S3ClientConfig,
-} from "@aws-sdk/client-s3";
-import { Upload } from "@aws-sdk/lib-storage";
-import { MAX_KEYS_PER_DELETE, UPLOAD_PART_SIZE_BYTES } from "./storage.constants.js";
-import type { FileStoreType, StorageSettingsType } from "./storage.types.js";
+import type { Readable } from 'node:stream';
+import { DeleteObjectsCommand, GetObjectCommand, S3Client, type S3ClientConfig } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
+import { MAX_KEYS_PER_DELETE, UPLOAD_PART_SIZE_BYTES } from './storage.constants.js';
+import type { FileStoreType, StorageSettingsType } from './storage.types.js';
 
 export function s3ClientConfigOf(settings: StorageSettingsType): S3ClientConfig {
   return {
@@ -16,8 +11,8 @@ export function s3ClientConfigOf(settings: StorageSettingsType): S3ClientConfig 
     forcePathStyle: settings.forcePathStyle,
     credentials: { accessKeyId: settings.accessKey, secretAccessKey: settings.secretKey },
     // The SDK's default adds CRC checksums to every upload, which several S3-compatible servers reject.
-    requestChecksumCalculation: "WHEN_REQUIRED",
-    responseChecksumValidation: "WHEN_REQUIRED",
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   };
 }
 
@@ -39,7 +34,7 @@ export function createS3Store(settings: StorageSettingsType): FileStoreType {
     async get(key) {
       const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
       if (!result.Body) {
-        throw new Error("object store returned no body");
+        throw new Error('object store returned no body');
       }
       return result.Body as Readable;
     },

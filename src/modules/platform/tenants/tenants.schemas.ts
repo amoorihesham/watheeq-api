@@ -1,9 +1,9 @@
-import { z } from "zod";
-import { pageQuery } from "@/http/filters.js";
-import { idSchema } from "@/http/validate.js";
-import { emailSchema, userNameSchema } from "@/modules/auth/index.js";
-import { discountPercentSchema } from "../plans/plans.schemas.js";
-import { MAX_REASON_LENGTH, MAX_TENANT_NAME_LENGTH, SLUG_PATTERN } from "./tenants.constants.js";
+import { z } from 'zod';
+import { pageQuery } from '@/http/filters.js';
+import { idSchema } from '@/http/validate.js';
+import { emailSchema, userNameSchema } from '@/modules/auth/index.js';
+import { discountPercentSchema } from '../plans/plans.schemas.js';
+import { MAX_REASON_LENGTH, MAX_TENANT_NAME_LENGTH, SLUG_PATTERN } from './tenants.constants.js';
 
 export const createTenantRequestSchema = z
   .strictObject({
@@ -19,11 +19,11 @@ export const createTenantRequestSchema = z
       })
       // No minimum term (P1.21): one day is enough.
       .refine((s) => s.endDate >= s.startDate, {
-        path: ["endDate"],
-        params: { code: "end_before_start" },
+        path: ['endDate'],
+        params: { code: 'end_before_start' },
       }),
   })
-  .meta({ id: "CreateTenantRequest" });
+  .meta({ id: 'CreateTenantRequest' });
 
 // Renew, extend, change plan, and end early are all this one change (Phase 1 spec, 4.3).
 export const changeSubscriptionRequestSchema = z
@@ -36,9 +36,9 @@ export const changeSubscriptionRequestSchema = z
     reason: z.string().trim().min(1).max(MAX_REASON_LENGTH).optional(),
   })
   .refine((s) => s.endDate >= s.startDate, {
-    path: ["endDate"],
-    params: { code: "end_before_start" },
+    path: ['endDate'],
+    params: { code: 'end_before_start' },
   })
-  .meta({ id: "ChangeSubscriptionRequest" });
+  .meta({ id: 'ChangeSubscriptionRequest' });
 
 export const listTenantsQuerySchema = z.object({ ...pageQuery });

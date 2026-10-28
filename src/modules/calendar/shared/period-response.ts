@@ -1,9 +1,9 @@
-import type { PeriodResponseType, PeriodViewType } from "../calendar.types.js";
-import { weekView } from "./rows.js";
+import type { PeriodResponseType, PeriodViewType } from '../calendar.types.js';
+import { weekView } from './rows.js';
 
 /** A period view in its response shape: every key present, `null` where the variant has none (R8.4). */
 export function toPeriodResponse(view: PeriodViewType): PeriodResponseType {
-  const season = view.kind === "season";
+  const season = view.kind === 'season';
   const shared = {
     id: view.id,
     name: view.name,
@@ -13,10 +13,10 @@ export function toPeriodResponse(view: PeriodViewType): PeriodResponseType {
     replacesId: view.replacesId,
     next: view.next,
   };
-  if (view.recurrence === "once") {
+  if (view.recurrence === 'once') {
     return {
       ...shared,
-      recurrence: "once",
+      recurrence: 'once',
       startDate: view.startDate,
       endDate: view.endDate,
       start: null,
@@ -38,8 +38,8 @@ export function toPeriodResponse(view: PeriodViewType): PeriodResponseType {
     overrides: view.overrides.map((override) => ({
       year: override.year,
       action: override.action,
-      startDate: override.action === "move" ? override.startDate : null,
-      endDate: override.action === "move" ? override.endDate : null,
+      startDate: override.action === 'move' ? override.startDate : null,
+      endDate: override.action === 'move' ? override.endDate : null,
     })),
   };
 }

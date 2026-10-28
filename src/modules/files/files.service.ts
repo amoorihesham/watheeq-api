@@ -1,34 +1,17 @@
-import { Readable } from "node:stream";
-import type { Db, Tx } from "@/db/pool.js";
-import { withTx } from "@/db/tx.js";
-import { AppError } from "@/http/errors.js";
-import type { Logger } from "@/logging/logger.js";
-import { notify } from "@/modules/notifications/index.js";
-import {
-  BYTES_PER_GB,
-  clearNotice,
-  createSubscriptionsRepository,
-  recordNotice,
-} from "@/modules/subscriptions/index.js";
-import { holdersOf } from "@/modules/tenant-access/index.js";
-import type { FileStoreType } from "@/storage/index.js";
-import {
-  CONTENT_TYPE_BY_KIND,
-  MAX_PENDING_UPLOADS,
-  PENDING_LIFETIME_HOURS,
-  STORAGE_REARM_PERCENT,
-  STORAGE_WARNING_PERCENT,
-} from "./files.constants.js";
-import type {
-  FileDownloadType,
-  FileRowType,
-  FilesRepositoryType,
-  FileType,
-  UploadInputType,
-} from "./files.types.js";
-import { createUploadInspector } from "./shared/inspector.js";
-import { storageKeyOf } from "./shared/keys.js";
-import { cleanFileName } from "./shared/names.js";
+import { Readable } from 'node:stream';
+import type { Db, Tx } from '@/db/pool.js';
+import { withTx } from '@/db/tx.js';
+import { AppError } from '@/http/errors.js';
+import type { Logger } from '@/logging/logger.js';
+import { notify } from '@/modules/notifications/index.js';
+import { BYTES_PER_GB, clearNotice, createSubscriptionsRepository, recordNotice } from '@/modules/subscriptions/index.js';
+import { holdersOf } from '@/modules/tenant-access/index.js';
+import type { FileStoreType } from '@/storage/index.js';
+import { CONTENT_TYPE_BY_KIND, MAX_PENDING_UPLOADS, PENDING_LIFETIME_HOURS, STORAGE_REARM_PERCENT, STORAGE_WARNING_PERCENT } from './files.constants.js';
+import type { FileDownloadType, FileRowType, FilesRepositoryType, FileType, UploadInputType } from './files.types.js';
+import { createUploadInspector } from './shared/inspector.js';
+import { storageKeyOf } from './shared/keys.js';
+import { cleanFileName } from './shared/names.js';
 
 const subscriptionsRepo = createSubscriptionsRepository();
 
@@ -37,21 +20,17 @@ const subscriptionsRepo = createSubscriptionsRepository();
  * lock and has just summed the stored bytes: usage seen below 80% before the upload re-arms it, and usage at 90% or
  * more after it sends it once. The re-arm comes first, so one upload that jumps across both sends a new warning.
  */
-async function warnWhenNearlyFull(
-  tx: Tx,
-  tenantId: string,
-  usage: { before: number; after: number; limitBytes: number },
-): Promise<void> {
+async function warnWhenNearlyFull(tx: Tx, tenantId: string, usage: { before: number; after: number; limitBytes: number }): Promise<void> {
   const { before, after, limitBytes } = usage;
   if (before * 100 < limitBytes * STORAGE_REARM_PERCENT) {
-    await clearNotice(tx, tenantId, "storage_nearly_full", "");
+    await clearNotice(tx, tenantId, 'storage_nearly_full', '');
   }
   if (after * 100 >= limitBytes * STORAGE_WARNING_PERCENT) {
-    if (await recordNotice(tx, tenantId, "storage_nearly_full", "")) {
+    if (await recordNotice(tx, tenantId, 'storage_nearly_full', '')) {
       await notify(tx, {
         tenantId,
-        recipients: await holdersOf(tx, tenantId, "subscription.view"),
-        kind: "storage.nearly_full",
+        recipients: await holdersOf(tx, tenantId, 'subscription.view'),
+        kind: 'storage.nearly_full',
         data: { usedBytes: after, limitBytes },
       });
     }
@@ -72,15 +51,7 @@ const toFile = (row: FileRowType): FileType => {
   };
 };
 
-export function createFilesService({
-  db,
-  repo,
-  store,
-}: {
-  db: Db;
-  repo: FilesRepositoryType;
-  store: FileStoreType;
-}) {
+export function createFilesService({ db, repo, store }: { db: Db; repo: FilesRepositoryType; store: FileStoreType }) {
   /**
    * The short transaction under the tenant's upload lock: the uploader's quota, the storage reservation, and the
    * `uploading` row that makes the reservation count for the next caller (Phase 5.5 spec, 4.3 "Uploading").
@@ -89,12 +60,12 @@ export function createFilesService({
     return withTx(db, async (tx) => {
       const [uploader] = await repo.findUploader(tx, input.tenantId, input.userId);
       if (!uploader?.isActive) {
-        throw new AppError("FORBIDDEN");
+        throw new AppError('FORBIDDEN');
       }
       await repo.lockUploads(tx, input.tenantId);
       const [open] = await repo.countOpenUploads(tx, input.userId);
       if ((open?.open ?? 0) >= MAX_PENDING_UPLOADS) {
-        throw new AppError("UPLOAD_QUOTA_REACHED");
+        throw new AppError('UPLOAD_QUOTA_REACHED');
       }
       const [limit] = await subscriptionsRepo.findStorageLimit(tx, input.tenantId);
       if (!limit) {
@@ -107,18 +78,18 @@ export function createFilesService({
         limitBytes: limit.storageLimitGb * BYTES_PER_GB,
       };
       if (usage.after > usage.limitBytes) {
-        throw new AppError("STORAGE_LIMIT_REACHED");
+        throw new AppError('STORAGE_LIMIT_REACHED');
       }
       await warnWhenNearlyFull(tx, input.tenantId, usage);
       const [row] = await repo.insert(tx, {
         tenantId: input.tenantId,
         uploadedBy: input.userId,
-        state: "uploading",
+        state: 'uploading',
         name,
         sizeBytes: input.declaredSize,
       });
       if (!row) {
-        throw new Error("insert returned no row");
+        throw new Error('insert returned no row');
       }
       return row;
     });
@@ -130,7 +101,7 @@ export function createFilesService({
       await store.delete([key]);
       await repo.deleteById(db, fileId);
     } catch (err) {
-      log.error({ err, fileId }, "could not remove a failed upload; the sweep will");
+      log.error({ err, fileId }, 'could not remove a failed upload; the sweep will');
     }
   }
 
@@ -155,12 +126,12 @@ export function createFilesService({
           sha256: inspector.sha256(),
         });
         if (!pending) {
-          throw new Error("the upload row was removed while its bytes were arriving");
+          throw new Error('the upload row was removed while its bytes were arriving');
         }
         return toFile(pending);
       } catch (err) {
         if (!(err instanceof AppError)) {
-          log.error({ err, fileId: reserved.id }, "upload failed");
+          log.error({ err, fileId: reserved.id }, 'upload failed');
         }
         await abandon(reserved.id, key, log);
         throw err;
@@ -171,19 +142,15 @@ export function createFilesService({
     async get(tenantId: string, userId: string, fileId: string): Promise<FileType> {
       const [row] = await repo.findPendingOf(db, tenantId, userId, fileId);
       if (!row) {
-        throw new AppError("NOT_FOUND");
+        throw new AppError('NOT_FOUND');
       }
       return toFile(row);
     },
 
-    async open(
-      tenantId: string,
-      userId: string,
-      fileId: string,
-    ): Promise<{ file: FileDownloadType; body: Readable }> {
+    async open(tenantId: string, userId: string, fileId: string): Promise<{ file: FileDownloadType; body: Readable }> {
       const [row] = await repo.findPendingOf(db, tenantId, userId, fileId);
       if (!row) {
-        throw new AppError("NOT_FOUND");
+        throw new AppError('NOT_FOUND');
       }
       const file = toFile(row);
       return {
@@ -196,7 +163,7 @@ export function createFilesService({
     async discard(tenantId: string, userId: string, fileId: string): Promise<void> {
       const rows = await repo.discardPendingOf(db, tenantId, userId, fileId);
       if (rows.length === 0) {
-        throw new AppError("NOT_FOUND");
+        throw new AppError('NOT_FOUND');
       }
     },
   };

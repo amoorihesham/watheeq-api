@@ -1,22 +1,17 @@
-import type { z } from "zod";
-import type { AuthConfigType, LinksConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { EmailSenderType } from "@/email/index.js";
-import type { OrgUnitKindType } from "@/modules/org/index.js";
-import type { createUsersController } from "./users.controller.js";
-import type { createUsersRepository } from "./users.repository.js";
-import type { userResponseSchema } from "./users.responses.js";
-import type {
-  assignRoleRequestSchema,
-  inviteUserRequestSchema,
-  listUsersQuerySchema,
-  updateUserRequestSchema,
-} from "./users.schemas.js";
-import type { createUsersService } from "./users.service.js";
+import type { z } from 'zod';
+import type { AuthConfigType, LinksConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { EmailSenderType } from '@/email/index.js';
+import type { OrgUnitKindType } from '@/modules/org/index.js';
+import type { createUsersController } from './users.controller.js';
+import type { createUsersRepository } from './users.repository.js';
+import type { userResponseSchema } from './users.responses.js';
+import type { assignRoleRequestSchema, inviteUserRequestSchema, listUsersQuerySchema, updateUserRequestSchema } from './users.schemas.js';
+import type { createUsersService } from './users.service.js';
 
 /** A tenant user as the API returns it. */
 export type UserType = z.output<typeof userResponseSchema>;
-export type UserStatusType = UserType["status"];
+export type UserStatusType = UserType['status'];
 
 /** A user and their membership, as the repository reads them. */
 export interface UserRowType {

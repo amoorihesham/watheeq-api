@@ -1,4 +1,4 @@
-import { type AnyColumn, type SQL, sql } from "drizzle-orm";
+import { type AnyColumn, type SQL, sql } from 'drizzle-orm';
 
 /**
  * Case-insensitive name order with the ICU root collation, so lists sort the same on every server whatever

@@ -1,38 +1,25 @@
-import { writeAuditEntry } from "@/audit/index.js";
-import type { EscalationsJobConfigType } from "@/config/config.js";
-import type { Db, Executor, Tx } from "@/db/pool.js";
-import { withTx } from "@/db/tx.js";
-import type { Logger } from "@/logging/logger.js";
-import { addWorkingDays, type CalendarType, loadCalendar } from "@/modules/calendar/index.js";
-import {
-  type EscalationRuleType,
-  type RecipientType,
-  readEscalation,
-} from "@/modules/escalation/index.js";
-import { type NotificationKindType, notify } from "@/modules/notifications/index.js";
-import {
-  type AssigneeLevelType,
-  type AssigneeTargetType,
-  nextLevel,
-  resolveAssignees,
-} from "@/modules/positions/index.js";
-import { holdersOf } from "@/modules/tenant-access/index.js";
-import type { JobType } from "@/scheduler/index.js";
-import { ESCALATION_RULE_STATES } from "../requests.constants.js";
-import type {
-  EscalationCandidateRowType,
-  EscalationFiringType,
-  LockedRequestRowType,
-} from "../requests.types.js";
-import { createEscalationsRepository } from "./escalations.repository.js";
-import { numberOf } from "./notices.js";
+import { writeAuditEntry } from '@/audit/index.js';
+import type { Db, Executor, Tx } from '@/db/pool.js';
+import { withTx } from '@/db/tx.js';
+import type { Logger } from '@/logging/logger.js';
+import { addWorkingDays, type CalendarType, loadCalendar } from '@/modules/calendar/index.js';
+import { type EscalationRuleType, type RecipientType, readEscalation } from '@/modules/escalation/index.js';
+import { type NotificationKindType, notify } from '@/modules/notifications/index.js';
+import { type AssigneeLevelType, type AssigneeTargetType, nextLevel, resolveAssignees } from '@/modules/positions/index.js';
+import { holdersOf } from '@/modules/tenant-access/index.js';
+import type { JobType } from '@/scheduler/index.js';
+import { ESCALATION_RULE_STATES } from '../requests.constants.js';
+import type { EscalationCandidateRowType, EscalationFiringType, LockedRequestRowType } from '../requests.types.js';
+import { createEscalationsRepository } from './escalations.repository.js';
+import { numberOf } from './notices.js';
+import type { EscalationsJobConfigType } from '@/config/config.js';
 
 const repo = createEscalationsRepository();
 
 const KIND_OF_RULE: Record<EscalationRuleType, NotificationKindType> = {
-  r0: "request.review_overdue",
-  r1: "request.at_risk",
-  r2: "request.breached",
+  r0: 'request.review_overdue',
+  r1: 'request.at_risk',
+  r2: 'request.breached',
 };
 
 export interface CheckEscalationsOptionsType {
@@ -67,40 +54,29 @@ interface DueType {
  * What is due on one candidate at `now` (Phase 7 spec, 4.3): R0 once its days after submission have passed, R2 once
  * the deadline has passed, and R1 from its share of the deadline until then (Q2).
  */
-function dueOf(
-  candidate: EscalationCandidateRowType,
-  calendar: CalendarType,
-  now: Date,
-): DueType[] {
-  if (candidate.state === "in_review") {
+function dueOf(candidate: EscalationCandidateRowType, calendar: CalendarType, now: Date): DueType[] {
+  if (candidate.state === 'in_review') {
     if (!candidate.r0.enabled || candidate.r0.fired) {
       return [];
     }
     const dueAt = addWorkingDays(calendar, candidate.submittedAt, candidate.r0.days);
-    return now >= dueAt ? [{ rule: "r0", dueAt, deadline: null }] : [];
+    return now >= dueAt ? [{ rule: 'r0', dueAt, deadline: null }] : [];
   }
   if (!candidate.acceptedAt) {
     return [];
   }
   const deadline = addWorkingDays(calendar, candidate.acceptedAt, candidate.priorityDays);
   if (now > deadline) {
-    return candidate.r2.enabled && !candidate.r2.fired
-      ? [{ rule: "r2", dueAt: deadline, deadline }]
-      : [];
+    return candidate.r2.enabled && !candidate.r2.fired ? [{ rule: 'r2', dueAt: deadline, deadline }] : [];
   }
   if (!candidate.r1.enabled || candidate.r1.fired || candidate.r2.fired) {
     return [];
   }
-  const dueAt = addWorkingDays(
-    calendar,
-    candidate.acceptedAt,
-    (candidate.priorityDays * candidate.r1.percent) / 100,
-  );
-  return now >= dueAt ? [{ rule: "r1", dueAt, deadline }] : [];
+  const dueAt = addWorkingDays(calendar, candidate.acceptedAt, (candidate.priorityDays * candidate.r1.percent) / 100);
+  return now >= dueAt ? [{ rule: 'r1', dueAt, deadline }] : [];
 }
 
-const targetOf = (recipient: RecipientType): AssigneeTargetType =>
-  "position" in recipient ? { position: recipient.position } : { builtin: recipient.builtin };
+const targetOf = (recipient: RecipientType): AssigneeTargetType => ('position' in recipient ? { position: recipient.position } : { builtin: recipient.builtin });
 
 interface TargetResultType {
   target: AssigneeTargetType;
@@ -109,11 +85,7 @@ interface TargetResultType {
 }
 
 /** The people each target resolves to, climbing when a target finds nobody (Q4). */
-async function resolveTargets(
-  tx: Tx,
-  request: LockedRequestRowType,
-  recipients: RecipientType[],
-): Promise<TargetResultType[]> {
+async function resolveTargets(tx: Tx, request: LockedRequestRowType, recipients: RecipientType[]): Promise<TargetResultType[]> {
   const context = { requesterId: request.requesterId, handlerId: request.handlerId };
   const options = { excludeParties: false };
   const results: TargetResultType[] = [];
@@ -131,23 +103,18 @@ async function resolveTargets(
   return results;
 }
 
-type FiringOutcomeType = "fired" | "skipped_locked" | "stale";
+type FiringOutcomeType = 'fired' | 'skipped_locked' | 'stale';
 
 /** Fires one rule on one request in one transaction (Phase 7 spec, 4.3 "Firing"). */
-async function fire(
-  db: Db,
-  candidate: EscalationCandidateRowType,
-  due: DueType,
-  runId: string,
-): Promise<FiringOutcomeType> {
+async function fire(db: Db, candidate: EscalationCandidateRowType, due: DueType, runId: string): Promise<FiringOutcomeType> {
   return withTx(db, async (tx) => {
     const [request] = await repo.lockForFiring(tx, candidate.tenantId, candidate.id);
     if (!request) {
-      return "skipped_locked";
+      return 'skipped_locked';
     }
     const settings = await readEscalation(tx, request.tenantId);
     if (request.state !== ESCALATION_RULE_STATES[due.rule] || !settings?.[due.rule].enabled) {
-      return "stale";
+      return 'stale';
     }
     const inserted = await repo.insertFiring(tx, {
       tenantId: request.tenantId,
@@ -156,21 +123,19 @@ async function fire(
       dueAt: due.dueAt,
     });
     if (inserted.length === 0) {
-      return "stale";
+      return 'stale';
     }
 
     const targets = await resolveTargets(tx, request, settings[due.rule].recipients);
     const found = [...new Set(targets.flatMap((result) => result.userIds))];
     const noRecipients = found.length === 0;
-    const recipients = noRecipients
-      ? await holdersOf(tx, request.tenantId, "escalation.manage")
-      : found;
+    const recipients = noRecipients ? await holdersOf(tx, request.tenantId, 'escalation.manage') : found;
     const base = { number: numberOf(request), title: request.title };
     await notify(tx, {
       tenantId: request.tenantId,
       recipients,
       requestId: request.id,
-      kind: noRecipients ? "escalation.no_recipients" : KIND_OF_RULE[due.rule],
+      kind: noRecipients ? 'escalation.no_recipients' : KIND_OF_RULE[due.rule],
       data: noRecipients
         ? { ...base, rule: due.rule }
         : {
@@ -181,9 +146,9 @@ async function fire(
     });
     await writeAuditEntry(tx, {
       tenantId: request.tenantId,
-      actor: { type: "system" },
-      action: "request.escalated",
-      resourceType: "request",
+      actor: { type: 'system' },
+      action: 'request.escalated',
+      resourceType: 'request',
       resourceId: request.id,
       details: {
         rule: due.rule,
@@ -194,7 +159,7 @@ async function fire(
       },
       requestId: runId,
     });
-    return "fired";
+    return 'fired';
   });
 }
 
@@ -203,10 +168,7 @@ async function fire(
  * its calendar, and fires each rule in its own transaction. Stops starting firings when the budget is spent or the
  * signal aborts; the rest waits for the next run.
  */
-export async function checkEscalations(
-  db: Db,
-  { logger, runId, signal, now: fixedNow, budgetMs, afterScan }: CheckEscalationsOptionsType,
-): Promise<EscalationCountsType> {
+export async function checkEscalations(db: Db, { logger, runId, signal, now: fixedNow, budgetMs, afterScan }: CheckEscalationsOptionsType): Promise<EscalationCountsType> {
   const counts: EscalationCountsType = { r0: 0, r1: 0, r2: 0, skippedLocked: 0, failed: 0 };
   const startedAt = Date.now();
   const now = fixedNow ?? (await repo.now(db));
@@ -224,7 +186,7 @@ export async function checkEscalations(
       calendar = await loadCalendar(db, tenantId);
     } catch (err) {
       counts.failed += 1;
-      logger.error({ err, tenantId }, "escalation check failed for the tenant");
+      logger.error({ err, tenantId }, 'escalation check failed for the tenant');
       continue;
     }
     for (const candidate of tenantCandidates) {
@@ -234,18 +196,15 @@ export async function checkEscalations(
       try {
         for (const due of dueOf(candidate, calendar, now)) {
           const outcome = await fire(db, candidate, due, runId);
-          if (outcome === "fired") {
+          if (outcome === 'fired') {
             counts[due.rule] += 1;
-          } else if (outcome === "skipped_locked") {
+          } else if (outcome === 'skipped_locked') {
             counts.skippedLocked += 1;
           }
         }
       } catch (err) {
         counts.failed += 1;
-        logger.error(
-          { err, tenantId, requestId: candidate.id },
-          "escalation check failed for the request",
-        );
+        logger.error({ err, tenantId, requestId: candidate.id }, 'escalation check failed for the request');
       }
     }
   }
@@ -254,19 +213,14 @@ export async function checkEscalations(
 
 export function createEscalationsJob(settings: EscalationsJobConfigType): JobType {
   return {
-    name: "requests.escalations",
+    name: 'requests.escalations',
     intervalMs: settings.intervalMs,
     settings,
-    run: ({ db, logger, signal, runId }) =>
-      checkEscalations(db, { logger, runId, signal, budgetMs: settings.budgetMs }),
+    run: ({ db, logger, signal, runId }) => checkEscalations(db, { logger, runId, signal, budgetMs: settings.budgetMs }),
   };
 }
 
 /** The rules that fired on a request, in the order they fired (R7.5). */
-export function escalationsOf(
-  executor: Executor,
-  tenantId: string,
-  requestId: string,
-): Promise<EscalationFiringType[]> {
+export function escalationsOf(executor: Executor, tenantId: string, requestId: string): Promise<EscalationFiringType[]> {
   return repo.firingsOf(executor, tenantId, requestId);
 }

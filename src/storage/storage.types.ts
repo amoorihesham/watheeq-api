@@ -1,5 +1,5 @@
-import type { Readable } from "node:stream";
-import type { StorageConfigType } from "@/config/config.js";
+import type { Readable } from 'node:stream';
+import type { StorageConfigType } from '@/config/config.js';
 
 /** Where the bytes of uploaded files live. Modules depend on this; the S3 implementation and test doubles satisfy it. */
 export interface FileStoreType {

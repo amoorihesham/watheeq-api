@@ -1,18 +1,13 @@
-import { sql } from "drizzle-orm";
-import type { Tx } from "@/db/pool.js";
-import { SUBSCRIPTION_TIME_ZONE } from "@/modules/subscriptions/index.js";
+import { sql } from 'drizzle-orm';
+import type { Tx } from '@/db/pool.js';
+import { SUBSCRIPTION_TIME_ZONE } from '@/modules/subscriptions/index.js';
 
 /**
  * The next number of a prefix for the tenant in the current Riyadh year (Phase 6 spec, 4.1). The upsert takes the
  * counter row's lock, so concurrent submissions count one after the other, and a rollback undoes the increment, so
  * numbers have no gaps. `at` fixes the clock for tests; production uses the database's.
  */
-export async function nextNumber(
-  tx: Tx,
-  tenantId: string,
-  prefix: string,
-  at?: Date,
-): Promise<{ year: number; number: number }> {
+export async function nextNumber(tx: Tx, tenantId: string, prefix: string, at?: Date): Promise<{ year: number; number: number }> {
   const instant = at ? sql`${at.toISOString()}::timestamptz` : sql`now()`;
   const zone = sql.raw(`'${SUBSCRIPTION_TIME_ZONE}'`);
   const { rows } = await tx.execute<{ year: number; last_value: number }>(sql`
@@ -22,7 +17,7 @@ export async function nextNumber(
     returning year::int as year, last_value`);
   const [row] = rows;
   if (!row) {
-    throw new Error("the number sequence returned no row");
+    throw new Error('the number sequence returned no row');
   }
   return { year: row.year, number: row.last_value };
 }

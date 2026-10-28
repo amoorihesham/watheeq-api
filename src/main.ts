@@ -1,45 +1,38 @@
-import { buildApp } from "./app.js";
-import { parseConfig, unknownJobKeys } from "./config/config.js";
-import { createDb, createPool } from "./db/pool.js";
-import { buildJobs } from "./jobs.js";
-import { createLogger } from "./logging/logger.js";
-import { type SchedulerType, selectJobs, startScheduler } from "./scheduler/index.js";
-import { createS3Store } from "./storage/index.js";
+import { buildApp } from './app.js';
+import { parseConfig } from './config/config.js';
+import { createDb, createPool } from './db/pool.js';
+import { buildJobs } from './jobs.js';
+import { createLogger } from './logging/logger.js';
+import { type SchedulerType, selectJobs, startScheduler } from './scheduler/index.js';
+import { createS3Store } from './storage/index.js';
 
 const parsed = parseConfig(process.env);
 if (!parsed.ok) {
-  createLogger("info").fatal(parsed.message);
+  createLogger('info').fatal(parsed.message);
   process.exit(1);
 }
 
 const config = parsed.config;
 const logger = createLogger(config.server.logLevel);
 
-const unknownKeys = unknownJobKeys(process.env);
-if (unknownKeys.length > 0) {
-  logger.warn({ keys: unknownKeys }, "unknown setting ignored");
-}
-
 const fileStore = createS3Store(config.storage);
 
-// Names in JOBS are checked here, before anything listens, because config does not know the job names.
 let jobs: ReturnType<typeof selectJobs>;
 try {
-  jobs = selectJobs(config.jobs.enabled, buildJobs({ fileStore, jobs: config.jobs }));
+  jobs = selectJobs(config.scheduler.jobs, buildJobs({ fileStore, jobs: config.jobs }));
 } catch (err) {
-  logger.fatal({ err }, "invalid JOBS setting");
+  logger.fatal({ err }, 'invalid JOBS setting');
   process.exit(1);
 }
 
 const pool = createPool(config.database, logger);
+
 let scheduler: SchedulerType | undefined;
+
 const server = buildApp({ pool, logger, config, fileStore }).listen(config.server.port, () => {
-  logger.info({ port: config.server.port, env: config.server.env }, "listening");
+  logger.info({ port: config.server.port, env: config.server.env }, 'listening');
   scheduler = startScheduler({ jobs, db: createDb(pool), logger });
-  logger.info(
-    { jobs: jobs.map((job) => ({ name: job.name, ...job.settings })) },
-    "scheduler started",
-  );
+  logger.info({ jobs: jobs.map((job) => ({ name: job.name, ...job.settings })) }, 'scheduler started');
 });
 
 let shuttingDown = false;
@@ -49,21 +42,16 @@ function shutdown(signal: string): void {
     return;
   }
   shuttingDown = true;
-  logger.info({ signal }, "shutting down");
+  logger.info({ signal }, 'shutting down');
 
-  // Clears the job timers now; a job stops between transactions, and the one in progress finishes or rolls back
-  // before the pool closes.
   const jobsStopped = Promise.resolve(scheduler?.stop());
 
   let exitCode = 0;
   const forceTimer = setTimeout(() => {
-    logger.error(
-      { timeoutMs: config.server.shutdownTimeoutMs },
-      "in-flight requests did not finish, closing connections",
-    );
+    logger.error({ timeoutMs: config.server.shutdownTimeout }, 'in-flight requests did not finish, closing connections');
     exitCode = 1;
     server.closeAllConnections();
-  }, config.server.shutdownTimeoutMs);
+  }, config.server.shutdownTimeout);
   forceTimer.unref();
 
   server.close(() => {
@@ -71,7 +59,7 @@ function shutdown(signal: string): void {
     jobsStopped
       .then(() => pool.end())
       .catch((err: unknown) => {
-        logger.error({ err }, "error closing database pool");
+        logger.error({ err }, 'error closing database pool');
         exitCode = 1;
       })
       .finally(() => process.exit(exitCode));
@@ -79,14 +67,14 @@ function shutdown(signal: string): void {
   server.closeIdleConnections();
 }
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
-process.on("uncaughtException", (err) => {
-  logger.fatal({ err }, "uncaught exception");
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'uncaught exception');
   process.exit(1);
 });
-process.on("unhandledRejection", (reason) => {
-  logger.fatal({ err: reason }, "unhandled rejection");
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ err: reason }, 'unhandled rejection');
   process.exit(1);
 });

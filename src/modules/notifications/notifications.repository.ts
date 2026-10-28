@@ -1,11 +1,10 @@
-import { and, count, eq, inArray, isNotNull, isNull, lt, type SQL, sql } from "drizzle-orm";
-import type { Executor } from "@/db/pool.js";
-import { notifications, tenantMembers, users } from "@/db/schema/index.js";
-import type { PageRequestType } from "@/http/list.js";
-import type { NewNotificationType } from "./notifications.types.js";
+import { and, count, eq, inArray, isNotNull, isNull, lt, type SQL, sql } from 'drizzle-orm';
+import type { Executor } from '@/db/pool.js';
+import { notifications, tenantMembers, users } from '@/db/schema/index.js';
+import type { PageRequestType } from '@/http/list.js';
+import type { NewNotificationType } from './notifications.types.js';
 
-const own = (tenantId: string, userId: string) =>
-  and(eq(notifications.tenantId, tenantId), eq(notifications.userId, userId));
+const own = (tenantId: string, userId: string) => and(eq(notifications.tenantId, tenantId), eq(notifications.userId, userId));
 
 /** A notification's place in the list order, read in SQL: a JavaScript Date would drop the microseconds. */
 const positionOf = (tenantId: string, userId: string, notificationId: string) =>
@@ -21,13 +20,7 @@ export function createNotificationsRepository() {
         .select({ userId: tenantMembers.userId })
         .from(tenantMembers)
         .innerJoin(users, eq(users.id, tenantMembers.userId))
-        .where(
-          and(
-            eq(tenantMembers.tenantId, tenantId),
-            inArray(tenantMembers.userId, userIds),
-            eq(users.isActive, true),
-          ),
-        )
+        .where(and(eq(tenantMembers.tenantId, tenantId), inArray(tenantMembers.userId, userIds), eq(users.isActive, true)))
         .then((rows) => rows.map((row) => row.userId));
     },
 
@@ -54,11 +47,7 @@ export function createNotificationsRepository() {
 
     /** The caller's own notifications, narrowed by the `unread` filter (`true` unread, `false` read only). */
     listWhere(tenantId: string, userId: string, unread: string): SQL | undefined {
-      return and(
-        own(tenantId, userId),
-        unread === "true" ? isNull(notifications.readAt) : undefined,
-        unread === "false" ? isNotNull(notifications.readAt) : undefined,
-      );
+      return and(own(tenantId, userId), unread === 'true' ? isNull(notifications.readAt) : undefined, unread === 'false' ? isNotNull(notifications.readAt) : undefined);
     },
 
     async count(db: Executor, where: SQL | undefined): Promise<number> {
@@ -96,13 +85,7 @@ export function createNotificationsRepository() {
       return db
         .update(notifications)
         .set({ readAt: sql`now()` })
-        .where(
-          and(
-            own(tenantId, userId),
-            isNull(notifications.readAt),
-            sql`(${notifications.createdAt}, ${notifications.id}) <= ${positionOf(tenantId, userId, upTo)}`,
-          ),
-        );
+        .where(and(own(tenantId, userId), isNull(notifications.readAt), sql`(${notifications.createdAt}, ${notifications.id}) <= ${positionOf(tenantId, userId, upTo)}`));
     },
 
     /**
@@ -115,11 +98,8 @@ export function createNotificationsRepository() {
         .from(notifications)
         .where(lt(notifications.readAt, sql`now() - ${days} * interval '1 day'`))
         .limit(limit)
-        .for("update", { skipLocked: true });
-      return db
-        .delete(notifications)
-        .where(inArray(notifications.id, due))
-        .returning({ id: notifications.id });
+        .for('update', { skipLocked: true });
+      return db.delete(notifications).where(inArray(notifications.id, due)).returning({ id: notifications.id });
     },
   };
 }

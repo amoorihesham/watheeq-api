@@ -1,24 +1,19 @@
-import type { z } from "zod";
-import type { AuthConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { subscriptions, tenantNoticeKinds } from "@/db/schema/index.js";
-import type { SUBSCRIPTION_STATES } from "./subscriptions.constants.js";
-import type { createSubscriptionsController } from "./subscriptions.controller.js";
-import type { createSubscriptionsRepository } from "./subscriptions.repository.js";
-import type {
-  getSubscriptionResponseSchema,
-  subscriptionStatusResponseSchema,
-  subscriptionViewResponseSchema,
-  usageResponseSchema,
-} from "./subscriptions.responses.js";
-import type { createSubscriptionsService } from "./subscriptions.service.js";
+import type { z } from 'zod';
+import type { AuthConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { subscriptions, tenantNoticeKinds } from '@/db/schema/index.js';
+import type { SUBSCRIPTION_STATES } from './subscriptions.constants.js';
+import type { createSubscriptionsController } from './subscriptions.controller.js';
+import type { createSubscriptionsRepository } from './subscriptions.repository.js';
+import type { getSubscriptionResponseSchema, subscriptionStatusResponseSchema, subscriptionViewResponseSchema, usageResponseSchema } from './subscriptions.responses.js';
+import type { createSubscriptionsService } from './subscriptions.service.js';
 
 export type SubscriptionStateType = (typeof SUBSCRIPTION_STATES)[number];
 
 export type SubscriptionRowType = typeof subscriptions.$inferSelect;
 export type NoticeKindType = (typeof tenantNoticeKinds.enumValues)[number];
 export type NewSubscriptionType = typeof subscriptions.$inferInsert;
-export type SubscriptionChangesType = Omit<NewSubscriptionType, "tenantId" | "updatedAt">;
+export type SubscriptionChangesType = Omit<NewSubscriptionType, 'tenantId' | 'updatedAt'>;
 
 export interface PricingInputType {
   priceHalalas: number;
@@ -27,14 +22,14 @@ export interface PricingInputType {
 }
 
 export interface PricingType extends PricingInputType {
-  paymentPeriod: SubscriptionRowType["paymentPeriod"];
+  paymentPeriod: SubscriptionRowType['paymentPeriod'];
   effectivePriceHalalas: number;
 }
 
 export type SubscriptionViewType = z.output<typeof subscriptionViewResponseSchema>;
 export type SubscriptionStatusType = z.output<typeof subscriptionStatusResponseSchema>;
 export type UsageType = z.output<typeof usageResponseSchema>;
-export type StorageUsageType = UsageType["storage"];
+export type StorageUsageType = UsageType['storage'];
 export type GetSubscriptionResponseType = z.output<typeof getSubscriptionResponseSchema>;
 
 /** Attached to the request by `subscriptionGuard`; read it through `subscriptionOf(req)`. */

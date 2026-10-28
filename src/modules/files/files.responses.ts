@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /** A pending file as the API returns it. */
 export const fileResponseSchema = z
@@ -10,4 +10,4 @@ export const fileResponseSchema = z
     sha256: z.string(),
     expiresAt: z.date(),
   })
-  .meta({ id: "File" });
+  .meta({ id: 'File' });

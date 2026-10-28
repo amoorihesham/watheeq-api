@@ -1,4 +1,4 @@
-import { notificationKinds } from "@/db/schema/index.js";
+import { notificationKinds } from '@/db/schema/index.js';
 
 export const NOTIFICATION_KINDS = notificationKinds.enumValues;
 

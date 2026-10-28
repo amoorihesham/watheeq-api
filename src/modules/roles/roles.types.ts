@@ -1,17 +1,12 @@
-import type { z } from "zod";
-import type { AuthConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { PermissionScopeType } from "@/modules/tenant-access/index.js";
-import type { createRolesController } from "./roles.controller.js";
-import type { createRolesRepository } from "./roles.repository.js";
-import type { permissionResponseSchema, roleResponseSchema } from "./roles.responses.js";
-import type {
-  createRoleRequestSchema,
-  listPermissionsQuerySchema,
-  listRolesQuerySchema,
-  updateRoleRequestSchema,
-} from "./roles.schemas.js";
-import type { createRolesService } from "./roles.service.js";
+import type { z } from 'zod';
+import type { AuthConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { PermissionScopeType } from '@/modules/tenant-access/index.js';
+import type { createRolesController } from './roles.controller.js';
+import type { createRolesRepository } from './roles.repository.js';
+import type { permissionResponseSchema, roleResponseSchema } from './roles.responses.js';
+import type { createRoleRequestSchema, listPermissionsQuerySchema, listRolesQuerySchema, updateRoleRequestSchema } from './roles.schemas.js';
+import type { createRolesService } from './roles.service.js';
 
 /** A role row, without its grants. */
 export interface RoleRowType {

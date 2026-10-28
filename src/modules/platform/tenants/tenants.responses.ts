@@ -1,8 +1,5 @@
-import { z } from "zod";
-import {
-  subscriptionViewResponseSchema,
-  usageResponseSchema,
-} from "@/modules/subscriptions/index.js";
+import { z } from 'zod';
+import { subscriptionViewResponseSchema, usageResponseSchema } from '@/modules/subscriptions/index.js';
 
 export const tenantResponseSchema = z
   .strictObject({
@@ -12,7 +9,7 @@ export const tenantResponseSchema = z
     ownerId: z.string().nullable(),
     createdAt: z.date(),
   })
-  .meta({ id: "Tenant" });
+  .meta({ id: 'Tenant' });
 
 /** The one tenant shape: create, get, each list item, and a subscription change all answer it (Q18). */
 export const tenantDetailResponseSchema = z
@@ -21,4 +18,4 @@ export const tenantDetailResponseSchema = z
     subscription: subscriptionViewResponseSchema,
     usage: usageResponseSchema,
   })
-  .meta({ id: "TenantDetail" });
+  .meta({ id: 'TenantDetail' });

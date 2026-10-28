@@ -1,13 +1,12 @@
-import { createHash } from "node:crypto";
-import type { Readable } from "node:stream";
-import { fileTypeFromBuffer } from "file-type";
-import { AppError } from "@/http/errors.js";
-import { DETECTION_PREFIX_BYTES } from "../files.constants.js";
-import type { FileKindType, UploadInspectorType } from "../files.types.js";
+import { createHash } from 'node:crypto';
+import type { Readable } from 'node:stream';
+import { fileTypeFromBuffer } from 'file-type';
+import { AppError } from '@/http/errors.js';
+import { DETECTION_PREFIX_BYTES } from '../files.constants.js';
+import type { FileKindType, UploadInspectorType } from '../files.types.js';
 
-const lengthMismatch = () =>
-  new AppError("VALIDATION_FAILED", [{ path: "body", code: "length_mismatch" }]);
-const notAllowed = () => new AppError("FILE_TYPE_NOT_ALLOWED");
+const lengthMismatch = () => new AppError('VALIDATION_FAILED', [{ path: 'body', code: 'length_mismatch' }]);
+const notAllowed = () => new AppError('FILE_TYPE_NOT_ALLOWED');
 
 /**
  * Checks an upload while it streams to the store (Phase 5.5 spec, 4.3 "Uploading"): the bytes received must equal
@@ -15,12 +14,9 @@ const notAllowed = () => new AppError("FILE_TYPE_NOT_ALLOWED");
  * the file name claims. Plain text has no signature: it must be valid UTF-8 without a NUL byte, throughout.
  * Refusing while streaming stops the transfer before the rest of the file reaches the store.
  */
-export function createUploadInspector(
-  kind: FileKindType,
-  declaredSize: number,
-): UploadInspectorType {
-  const hash = createHash("sha256");
-  const decoder = kind === "txt" ? new TextDecoder("utf-8", { fatal: true }) : undefined;
+export function createUploadInspector(kind: FileKindType, declaredSize: number): UploadInspectorType {
+  const hash = createHash('sha256');
+  const decoder = kind === 'txt' ? new TextDecoder('utf-8', { fatal: true }) : undefined;
   let received = 0;
   let prefix: Buffer[] = [];
   let prefixBytes = 0;
@@ -37,7 +33,7 @@ export function createUploadInspector(
     // A malformed file that makes the detector throw is a file of no allowed type.
     const detected = await fileTypeFromBuffer(Buffer.concat(prefix)).catch(() => undefined);
     prefix = [];
-    if (kind === "txt") {
+    if (kind === 'txt') {
       if (detected) {
         throw fail(notAllowed());
       }
@@ -55,7 +51,7 @@ export function createUploadInspector(
     }
     try {
       if (chunk.includes(0)) {
-        throw new Error("NUL byte");
+        throw new Error('NUL byte');
       }
       decoder.decode(chunk, { stream: true });
     } catch {
@@ -103,6 +99,6 @@ export function createUploadInspector(
   return {
     measure,
     failure: () => failure,
-    sha256: () => hash.digest("hex"),
+    sha256: () => hash.digest('hex'),
   };
 }

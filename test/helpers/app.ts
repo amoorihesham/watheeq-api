@@ -1,12 +1,12 @@
-import type express from "express";
-import type pg from "pg";
-import { buildApp } from "../../src/app.js";
-import type { EmailSenderType } from "../../src/email/index.js";
-import type { Logger } from "../../src/logging/logger.js";
-import type { FileStoreType } from "../../src/storage/index.js";
-import { testConfig } from "./config.js";
-import { createFakeEmailSender } from "./email.js";
-import { connectToTestStore } from "./storage.js";
+import type express from 'express';
+import type pg from 'pg';
+import { buildApp } from '../../src/app.js';
+import type { EmailSenderType } from '../../src/email/index.js';
+import type { Logger } from '../../src/logging/logger.js';
+import type { FileStoreType } from '../../src/storage/index.js';
+import { testConfig } from './config.js';
+import { createFakeEmailSender } from './email.js';
+import { connectToTestStore } from './storage.js';
 
 export interface TestAppOptions {
   /** Raw environment strings layered over the defaults, as in `testConfig`. */
@@ -20,19 +20,13 @@ export interface TestAppOptions {
 }
 
 /** The real application, built against the given pool and logger with test configuration. */
-export function testApp(
-  pool: pg.Pool,
-  logger: Logger,
-  options: TestAppOptions = {},
-): express.Express {
+export function testApp(pool: pg.Pool, logger: Logger, options: TestAppOptions = {}): express.Express {
   return buildApp({
     pool,
     logger,
     config: testConfig(options.config),
     emailSender: options.emailSender ?? createFakeEmailSender().sender,
     fileStore: options.fileStore ?? connectToTestStore(),
-    ...(options.routers
-      ? { routers: options.routers.map((router) => ({ prefix: "/", router })) }
-      : {}),
+    ...(options.routers ? { routers: options.routers.map((router) => ({ prefix: '/', router })) } : {}),
   });
 }

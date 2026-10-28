@@ -1,4 +1,4 @@
-import type { EmailConfigType } from "@/config/config.js";
+import type { EmailConfigType } from '@/config/config.js';
 
 export interface EmailMessageType {
   to: string;

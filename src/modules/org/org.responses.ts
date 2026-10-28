@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { ORG_UNIT_KINDS } from "./org.constants.js";
+import { z } from 'zod';
+import { ORG_UNIT_KINDS } from './org.constants.js';
 
 export const orgUnitResponseSchema = z
   .strictObject({
@@ -10,7 +10,7 @@ export const orgUnitResponseSchema = z
     createdAt: z.date(),
     updatedAt: z.date(),
   })
-  .meta({ id: "OrgUnit" });
+  .meta({ id: 'OrgUnit' });
 
 const sectionNodeFields = {
   id: z.string(),
@@ -33,4 +33,4 @@ export const orgTreeResponseSchema = z
     organization: z.strictObject({ memberCount: z.number() }),
     departments: z.array(departmentNodeResponseSchema),
   })
-  .meta({ id: "OrgTree" });
+  .meta({ id: 'OrgTree' });

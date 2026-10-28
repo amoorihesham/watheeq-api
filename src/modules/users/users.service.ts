@@ -1,82 +1,46 @@
-import { type SQL, sql } from "drizzle-orm";
-import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
-import { byName } from "@/db/order.js";
-import type { Db, Executor, Tx } from "@/db/pool.js";
-import { users } from "@/db/schema/index.js";
-import { withTx } from "@/db/tx.js";
-import type { EmailSenderType } from "@/email/index.js";
-import { AppError } from "@/http/errors.js";
-import { listPage } from "@/http/list.js";
-import type { PageType } from "@/http/respond.js";
-import type { Logger } from "@/logging/logger.js";
-import {
-  endUserAccess,
-  insertPendingUser,
-  invitationEmail,
-  issuePasswordToken,
-} from "@/modules/auth/index.js";
-import { assertSeatAvailable } from "@/modules/subscriptions/index.js";
-import {
-  assertGrantsHeld,
-  type GrantMapType,
-  grantListOf,
-  loadRoleGrants,
-  type TenantPermissionType,
-} from "@/modules/tenant-access/index.js";
-import type {
-  AssignRoleRequestType,
-  CallerType,
-  InviteUserRequestType,
-  ListUsersQueryType,
-  MemberChangesType,
-  UpdateUserRequestType,
-  UserRowType,
-  UsersRepositoryType,
-  UsersSettingsType,
-  UserType,
-} from "./users.types.js";
+import { type SQL, sql } from 'drizzle-orm';
+import { type AuditContextType, writeAuditEntry } from '@/audit/index.js';
+import { byName } from '@/db/order.js';
+import type { Db, Executor, Tx } from '@/db/pool.js';
+import { users } from '@/db/schema/index.js';
+import { withTx } from '@/db/tx.js';
+import type { EmailSenderType } from '@/email/index.js';
+import { AppError } from '@/http/errors.js';
+import { listPage } from '@/http/list.js';
+import type { PageType } from '@/http/respond.js';
+import type { Logger } from '@/logging/logger.js';
+import { endUserAccess, insertPendingUser, invitationEmail, issuePasswordToken } from '@/modules/auth/index.js';
+import { assertSeatAvailable } from '@/modules/subscriptions/index.js';
+import { assertGrantsHeld, type GrantMapType, grantListOf, loadRoleGrants, type TenantPermissionType } from '@/modules/tenant-access/index.js';
+import type { AssignRoleRequestType, CallerType, InviteUserRequestType, ListUsersQueryType, MemberChangesType, UpdateUserRequestType, UserRowType, UsersRepositoryType, UsersSettingsType, UserType } from './users.types.js';
 
 function toUser(row: UserRowType): UserType {
   return {
     id: row.id,
     email: row.email,
     userName: row.userName,
-    unit:
-      row.unitId && row.unitName && row.unitKind
-        ? { id: row.unitId, name: row.unitName, kind: row.unitKind }
-        : null,
+    unit: row.unitId && row.unitName && row.unitKind ? { id: row.unitId, name: row.unitName, kind: row.unitKind } : null,
     isManager: row.isManager,
     role: { id: row.roleId, name: row.roleName, isSystem: row.roleIsSystem },
     isOwner: row.isOwner,
-    status: !row.isActive ? "inactive" : row.emailVerifiedAt ? "active" : "invited",
+    status: !row.isActive ? 'inactive' : row.emailVerifiedAt ? 'active' : 'invited',
     createdAt: row.createdAt,
   };
 }
 
-const managerNeedsUnit = () =>
-  new AppError("VALIDATION_FAILED", [{ path: "isManager", code: "manager_needs_unit" }]);
+const managerNeedsUnit = () => new AppError('VALIDATION_FAILED', [{ path: 'isManager', code: 'manager_needs_unit' }]);
 
-export function createUsersService({
-  db,
-  repo,
-  emailSender,
-  settings,
-}: {
-  db: Db;
-  repo: UsersRepositoryType;
-  emailSender: EmailSenderType;
-  settings: UsersSettingsType;
-}) {
+export function createUsersService({ db, repo, emailSender, settings }: { db: Db; repo: UsersRepositoryType; emailSender: EmailSenderType; settings: UsersSettingsType }) {
   async function assertUnit(executor: Executor, tenantId: string, unitId: string | null) {
     if (unitId && !(await repo.unitExists(executor, tenantId, unitId)).length) {
-      throw new AppError("VALIDATION_FAILED", [{ path: "unitId", code: "unknown_unit" }]);
+      throw new AppError('VALIDATION_FAILED', [{ path: 'unitId', code: 'unknown_unit' }]);
     }
   }
 
   async function grantsOfRole(executor: Executor, tenantId: string, roleId: string) {
     const grants = await loadRoleGrants(executor, tenantId, roleId);
     if (!grants) {
-      throw new AppError("VALIDATION_FAILED", [{ path: "roleId", code: "unknown_role" }]);
+      throw new AppError('VALIDATION_FAILED', [{ path: 'roleId', code: 'unknown_role' }]);
     }
     return grants;
   }
@@ -85,25 +49,14 @@ export function createUsersService({
    * The subset rule for users (R3.10, P3.11): the caller must hold the route's permission and every grant of each
    * role involved, as their role is now (R3.12).
    */
-  function assertWithinCaller(
-    tx: Tx,
-    tenantId: string,
-    caller: CallerType,
-    permission: TenantPermissionType,
-    roles: { grants: GrantMapType; path?: string }[],
-  ) {
-    return assertGrantsHeld(tx, tenantId, caller.id, [
-      { key: permission, scope: "organization" },
-      ...roles.flatMap(({ grants, path }) =>
-        grantListOf(grants).map((grant) => (path === undefined ? grant : { ...grant, path })),
-      ),
-    ]);
+  function assertWithinCaller(tx: Tx, tenantId: string, caller: CallerType, permission: TenantPermissionType, roles: { grants: GrantMapType; path?: string }[]) {
+    return assertGrantsHeld(tx, tenantId, caller.id, [{ key: permission, scope: 'organization' }, ...roles.flatMap(({ grants, path }) => grantListOf(grants).map((grant) => (path === undefined ? grant : { ...grant, path })))]);
   }
 
   async function loadUser(executor: Executor, tenantId: string, userId: string, visible?: SQL) {
     const [row] = await repo.findById(executor, tenantId, userId, visible);
     if (!row) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     return row;
   }
@@ -112,27 +65,23 @@ export function createUsersService({
   async function lockUser(tx: Tx, tenantId: string, userId: string, visible?: SQL) {
     const [locked] = await repo.lockMember(tx, tenantId, userId);
     if (!locked) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError('NOT_FOUND');
     }
     return loadUser(tx, tenantId, userId, visible);
   }
 
   return {
-    async list(
-      tenantId: string,
-      callerId: string,
-      query: ListUsersQueryType,
-    ): Promise<PageType<UserType>> {
+    async list(tenantId: string, callerId: string, query: ListUsersQueryType): Promise<PageType<UserType>> {
       const visible = repo.visibleTo(tenantId, callerId);
       const page = await listPage({
         db,
-        list: "users",
+        list: 'users',
         query,
         keys: [
-          { expr: byName(users.userName), type: "text" },
-          { expr: sql`${users.id}`, type: "uuid" },
+          { expr: byName(users.userName), type: 'text' },
+          { expr: sql`${users.id}`, type: 'uuid' },
         ],
-        direction: "asc",
+        direction: 'asc',
         where: (filters) => repo.listWhere(tenantId, filters, visible),
         selectPage: repo.page,
         count: repo.count,
@@ -149,22 +98,14 @@ export function createUsersService({
      * Creates the user without a password, takes a seat (R2.9), and emails the invitation after commit (P1.14).
      * A send failure is logged; the user exists and the admin can resend.
      */
-    async invite(
-      tenantId: string,
-      body: InviteUserRequestType,
-      caller: CallerType,
-      context: AuditContextType,
-      log: Logger,
-    ): Promise<UserType> {
+    async invite(tenantId: string, body: InviteUserRequestType, caller: CallerType, context: AuditContextType, log: Logger): Promise<UserType> {
       if (body.isManager && !body.unitId) {
         throw managerNeedsUnit();
       }
       const { user, token, tenantName } = await withTx(db, async (tx) => {
         await assertUnit(tx, tenantId, body.unitId);
         const role = await grantsOfRole(tx, tenantId, body.roleId);
-        await assertWithinCaller(tx, tenantId, caller, "user.create", [
-          { grants: role, path: "roleId" },
-        ]);
+        await assertWithinCaller(tx, tenantId, caller, 'user.create', [{ grants: role, path: 'roleId' }]);
         await assertSeatAvailable(tx, tenantId);
         const created = await insertPendingUser(tx, { email: body.email, userName: body.userName });
         await repo.insertMember(tx, {
@@ -174,18 +115,13 @@ export function createUsersService({
           isManager: body.isManager,
           roleId: body.roleId,
         });
-        const token = await issuePasswordToken(
-          tx,
-          created.id,
-          "invitation",
-          settings.invitationTtlSeconds,
-        );
+        const token = await issuePasswordToken(tx, created.id, 'invitation', settings.invitationTtlSeconds);
         const user = toUser(await loadUser(tx, tenantId, created.id));
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "user.invited",
-          resourceType: "user",
+          action: 'user.invited',
+          resourceType: 'user',
           resourceId: created.id,
           details: {
             email: body.email,
@@ -197,21 +133,14 @@ export function createUsersService({
           },
         });
         const [tenant] = await repo.tenantName(tx, tenantId);
-        return { user, token, tenantName: tenant?.name ?? "" };
+        return { user, token, tenantName: tenant?.name ?? '' };
       });
 
       try {
-        await emailSender.send(
-          invitationEmail(
-            user,
-            { userName: caller.userName, tenantName },
-            token,
-            settings.appBaseUrl,
-          ),
-        );
+        await emailSender.send(invitationEmail(user, { userName: caller.userName, tenantName }, token, settings.appBaseUrl));
       } catch (err) {
         // The token is never logged.
-        log.warn({ err, userId: user.id }, "invitation email failed");
+        log.warn({ err, userId: user.id }, 'invitation email failed');
       }
       return user;
     },
@@ -220,12 +149,7 @@ export function createUsersService({
      * Changes name, unit, and manager flag (R2.11); the role has its own endpoint (P3.12). Moving a manager ends
      * their manager role unless the same request sets it again (R2.7).
      */
-    update(
-      tenantId: string,
-      id: string,
-      body: UpdateUserRequestType,
-      context: AuditContextType,
-    ): Promise<UserType> {
+    update(tenantId: string, id: string, body: UpdateUserRequestType, context: AuditContextType): Promise<UserType> {
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
         const unitId = body.unitId === undefined ? before.unitId : body.unitId;
@@ -242,20 +166,16 @@ export function createUsersService({
           unitId,
           isManager,
         };
-        const changed = (Object.keys(next) as (keyof typeof next)[]).filter(
-          (key) => next[key] !== before[key],
-        );
+        const changed = (Object.keys(next) as (keyof typeof next)[]).filter((key) => next[key] !== before[key]);
         if (changed.length === 0) {
           return toUser(before);
         }
-        if (changed.includes("userName")) {
+        if (changed.includes('userName')) {
           await repo.updateUser(tx, id, { userName: next.userName });
         }
-        const memberChanges: MemberChangesType = Object.fromEntries(
-          changed.filter((key) => key !== "userName").map((key) => [key, next[key]]),
-        );
+        const memberChanges: MemberChangesType = Object.fromEntries(changed.filter((key) => key !== 'userName').map((key) => [key, next[key]]));
         // A holder must sit in the position's unit, so a move ends the position (R5.3).
-        const losesPosition = changed.includes("unitId") && before.positionId !== null;
+        const losesPosition = changed.includes('unitId') && before.positionId !== null;
         if (losesPosition) {
           memberChanges.positionId = null;
         }
@@ -265,8 +185,8 @@ export function createUsersService({
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "user.updated",
-          resourceType: "user",
+          action: 'user.updated',
+          resourceType: 'user',
           resourceId: id,
           details: {
             before: {
@@ -287,29 +207,20 @@ export function createUsersService({
      * Gives the user another role (R3.9). Both the current and the new role must be within the caller's grants
      * (R3.10); nobody changes their own role (R3.11), and the owner keeps the Tenant Admin role (R3.3).
      */
-    assignRole(
-      tenantId: string,
-      id: string,
-      input: AssignRoleRequestType,
-      caller: CallerType,
-      context: AuditContextType,
-    ): Promise<UserType> {
+    assignRole(tenantId: string, id: string, input: AssignRoleRequestType, caller: CallerType, context: AuditContextType): Promise<UserType> {
       const { roleId } = input;
       return withTx(db, async (tx) => {
         // The caller's directory scope bounds whom they can reach (Phase 3 spec, step 3.4).
         const before = await lockUser(tx, tenantId, id, repo.visibleTo(tenantId, caller.id));
         if (id === caller.id) {
-          throw new AppError("SELF_CHANGE_FORBIDDEN");
+          throw new AppError('SELF_CHANGE_FORBIDDEN');
         }
         if (before.isOwner && roleId !== before.roleId) {
-          throw new AppError("OWNER_PROTECTED");
+          throw new AppError('OWNER_PROTECTED');
         }
         const role = await grantsOfRole(tx, tenantId, roleId);
         const current = await grantsOfRole(tx, tenantId, before.roleId);
-        await assertWithinCaller(tx, tenantId, caller, "role.assign", [
-          { grants: current },
-          { grants: role, path: "roleId" },
-        ]);
+        await assertWithinCaller(tx, tenantId, caller, 'role.assign', [{ grants: current }, { grants: role, path: 'roleId' }]);
         if (roleId === before.roleId) {
           return toUser(before);
         }
@@ -318,8 +229,8 @@ export function createUsersService({
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "user.role_assigned",
-          resourceType: "user",
+          action: 'user.role_assigned',
+          resourceType: 'user',
           resourceId: id,
           details: {
             before: { roleId: before.roleId, roleName: before.roleName },
@@ -331,22 +242,17 @@ export function createUsersService({
     },
 
     /** Frees the seat and ends the manager role, the position held (R5.3), every link, and every session (R2.12). Repeating it is a no-op. */
-    deactivate(
-      tenantId: string,
-      id: string,
-      caller: CallerType,
-      context: AuditContextType,
-    ): Promise<UserType> {
+    deactivate(tenantId: string, id: string, caller: CallerType, context: AuditContextType): Promise<UserType> {
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
         if (id === caller.id) {
-          throw new AppError("SELF_CHANGE_FORBIDDEN");
+          throw new AppError('SELF_CHANGE_FORBIDDEN');
         }
         if (before.isOwner) {
-          throw new AppError("OWNER_PROTECTED");
+          throw new AppError('OWNER_PROTECTED');
         }
         const role = await grantsOfRole(tx, tenantId, before.roleId);
-        await assertWithinCaller(tx, tenantId, caller, "user.deactivate", [{ grants: role }]);
+        await assertWithinCaller(tx, tenantId, caller, 'user.deactivate', [{ grants: role }]);
         if (!before.isActive) {
           return toUser(before);
         }
@@ -363,8 +269,8 @@ export function createUsersService({
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "user.deactivated",
-          resourceType: "user",
+          action: 'user.deactivated',
+          resourceType: 'user',
           resourceId: id,
           ...(hasEnded
             ? {
@@ -386,16 +292,11 @@ export function createUsersService({
      * Takes a seat again (R2.12, R1.12); the user comes back as a plain member of their unit. Their role must be
      * within the caller's grants, since reactivating gives its powers back (P3.11).
      */
-    reactivate(
-      tenantId: string,
-      id: string,
-      caller: CallerType,
-      context: AuditContextType,
-    ): Promise<UserType> {
+    reactivate(tenantId: string, id: string, caller: CallerType, context: AuditContextType): Promise<UserType> {
       return withTx(db, async (tx) => {
         const before = await lockUser(tx, tenantId, id);
         const role = await grantsOfRole(tx, tenantId, before.roleId);
-        await assertWithinCaller(tx, tenantId, caller, "user.deactivate", [{ grants: role }]);
+        await assertWithinCaller(tx, tenantId, caller, 'user.deactivate', [{ grants: role }]);
         if (before.isActive) {
           return toUser(before);
         }
@@ -404,8 +305,8 @@ export function createUsersService({
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "user.reactivated",
-          resourceType: "user",
+          action: 'user.reactivated',
+          resourceType: 'user',
           resourceId: id,
         });
         return toUser(await loadUser(tx, tenantId, id));
@@ -416,39 +317,27 @@ export function createUsersService({
      * Issues a new invitation link and retires the older ones (R2.14). A send failure surfaces as an error:
      * the admin asked for an email, so they must not be told it went out.
      */
-    async resendInvitation(
-      tenantId: string,
-      id: string,
-      caller: CallerType,
-      context: AuditContextType,
-    ): Promise<void> {
+    async resendInvitation(tenantId: string, id: string, caller: CallerType, context: AuditContextType): Promise<void> {
       const { user, token, tenantName } = await withTx(db, async (tx) => {
         const user = await lockUser(tx, tenantId, id);
         if (user.emailVerifiedAt) {
-          throw new AppError("ALREADY_VERIFIED");
+          throw new AppError('ALREADY_VERIFIED');
         }
         if (!user.isActive) {
-          throw new AppError("USER_INACTIVE");
+          throw new AppError('USER_INACTIVE');
         }
-        const token = await issuePasswordToken(tx, id, "invitation", settings.invitationTtlSeconds);
+        const token = await issuePasswordToken(tx, id, 'invitation', settings.invitationTtlSeconds);
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "user.invitation_resent",
-          resourceType: "user",
+          action: 'user.invitation_resent',
+          resourceType: 'user',
           resourceId: id,
         });
         const [tenant] = await repo.tenantName(tx, tenantId);
-        return { user, token, tenantName: tenant?.name ?? "" };
+        return { user, token, tenantName: tenant?.name ?? '' };
       });
-      await emailSender.send(
-        invitationEmail(
-          user,
-          { userName: caller.userName, tenantName },
-          token,
-          settings.appBaseUrl,
-        ),
-      );
+      await emailSender.send(invitationEmail(user, { userName: caller.userName, tenantName }, token, settings.appBaseUrl));
     },
   };
 }

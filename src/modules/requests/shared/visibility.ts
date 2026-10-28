@@ -1,19 +1,9 @@
-import { type AnyColumn, and, eq, or, type SQL, sql } from "drizzle-orm";
-import {
-  informationRequests,
-  requestStageAssignees,
-  requestStageRuns,
-  requests,
-} from "@/db/schema/index.js";
-import { withinScope } from "@/modules/tenant-access/index.js";
+import { type AnyColumn, and, eq, or, type SQL, sql } from 'drizzle-orm';
+import { informationRequests, requestStageAssignees, requestStageRuns, requests } from '@/db/schema/index.js';
+import { withinScope } from '@/modules/tenant-access/index.js';
 
 /** The caller's `permission` scope over the request's owner and one of its recorded units (T29). */
-const scoped = (
-  tenantId: string,
-  callerId: string,
-  permission: "request.view" | "request.review",
-  unit: AnyColumn,
-) =>
+const scoped = (tenantId: string, callerId: string, permission: 'request.view' | 'request.review', unit: AnyColumn) =>
   withinScope({
     tenantId,
     callerId,
@@ -23,11 +13,7 @@ const scoped = (
   });
 
 /** True while the request is in review and the caller holds `request.review`. */
-export const reviewableBy = (tenantId: string, callerId: string): SQL =>
-  and(
-    eq(requests.state, "in_review"),
-    scoped(tenantId, callerId, "request.review", requests.requesterUnitId),
-  ) as SQL;
+export const reviewableBy = (tenantId: string, callerId: string): SQL => and(eq(requests.state, 'in_review'), scoped(tenantId, callerId, 'request.review', requests.requesterUnitId)) as SQL;
 
 /** The caller is recorded as an assignee of the request's live (active or held) stage run. */
 export const isLiveAssignee = (callerId: string): SQL =>
@@ -50,8 +36,8 @@ export function visibleRequests(tenantId: string, callerId: string): SQL {
     eq(requests.handlerId, callerId),
     isLiveAssignee(callerId),
     reviewableBy(tenantId, callerId),
-    scoped(tenantId, callerId, "request.view", requests.requesterUnitId),
-    scoped(tenantId, callerId, "request.view", requests.handlerUnitId),
+    scoped(tenantId, callerId, 'request.view', requests.requesterUnitId),
+    scoped(tenantId, callerId, 'request.view', requests.handlerUnitId),
   ) as SQL;
 }
 
@@ -61,7 +47,7 @@ export function visibleRequests(tenantId: string, callerId: string): SQL {
  */
 export function waitingOnMe(_tenantId: string, callerId: string): SQL {
   return or(
-    and(eq(requests.state, "in_progress"), isLiveAssignee(callerId)),
+    and(eq(requests.state, 'in_progress'), isLiveAssignee(callerId)),
     and(
       eq(requests.requesterId, callerId),
       sql`exists (

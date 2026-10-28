@@ -1,4 +1,4 @@
-import type { EmailMessageType, EmailSenderType } from "../../src/email/index.js";
+import type { EmailMessageType, EmailSenderType } from '../../src/email/index.js';
 
 /** Records every email instead of sending it. `failNext` makes the next send throw, like an SMTP outage. */
 export function createFakeEmailSender() {
@@ -8,7 +8,7 @@ export function createFakeEmailSender() {
     async send(message) {
       if (failNext) {
         failNext = false;
-        throw new Error("smtp unavailable");
+        throw new Error('smtp unavailable');
       }
       sent.push(message);
     },
@@ -23,7 +23,7 @@ export function createFakeEmailSender() {
     lastTokenFor(to: string): string {
       const message = sent.filter((m) => m.to === to).at(-1);
       const link = message?.text.match(/https?:\/\/\S+/)?.[0];
-      return link ? (new URL(link).searchParams.get("token") ?? "") : "";
+      return link ? (new URL(link).searchParams.get('token') ?? '') : '';
     },
   };
 }

@@ -1,20 +1,14 @@
-import { WEEKDAYS } from "../calendar.constants.js";
-import type {
-  CalendarPeriodType,
-  CalendarType,
-  DayHoursType,
-  SpanType,
-  WeekShapeType,
-} from "../calendar.types.js";
-import { coversDate } from "./occurrences.js";
-import { timeToMs, weekdayIndexOf } from "./riyadh-time.js";
+import { WEEKDAYS } from '../calendar.constants.js';
+import type { CalendarPeriodType, CalendarType, DayHoursType, SpanType, WeekShapeType } from '../calendar.types.js';
+import { coversDate } from './occurrences.js';
+import { timeToMs, weekdayIndexOf } from './riyadh-time.js';
 
 function spanOn(week: WeekShapeType, date: string): SpanType | null {
-  const rule = week.days[WEEKDAYS[weekdayIndexOf(date)] ?? "sun"];
-  if (rule === "off") {
+  const rule = week.days[WEEKDAYS[weekdayIndexOf(date)] ?? 'sun'];
+  if (rule === 'off') {
     return null;
   }
-  return rule === "default" ? week : rule;
+  return rule === 'default' ? week : rule;
 }
 
 /** The version with the latest `effectiveFrom` on or before `date`. */
@@ -29,14 +23,13 @@ function versionOn(calendar: CalendarType, date: string): WeekShapeType | null {
 }
 
 /** The holidays covering `date`, working day or not. */
-export const holidaysOn = (calendar: CalendarType, date: string): CalendarPeriodType[] =>
-  calendar.periods.filter((p) => p.kind === "holiday" && coversDate(p, date));
+export const holidaysOn = (calendar: CalendarType, date: string): CalendarPeriodType[] => calendar.periods.filter((p) => p.kind === 'holiday' && coversDate(p, date));
 
 /** The highest-ranked season covering `date` (P4.9), whether or not the date is a working day. */
 export function seasonOn(calendar: CalendarType, date: string) {
-  let top: Extract<CalendarPeriodType, { kind: "season" }> | null = null;
+  let top: Extract<CalendarPeriodType, { kind: 'season' }> | null = null;
   for (const period of calendar.periods) {
-    if (period.kind === "season" && (!top || period.rank > top.rank) && coversDate(period, date)) {
+    if (period.kind === 'season' && (!top || period.rank > top.rank) && coversDate(period, date)) {
       top = period;
     }
   }
@@ -53,7 +46,7 @@ export function dayHours(calendar: CalendarType, date: string): DayHoursType | n
   if (!normal) {
     return null;
   }
-  if (calendar.periods.some((p) => p.kind === "holiday" && coversDate(p, date))) {
+  if (calendar.periods.some((p) => p.kind === 'holiday' && coversDate(p, date))) {
     return null;
   }
   const season = seasonOn(calendar, date);

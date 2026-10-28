@@ -1,1 +1,1 @@
-export { createPrioritiesRouter } from "./priorities.routes.js";
+export { createPrioritiesRouter } from './priorities.routes.js';

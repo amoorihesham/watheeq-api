@@ -1,25 +1,12 @@
-import type { z } from "zod";
-import type { AuthConfigType } from "@/config/config.js";
-import type { Db } from "@/db/pool.js";
-import type { WEEKDAYS } from "./calendar.constants.js";
-import type { createCalendarController } from "./calendar.controller.js";
-import type { createCalendarRepository } from "./calendar.repository.js";
-import type {
-  calendarDaysResponseSchema,
-  calendarResponseSchema,
-  hoursVersionResponseSchema,
-  periodResponseSchema,
-  weekShapeResponseSchema,
-} from "./calendar.responses.js";
-import type {
-  calendarQuerySchema,
-  createPeriodRequestSchema,
-  dayViewQuerySchema,
-  periodOverrideRequestSchema,
-  updatePeriodRequestSchema,
-  weekShapeSchema,
-} from "./calendar.schemas.js";
-import type { createCalendarService } from "./calendar.service.js";
+import type { z } from 'zod';
+import type { AuthConfigType } from '@/config/config.js';
+import type { Db } from '@/db/pool.js';
+import type { WEEKDAYS } from './calendar.constants.js';
+import type { createCalendarController } from './calendar.controller.js';
+import type { createCalendarRepository } from './calendar.repository.js';
+import type { calendarDaysResponseSchema, calendarResponseSchema, hoursVersionResponseSchema, periodResponseSchema, weekShapeResponseSchema } from './calendar.responses.js';
+import type { calendarQuerySchema, createPeriodRequestSchema, dayViewQuerySchema, periodOverrideRequestSchema, updatePeriodRequestSchema, weekShapeSchema } from './calendar.schemas.js';
+import type { createCalendarService } from './calendar.service.js';
 
 export type WeekdayType = (typeof WEEKDAYS)[number];
 
@@ -30,7 +17,7 @@ export interface SpanType {
 }
 
 /** `default` uses the week's own span. */
-export type DayRuleType = "default" | "off" | SpanType;
+export type DayRuleType = 'default' | 'off' | SpanType;
 
 /** Hours for the seven weekdays, used by normal hours and by seasons (P4.4, P4.5). */
 export interface WeekShapeType extends SpanType {
@@ -64,16 +51,14 @@ export interface DateRangeType {
 }
 
 /** One year's adjustment of a recurring period; `year` is in the period's own calendar (R4.7). */
-export type PeriodOverrideType =
-  | { year: number; action: "skip" }
-  | ({ year: number; action: "move" } & DateRangeType);
+export type PeriodOverrideType = { year: number; action: 'skip' } | ({ year: number; action: 'move' } & DateRangeType);
 
-type PeriodEffectType = { kind: "holiday" } | { kind: "season"; week: WeekShapeType; rank: number };
+type PeriodEffectType = { kind: 'holiday' } | { kind: 'season'; week: WeekShapeType; rank: number };
 
 type PeriodDatesType =
-  | ({ recurrence: "once" } & DateRangeType)
+  | ({ recurrence: 'once' } & DateRangeType)
   | {
-      recurrence: "gregorian" | "hijri";
+      recurrence: 'gregorian' | 'hijri';
       start: MonthDayType;
       end: MonthDayType;
       /** The version produces the occurrences whose computed start lies in this range (P4.8). */
@@ -85,10 +70,7 @@ type PeriodDatesType =
 /** A holiday or season version (P4.5). */
 export type CalendarPeriodType = { id: string; name: string } & PeriodEffectType & PeriodDatesType;
 
-export type RecurringPeriodType = Extract<
-  CalendarPeriodType,
-  { recurrence: "gregorian" | "hijri" }
->;
+export type RecurringPeriodType = Extract<CalendarPeriodType, { recurrence: 'gregorian' | 'hijri' }>;
 
 /** Everything the working-time calculation needs about one tenant. */
 export interface CalendarType {

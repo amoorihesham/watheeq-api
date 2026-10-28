@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { NOTIFICATION_KINDS } from "./notifications.constants.js";
+import { z } from 'zod';
+import { NOTIFICATION_KINDS } from './notifications.constants.js';
 
 export const notificationResponseSchema = z
   .strictObject({
@@ -11,8 +11,6 @@ export const notificationResponseSchema = z
     createdAt: z.date(),
     readAt: z.date().nullable(),
   })
-  .meta({ id: "Notification" });
+  .meta({ id: 'Notification' });
 
-export const unreadCountResponseSchema = z
-  .strictObject({ count: z.number() })
-  .meta({ id: "UnreadCount" });
+export const unreadCountResponseSchema = z.strictObject({ count: z.number() }).meta({ id: 'UnreadCount' });

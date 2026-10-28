@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { PAYMENT_PERIODS } from "./plans.constants.js";
+import { z } from 'zod';
+import { PAYMENT_PERIODS } from './plans.constants.js';
 
 export const planResponseSchema = z
   .strictObject({
@@ -14,4 +14,4 @@ export const planResponseSchema = z
     createdAt: z.date(),
     updatedAt: z.date(),
   })
-  .meta({ id: "Plan" });
+  .meta({ id: 'Plan' });

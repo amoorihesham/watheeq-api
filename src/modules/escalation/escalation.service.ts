@@ -1,30 +1,16 @@
-import { type AuditContextType, writeAuditEntry } from "@/audit/index.js";
-import type { Db, Executor } from "@/db/pool.js";
-import { withTx } from "@/db/tx.js";
-import { AppError, type ErrorDetail } from "@/http/errors.js";
-import { targetKey } from "./escalation.schemas.js";
-import type {
-  EscalationInputType,
-  EscalationRepositoryType,
-  EscalationResponseType,
-  EscalationRuleType,
-  EscalationType,
-  PutEscalationRequestType,
-  RecipientType,
-} from "./escalation.types.js";
-import { readEscalation } from "./shared/settings.js";
+import { type AuditContextType, writeAuditEntry } from '@/audit/index.js';
+import type { Db, Executor } from '@/db/pool.js';
+import { withTx } from '@/db/tx.js';
+import { AppError, type ErrorDetail } from '@/http/errors.js';
+import { targetKey } from './escalation.schemas.js';
+import type { EscalationInputType, EscalationRepositoryType, EscalationResponseType, EscalationRuleType, EscalationType, PutEscalationRequestType, RecipientType } from './escalation.types.js';
+import { readEscalation } from './shared/settings.js';
 
-const RULES: EscalationRuleType[] = ["r0", "r1", "r2"];
+const RULES: EscalationRuleType[] = ['r0', 'r1', 'r2'];
 
 /** A recipient in the shape a save sends: no names, ids in one case, in a fixed order. */
-function canonicalRecipients(
-  recipients: (RecipientType | EscalationInputType["r0"]["recipients"][number])[],
-) {
-  return recipients
-    .map((target) =>
-      "position" in target ? { position: target.position } : { builtin: target.builtin },
-    )
-    .sort((a, b) => targetKey(a).localeCompare(targetKey(b)));
+function canonicalRecipients(recipients: (RecipientType | EscalationInputType['r0']['recipients'][number])[]) {
+  return recipients.map((target) => ('position' in target ? { position: target.position } : { builtin: target.builtin })).sort((a, b) => targetKey(a).localeCompare(targetKey(b)));
 }
 
 /** The settings in the shape a save sends, so a save can be compared with what is stored, and audited. */
@@ -44,10 +30,7 @@ function canonical(settings: EscalationType | EscalationInputType) {
   };
 }
 
-const toRecipient = (target: RecipientType) =>
-  "position" in target
-    ? { position: target.position, name: target.name, builtin: null }
-    : { position: null, name: null, builtin: target.builtin };
+const toRecipient = (target: RecipientType) => ('position' in target ? { position: target.position, name: target.name, builtin: null } : { position: null, name: null, builtin: target.builtin });
 
 /** The response shape of the read: every rule with its recipients, and the saved flag. */
 function toResponse(settings: EscalationType | null): EscalationResponseType {
@@ -69,41 +52,29 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
    * Locks every tenant position the settings name, so none can be retired until this transaction ends, and
    * refuses the unknown and the retired. A position of another tenant is unknown (R5.19).
    */
-  async function assertPositionsActive(
-    tx: Executor,
-    tenantId: string,
-    settings: EscalationInputType,
-  ) {
-    const named = [
-      ...new Set(
-        RULES.flatMap((rule) =>
-          settings[rule].recipients.flatMap((t) => ("position" in t ? [t.position] : [])),
-        ),
-      ),
-    ];
+  async function assertPositionsActive(tx: Executor, tenantId: string, settings: EscalationInputType) {
+    const named = [...new Set(RULES.flatMap((rule) => settings[rule].recipients.flatMap((t) => ('position' in t ? [t.position] : []))))];
     if (named.length === 0) {
       return;
     }
-    const states = new Map(
-      (await repo.lockPositions(tx, tenantId, named)).map((state) => [state.id, state]),
-    );
+    const states = new Map((await repo.lockPositions(tx, tenantId, named)).map((state) => [state.id, state]));
     const details: ErrorDetail[] = [];
     RULES.forEach((rule) => {
       settings[rule].recipients.forEach((target, index) => {
-        if (!("position" in target)) {
+        if (!('position' in target)) {
           return;
         }
         const state = states.get(target.position);
         const path = `${rule}.recipients.${index}.position`;
         if (!state) {
-          details.push({ path, code: "unknown_position" });
+          details.push({ path, code: 'unknown_position' });
         } else if (state.retiredAt) {
-          details.push({ path, code: "position_retired" });
+          details.push({ path, code: 'position_retired' });
         }
       });
     });
     if (details.length > 0) {
-      throw new AppError("VALIDATION_FAILED", details);
+      throw new AppError('VALIDATION_FAILED', details);
     }
   }
 
@@ -116,11 +87,7 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
      * Replaces the whole configuration (R5.13). A save that changes nothing writes nothing. Recipients of a rule
      * that is off are kept.
      */
-    put(
-      tenantId: string,
-      body: PutEscalationRequestType,
-      context: AuditContextType,
-    ): Promise<EscalationResponseType> {
+    put(tenantId: string, body: PutEscalationRequestType, context: AuditContextType): Promise<EscalationResponseType> {
       return withTx(db, async (tx) => {
         await repo.lockSettings(tx, tenantId);
         const after = canonical(body);
@@ -137,14 +104,14 @@ export function createEscalationService({ db, repo }: { db: Db; repo: Escalation
         await writeAuditEntry(tx, {
           tenantId,
           ...context,
-          action: "escalation.updated",
-          resourceType: "escalation",
+          action: 'escalation.updated',
+          resourceType: 'escalation',
           resourceId: tenantId,
           details: { before, after },
         });
         const settings = await readEscalation(tx, tenantId);
         if (!settings) {
-          throw new Error("escalation settings missing after save");
+          throw new Error('escalation settings missing after save');
         }
         return toResponse(settings);
       });

@@ -1,9 +1,9 @@
-import { and, asc, count, eq, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
-import { byName } from "@/db/order.js";
-import type { Executor } from "@/db/pool.js";
-import { priorities } from "@/db/schema/index.js";
-import type { PageRequestType, SortKeyType } from "@/http/list.js";
-import type { PriorityRowType } from "./priorities.types.js";
+import { and, asc, count, eq, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
+import { byName } from '@/db/order.js';
+import type { Executor } from '@/db/pool.js';
+import { priorities } from '@/db/schema/index.js';
+import type { PageRequestType, SortKeyType } from '@/http/list.js';
+import type { PriorityRowType } from './priorities.types.js';
 
 const priorityColumns = {
   id: priorities.id,
@@ -14,13 +14,12 @@ const priorityColumns = {
 
 /** Active priorities by place, then retired ones (no place) by name; the ID breaks ties. */
 export const PRIORITY_SORT_KEYS: SortKeyType[] = [
-  { expr: sql`coalesce(${priorities.sortOrder}, 999999999)`, type: "integer" },
-  { expr: byName(priorities.name), type: "text" },
-  { expr: sql`${priorities.id}`, type: "uuid" },
+  { expr: sql`coalesce(${priorities.sortOrder}, 999999999)`, type: 'integer' },
+  { expr: byName(priorities.name), type: 'text' },
+  { expr: sql`${priorities.id}`, type: 'uuid' },
 ];
 
-const ofTenant = (tenantId: string, priorityId: string) =>
-  and(eq(priorities.tenantId, tenantId), eq(priorities.id, priorityId));
+const ofTenant = (tenantId: string, priorityId: string) => and(eq(priorities.tenantId, tenantId), eq(priorities.id, priorityId));
 
 /** Tenant code: every query is filtered by the caller's tenant (T2). */
 export function createPrioritiesRepository() {
@@ -30,21 +29,12 @@ export function createPrioritiesRepository() {
      * ends. The key differs from the calendar's and the seat lock's, so those never wait for it.
      */
     lockOrder(db: Executor, tenantId: string) {
-      return db.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${`priorities:${tenantId}`}, 0))`,
-      );
+      return db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`priorities:${tenantId}`}, 0))`);
     },
 
     /** The tenant's priorities that match the `retired` filter. */
     listWhere(tenantId: string, retired: string): SQL | undefined {
-      return and(
-        eq(priorities.tenantId, tenantId),
-        retired === "all"
-          ? undefined
-          : retired === "true"
-            ? isNotNull(priorities.retiredAt)
-            : isNull(priorities.retiredAt),
-      );
+      return and(eq(priorities.tenantId, tenantId), retired === 'all' ? undefined : retired === 'true' ? isNotNull(priorities.retiredAt) : isNull(priorities.retiredAt));
     },
 
     /** One page in the display order of `PRIORITY_SORT_KEYS`. */
@@ -66,16 +56,8 @@ export function createPrioritiesRepository() {
       return db.select(priorityColumns).from(priorities).where(ofTenant(tenantId, priorityId));
     },
 
-    findByIdForUpdate(
-      db: Executor,
-      tenantId: string,
-      priorityId: string,
-    ): Promise<PriorityRowType[]> {
-      return db
-        .select(priorityColumns)
-        .from(priorities)
-        .where(ofTenant(tenantId, priorityId))
-        .for("update");
+    findByIdForUpdate(db: Executor, tenantId: string, priorityId: string): Promise<PriorityRowType[]> {
+      return db.select(priorityColumns).from(priorities).where(ofTenant(tenantId, priorityId)).for('update');
     },
 
     /** The ids of the active priorities in display order. */
@@ -97,19 +79,11 @@ export function createPrioritiesRepository() {
       return Number(row?.next ?? 1);
     },
 
-    insert(
-      db: Executor,
-      values: { id: string; tenantId: string; name: string; days: number; sortOrder: number },
-    ) {
+    insert(db: Executor, values: { id: string; tenantId: string; name: string; days: number; sortOrder: number }) {
       return db.insert(priorities).values(values);
     },
 
-    update(
-      db: Executor,
-      tenantId: string,
-      priorityId: string,
-      patch: { name?: string; days?: number },
-    ) {
+    update(db: Executor, tenantId: string, priorityId: string, patch: { name?: string; days?: number }) {
       return db
         .update(priorities)
         .set({ ...patch, updatedAt: sql`now()` })
@@ -117,12 +91,7 @@ export function createPrioritiesRepository() {
     },
 
     /** Retiring takes the priority out of the order; restoring puts it at `sortOrder`. */
-    setRetired(
-      db: Executor,
-      tenantId: string,
-      priorityId: string,
-      place: { retired: true } | { retired: false; sortOrder: number },
-    ) {
+    setRetired(db: Executor, tenantId: string, priorityId: string, place: { retired: true } | { retired: false; sortOrder: number }) {
       return db
         .update(priorities)
         .set({

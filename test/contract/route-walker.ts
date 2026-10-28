@@ -1,4 +1,4 @@
-import express from "express";
+import express from 'express';
 
 interface LayerType {
   route?: { path: string; methods: Record<string, boolean> };
@@ -22,10 +22,10 @@ export function routesOfApp(build: () => express.Express): string[] {
     const result = original.apply(this, args);
     const path = args[0];
     if (Array.isArray(path)) {
-      throw new Error("an array mount path cannot be listed by the contract test");
+      throw new Error('an array mount path cannot be listed by the contract test');
     }
     for (const layer of this.stack.slice(before)) {
-      prefixOf.set(layer, typeof path === "string" ? path : "/");
+      prefixOf.set(layer, typeof path === 'string' ? path : '/');
     }
     return result;
   };
@@ -36,20 +36,17 @@ export function routesOfApp(build: () => express.Express): string[] {
     proto.use = original;
   }
 
-  const joinPaths = (base: string, path: string) =>
-    `${base}/${path}`.replace(/\/+/g, "/").replace(/(.)\/$/, "$1");
+  const joinPaths = (base: string, path: string) => `${base}/${path}`.replace(/\/+/g, '/').replace(/(.)\/$/, '$1');
   const walk = (stack: LayerType[], base: string): string[] =>
     stack.flatMap((layer) => {
       if (layer.route) {
         const full = joinPaths(base, layer.route.path);
         return Object.keys(layer.route.methods).map((method) => `${method.toUpperCase()} ${full}`);
       }
-      return layer.handle?.stack
-        ? walk(layer.handle.stack, joinPaths(base, prefixOf.get(layer) ?? "/"))
-        : [];
+      return layer.handle?.stack ? walk(layer.handle.stack, joinPaths(base, prefixOf.get(layer) ?? '/')) : [];
     });
-  return walk((app as unknown as { router: RouterType }).router.stack, "/");
+  return walk((app as unknown as { router: RouterType }).router.stack, '/');
 }
 
 /** Path parameter names are free (`:id` is `:requestId`), so every parameter compares as `:param`. */
-export const normalize = (path: string) => path.replace(/:[A-Za-z0-9_]+/g, ":param");
+export const normalize = (path: string) => path.replace(/:[A-Za-z0-9_]+/g, ':param');
