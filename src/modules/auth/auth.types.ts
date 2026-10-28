@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { AuthConfigType, LinksConfigType } from '@/config/config.js';
+import type { AuthConfigType, FrontendConfigType } from '@/config/config.js';
 import type { Db } from '@/db/pool.js';
 import type { passwordTokenPurposes } from '@/db/schema/password-tokens.js';
 import type { userRoles } from '@/db/schema/users.js';
@@ -110,7 +110,7 @@ export interface AuthSettingsType {
 export interface AuthRouterDepsType {
   db: Db;
   auth: AuthConfigType;
-  links: LinksConfigType;
+  frontend: FrontendConfigType;
   emailSender: EmailSenderType;
 }
 

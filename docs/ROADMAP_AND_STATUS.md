@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Last updated:** 2026-10-27
+**Last updated:** 2026-10-28
 
 ### Current Status
 
@@ -21,6 +21,7 @@
 - **Phase 3 (roles & authorization) implemented** (`docs/specs/phase-3-roles-authorization/phase-3-roles-authorization.md`): a code-held permission catalog with scopes, tenant-defined roles, a protected Tenant Admin role with computed permissions, role management and assignment under the subset rule checked against the actor's current role, and the user directory limited by `user.view` scope resolved in SQL from the caller's current unit.
   Its main decisions are D21-D23 in `MVP_SCOPE.md` and T26-T29 in `TECHNICAL_DECISIONS.md`; T25 (request bodies reject unknown fields) was added during the phase. Migration `0005` adds a required `role_id` to members, so a local database migrated earlier must be recreated (`docker compose down -v`).
 - **Known test flake:** now and then a full test run loses a Vitest worker to an external SIGKILL (once in nine runs during the Phase 7 review; not memory, systemd-oomd logged no kill, and no test kills processes). During Phase 8 it hit 4 times, with no out-of-memory kill in the kernel log or the cgroups and not from Vitest's own stop path. The sender is not yet identified; tracing it needs `bpftrace` or `strace` with root, neither installed. A second flake, the first file test timing out while a fresh SeaweedFS allocated its volumes, was fixed in Phase 7 by warming the test store up.
+  On 2026-10-28 it hit all four full runs, each time in a different file (one to three files per run), and each of those files passed on its own; it is getting more frequent.
 - **Phase 4 (working calendar) implemented** (`docs/specs/phase-4-working-calendar/phase-4-working-calendar.md`): per-tenant working hours with weekday spans, seasonal hours with explicit ranks, holidays one-off or recurring on Gregorian or Umm al-Qura dates with one-year adjustments, versioned rules whose past never changes, a day view, and the working-time functions Phases 6 and 7 use (`loadCalendar`, `addWorkingDays`, `workingDaysBetween`).
   Its main decisions are D24-D27 in `MVP_SCOPE.md` and T30-T33 in `TECHNICAL_DECISIONS.md`. Migrations `0006` and `0007` add the calendar tables and give existing tenants the default hours.
 - **Phase 5 (legal configuration) implemented** (`docs/specs/phase-5-legal-configuration/phase-5-legal-configuration.md`): positions placed in org units and held by their members, six built-in positions relative to the handler and the requester, the assignee resolver that Phases 6 and 7 use (`resolveAssignees`, `nextLevel`), linear workflows with immutable versions, services with allowed workflows and a default, priorities with a display order, and escalation settings per rule (on or off, threshold, recipients) that must be saved before requests can be submitted (`isEscalationConfigured`).
@@ -40,6 +41,9 @@
   Its main decisions are T57-T59 in `TECHNICAL_DECISIONS.md`. Environment variable names are unchanged, so existing `.env` files keep working; `.env.example` lists every key, the optional overrides commented with their defaults.
 - **Phase 10 (OpenAPI document and API reference) implemented** (`docs/specs/phase-10-openapi/phase-10-openapi.md`): every endpoint is declared once in `<module>.endpoints.ts`, and its router, input validation, response, and the OpenAPI 3.1 document are built from that declaration; services take parsed input; `docs/api/openapi.json` is committed and checked for drift and validity (`pnpm openapi` regenerates it); outside production Scalar serves it at `/docs` with try-it on the session cookies and nothing loaded from a third-party host; the `.API.md` of implemented phases are an index, and their shapes and errors live in `openapi.json`.
   Its main decisions are T60-T62 in `TECHNICAL_DECISIONS.md`, with T14 and T56 amended; it reverses Phase 8 Q1. No migration. Responses are unchanged, so the frontend can generate its types from `openapi.json` now.
+- **Owner changes after Phase 10 (2026-10-28):** the code is formatted with single quotes and a 240-character line width.
+  The config groups were renamed (`frontend`, `smtp`, `scheduler`, link lifetimes in `auth`, fields named after their variables), and the Phase 9 budget rule and unknown `JOB_*` warning were removed (Phase 9 spec, revision 2026-10-28; T57, T58).
+  The API now allows CORS with credentials from `APP_BASE_URL` (T63), and `.env.example` sets the optional keys to their defaults.
 - **Next action:** the owner decides the next phase. A local staging setup was named next; it must avoid the ports of other local projects, it brings secrets read from files (`TECHNICAL_DECISIONS.md`, Deferred Hardening), and it hosts `/docs` for the frontend.
 
 ---

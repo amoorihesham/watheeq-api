@@ -6,10 +6,10 @@ import type { FileStoreType, StorageSettingsType } from './storage.types.js';
 
 export function s3ClientConfigOf(settings: StorageSettingsType): S3ClientConfig {
   return {
-    endpoint: settings.endpoint,
-    region: settings.region,
-    forcePathStyle: settings.forcePathStyle,
-    credentials: { accessKeyId: settings.accessKey, secretAccessKey: settings.secretKey },
+    endpoint: settings.storageEndpoint,
+    region: settings.storageRegion,
+    forcePathStyle: settings.storageForcePathStyle,
+    credentials: { accessKeyId: settings.storageAccessKey, secretAccessKey: settings.storageSecretKey },
     // The SDK's default adds CRC checksums to every upload, which several S3-compatible servers reject.
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
@@ -18,14 +18,14 @@ export function s3ClientConfigOf(settings: StorageSettingsType): S3ClientConfig 
 
 export function createS3Store(settings: StorageSettingsType): FileStoreType {
   const client = new S3Client(s3ClientConfigOf(settings));
-  const { bucket } = settings;
+  const { storageBucket: bucket } = settings;
   return {
     async put(key, body) {
       const upload = new Upload({
         client,
         params: { Bucket: bucket, Key: key, Body: body },
         partSize: UPLOAD_PART_SIZE_BYTES,
-        queueSize: settings.uploadQueueSize,
+        queueSize: settings.storageUploadQueueSize,
         leavePartsOnError: false,
       });
       await upload.done();

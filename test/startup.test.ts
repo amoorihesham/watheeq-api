@@ -105,26 +105,7 @@ describe('startup', () => {
         .map((text) => JSON.parse(text))
         .find((entry) => entry.msg === 'scheduler started');
       expect(line?.jobs).toEqual([{ name: 'files.sweep', intervalMs: 300_000, batchSize: 77, budgetMs: 120_000 }]);
-      expect(output).not.toContain('unknown setting ignored');
       expect(output).not.toContain(base.STORAGE_SECRET_KEY);
-    });
-
-    it('warns once about an unknown JOB_ key and keeps starting (R9.7)', async () => {
-      const output = await runUntil({ ...base, JOB_FILE_SWEEP_INTERVAL_MS: '300000' }, 'scheduler started');
-      const warnings = linesOf(output).filter((text) => text.includes('unknown setting ignored'));
-      expect(warnings).toHaveLength(1);
-      expect(JSON.parse(warnings[0] ?? '{}')).toMatchObject({
-        level: 40,
-        keys: ['JOB_FILE_SWEEP_INTERVAL_MS'],
-      });
-      expect(output).toContain('scheduler started');
-    });
-
-    it('exits 1 naming the budget key when a budget is not below its interval (R9.5)', async () => {
-      const { code, output } = await runMain({ ...base, JOB_FILES_SWEEP_BUDGET_MS: '900000' });
-      expect(code).toBe(1);
-      expect(output).toContain('JOB_FILES_SWEEP_BUDGET_MS (custom)');
-      expect(output).not.toContain('900000');
     });
   });
 });

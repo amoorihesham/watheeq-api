@@ -11,5 +11,5 @@ export function createServicesRouter({ db, auth }: ServicesRouterDepsType): Rout
   const controller = createServicesController({
     service: createServicesService({ db, repo: createServicesRepository() }),
   });
-  return buildRouter(servicesApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(servicesApi, controller, { db, jwtSecret: auth.jwt });
 }

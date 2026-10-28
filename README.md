@@ -25,7 +25,7 @@ pnpm dev
 ## Configuration
 
 All settings are validated by `src/config/`, and changes take effect on restart.
-`.env.example` lists every key: required ones are set, optional overrides are commented with their default.
+`.env.example` lists every key: required ones are set, and optional ones are set to their default or commented with it.
 The app validates its environment at startup.
 `pnpm db:migrate` and `pnpm operator:create` need only `DATABASE_URL` (the operator password may also come from `OPERATOR_PASSWORD`).
 If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` and exits with code 1, naming keys and reasons only, never values.
@@ -43,7 +43,7 @@ If a key is missing or invalid, it logs `Invalid configuration: KEY (reason)` an
 | `SMTP_USER`, `SMTP_PASSWORD` | none | Optional SMTP login; Mailpit needs none. |
 | `SMTP_SECURE` | `false` | `true` for TLS from the first byte (port 465 style). |
 | `EMAIL_FROM` | none | Required. Sender address, for example `Watheeq <no-reply@watheeq.sa>`. |
-| `APP_BASE_URL` | none | Required. Web-app origin; verification links are `${APP_BASE_URL}/verify-email?token=...`. |
+| `APP_BASE_URL` | none | Required. Web-app origin; verification links are `${APP_BASE_URL}/verify-email?token=...`, and it is the only origin CORS allows. |
 | `VERIFICATION_TOKEN_TTL_SECONDS` | `259200` | Verification link lifetime (72 hours). |
 | `STORAGE_ENDPOINT` | none | Required. URL of the S3-compatible object store; locally SeaweedFS (`http://localhost:8333`). |
 | `STORAGE_BUCKET` | none | Required. Private bucket for uploaded files; created beforehand (locally by `docker compose up`). |
@@ -71,7 +71,9 @@ Create an operator with `pnpm operator:create <email> "<full name>"`; tenant use
   Every repository function that touches tenant data takes the tenant ID from the authenticated user and filters by it.
 - **Accounts:** one `users` table; `role` is `operator` (platform operator, no tenant) or `user` (tenant user).
   A tenant user belongs to exactly one tenant through `tenant_members`.
-- **Authentication:** a 30-minute JWT access token and a 7-day refresh token in `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Refresh tokens are stored hashed, rotated on every refresh, and checked against the database, so a deactivated user loses access within 30 minutes (design in `docs/specs/phase-0-foundations/phase-0-foundations.md`).
+- **Authentication:** a 30-minute JWT access token and a 7-day refresh token in `HttpOnly`, `Secure`, `SameSite=Lax` cookies.
+  The web app may run on its own origin (`APP_BASE_URL`), which CORS allows with credentials (T63).
+  Refresh tokens are stored hashed, rotated on every refresh, and checked against the database, so a deactivated user loses access within 30 minutes (design in `docs/specs/phase-0-foundations/phase-0-foundations.md`).
 - **Audit:** `writeAuditEntry(tx, entry)` from `src/audit/`, inside the same transaction as the change.
 - **Layers:** routes → controller → service → repository. Each module's routes file composes its own layers, and `src/app.ts` mounts the routers (`docs/specs/phase-0.5-refactor/phase-0.5-refactor.md`).
 

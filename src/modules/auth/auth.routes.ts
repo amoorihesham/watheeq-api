@@ -7,13 +7,13 @@ import { createAuthService } from './auth.service.js';
 import type { AuthRouterDepsType, AuthSettingsType } from './auth.types.js';
 
 /** The auth module's composition root: builds repository, service, and controller, and returns the `/auth` router built from its declarations. */
-export function createAuthRouter({ db, auth, links, emailSender }: AuthRouterDepsType): Router {
+export function createAuthRouter({ db, auth, frontend, emailSender }: AuthRouterDepsType): Router {
   const settings: AuthSettingsType = {
-    jwtSecret: auth.jwtSecret,
-    accessTokenTtlSeconds: auth.accessTokenTtlSeconds,
-    refreshTokenTtlSeconds: auth.refreshTokenTtlSeconds,
-    appBaseUrl: links.appBaseUrl,
-    passwordResetTtlSeconds: links.passwordResetTtlSeconds,
+    jwtSecret: auth.jwt,
+    accessTokenTtlSeconds: auth.accessExpireTTL,
+    refreshTokenTtlSeconds: auth.refreshExpireTTL,
+    appBaseUrl: frontend.appUrl,
+    passwordResetTtlSeconds: auth.resetPasswordTokenTTL,
   };
   const service = createAuthService({ db, repo: createAuthRepository(), settings, emailSender });
   const controller = createAuthController({ service, settings });

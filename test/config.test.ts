@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Config, parseCliConfig, parseConfig, unknownJobKeys } from '../src/config/config.js';
+import { type Config, parseCliConfig, parseConfig } from '../src/config/config.js';
 
 const valid = {
   DATABASE_URL: 'postgres://u:secret@localhost:5432/db',
@@ -20,37 +20,35 @@ describe('parseConfig', () => {
     expect(result).toEqual({
       ok: true,
       config: {
-        server: { env: 'development', port: 3000, logLevel: 'info', shutdownTimeoutMs: 10_000 },
-        database: { url: valid.DATABASE_URL, timeoutMs: 2000 },
+        server: { env: 'development', port: 3000, logLevel: 'info', shutdownTimeout: 10_000 },
+        frontend: { appUrl: valid.APP_BASE_URL },
+        database: { dbUrl: valid.DATABASE_URL, dbTimeout: 2000 },
         auth: {
-          jwtSecret: valid.JWT_SECRET,
-          accessTokenTtlSeconds: 1800,
-          refreshTokenTtlSeconds: 604800,
+          jwt: valid.JWT_SECRET,
+          accessExpireTTL: 1800,
+          refreshExpireTTL: 604800,
+          verificationTokenTTL: 259200,
+          resetPasswordTokenTTL: 3600,
         },
-        links: {
-          appBaseUrl: valid.APP_BASE_URL,
-          invitationTtlSeconds: 259200,
-          passwordResetTtlSeconds: 3600,
-        },
-        email: {
-          host: 'localhost',
-          port: 1025,
-          secure: false,
-          user: undefined,
-          password: undefined,
-          from: valid.EMAIL_FROM,
+        smtp: {
+          smtpHost: 'localhost',
+          smtpPort: 1025,
+          smtpSecure: false,
+          smtpUser: undefined,
+          smtpPassword: undefined,
+          emailFrom: valid.EMAIL_FROM,
         },
         storage: {
-          endpoint: valid.STORAGE_ENDPOINT,
-          region: 'us-east-1',
-          bucket: valid.STORAGE_BUCKET,
-          accessKey: valid.STORAGE_ACCESS_KEY,
-          secretKey: valid.STORAGE_SECRET_KEY,
-          forcePathStyle: false,
-          uploadQueueSize: 2,
+          storageEndpoint: valid.STORAGE_ENDPOINT,
+          storageRegion: 'us-east-1',
+          storageBucket: valid.STORAGE_BUCKET,
+          storageAccessKey: valid.STORAGE_ACCESS_KEY,
+          storageSecretKey: valid.STORAGE_SECRET_KEY,
+          storageForcePathStyle: false,
+          storageUploadQueueSize: 2,
         },
+        scheduler: { jobs: 'all' },
         jobs: {
-          enabled: 'all',
           escalations: { intervalMs: 60_000, budgetMs: 50_000 },
           subscriptionNotices: { intervalMs: 3_600_000 },
           fileSweep: { intervalMs: 900_000, batchSize: 100, budgetMs: 120_000 },
@@ -80,11 +78,10 @@ describe('parseConfig', () => {
     });
     expect(result.ok && result.config).toMatchObject({
       server: { env: 'production', port: 8080, logLevel: 'warn' },
-      auth: { accessTokenTtlSeconds: 900, refreshTokenTtlSeconds: 3600 },
-      links: { invitationTtlSeconds: 7200, passwordResetTtlSeconds: 600 },
-      email: { secure: true, user: 'mailer', password: 'mail-pass' },
-      storage: { region: 'me-south-1', forcePathStyle: true },
-      jobs: { enabled: ['files.sweep'] },
+      auth: { accessExpireTTL: 900, refreshExpireTTL: 3600, verificationTokenTTL: 7200, resetPasswordTokenTTL: 600 },
+      smtp: { smtpSecure: true, smtpUser: 'mailer', smtpPassword: 'mail-pass' },
+      storage: { storageRegion: 'me-south-1', storageForcePathStyle: true },
+      scheduler: { jobs: ['files.sweep'] },
     });
   });
 
@@ -97,7 +94,7 @@ describe('parseConfig', () => {
 
   it('reads token lifetimes and rejects ones under a minute', () => {
     const ok = parseConfig({ ...valid, ACCESS_TOKEN_TTL_SECONDS: '900' });
-    expect(ok.ok && ok.config.auth.accessTokenTtlSeconds).toBe(900);
+    expect(ok.ok && ok.config.auth.accessExpireTTL).toBe(900);
     expect(parseConfig({ ...valid, REFRESH_TOKEN_TTL_SECONDS: '59' })).toEqual({
       ok: false,
       message: 'Invalid configuration: REFRESH_TOKEN_TTL_SECONDS (too_small)',
@@ -106,9 +103,9 @@ describe('parseConfig', () => {
 
   it("reads SMTP_SECURE as a boolean, and only from 'true' or 'false'", () => {
     const on = parseConfig({ ...valid, SMTP_SECURE: 'true' });
-    expect(on.ok && on.config.email.secure).toBe(true);
+    expect(on.ok && on.config.smtp.smtpSecure).toBe(true);
     const off = parseConfig({ ...valid, SMTP_SECURE: 'false' });
-    expect(off.ok && off.config.email.secure).toBe(false);
+    expect(off.ok && off.config.smtp.smtpSecure).toBe(false);
     expect(parseConfig({ ...valid, SMTP_SECURE: 'yes' }).ok).toBe(false);
   });
 
@@ -121,7 +118,7 @@ describe('parseConfig', () => {
 
   it("reads STORAGE_FORCE_PATH_STYLE as a boolean, and only from 'true' or 'false'", () => {
     const on = parseConfig({ ...valid, STORAGE_FORCE_PATH_STYLE: 'true' });
-    expect(on.ok && on.config.storage.forcePathStyle).toBe(true);
+    expect(on.ok && on.config.storage.storageForcePathStyle).toBe(true);
     expect(parseConfig({ ...valid, STORAGE_FORCE_PATH_STYLE: '1' }).ok).toBe(false);
   });
 
@@ -135,7 +132,7 @@ describe('parseConfig', () => {
   it('reads JOBS as all, none, or a list of job names', () => {
     const read = (JOBS: string) => {
       const result = parseConfig({ ...valid, JOBS });
-      return result.ok ? result.config.jobs.enabled : result.message;
+      return result.ok ? result.config.scheduler.jobs : result.message;
     };
     expect(read('none')).toBe('none');
     expect(read('files.sweep')).toEqual(['files.sweep']);
@@ -160,7 +157,7 @@ describe('parseConfig', () => {
     expect(parseConfig({})).toEqual({
       ok: false,
       message:
-        'Invalid configuration: DATABASE_URL (Required), JWT_SECRET (Required), SMTP_HOST (Required), SMTP_PORT (Required), EMAIL_FROM (Required), APP_BASE_URL (Required), STORAGE_ENDPOINT (Required), STORAGE_BUCKET (Required), STORAGE_ACCESS_KEY (Required), STORAGE_SECRET_KEY (Required)',
+        'Invalid configuration: DATABASE_URL (Required), JWT_SECRET (Required), SMTP_HOST (Required), SMTP_PORT (Required), EMAIL_FROM (Required), APP_BASE_URL (Required), STORAGE_ACCESS_KEY (Required), STORAGE_SECRET_KEY (Required), STORAGE_ENDPOINT (Required), STORAGE_BUCKET (Required)',
     });
   });
 
@@ -190,7 +187,7 @@ describe('parseCliConfig', () => {
   it('needs only DATABASE_URL', () => {
     expect(parseCliConfig({ DATABASE_URL: valid.DATABASE_URL })).toEqual({
       ok: true,
-      config: { database: { url: valid.DATABASE_URL }, operatorPassword: undefined },
+      config: { database: { dbUrl: valid.DATABASE_URL }, operatorPassword: undefined },
     });
   });
 
@@ -202,7 +199,7 @@ describe('parseCliConfig', () => {
 
   it('names a non-PostgreSQL DATABASE_URL without printing it', () => {
     const result = parseCliConfig({ DATABASE_URL: 'mysql://u:topsecret@host/db' });
-    expect(result).toEqual({ ok: false, message: 'Invalid configuration: DATABASE_URL (custom)' });
+    expect(result).toEqual({ ok: false, message: 'Invalid configuration: DATABASE_URL (invalid_format)' });
   });
 
   it('reports a missing DATABASE_URL as Required', () => {
@@ -215,41 +212,35 @@ describe('parseCliConfig', () => {
 
 // Phase 9 spec, 4.3: key, default, and bounds of each operational setting.
 const OPERATIONAL = [
-  ['SHUTDOWN_TIMEOUT_MS', 10_000, 1000, 300_000, (c: Config) => c.server.shutdownTimeoutMs],
-  ['DATABASE_TIMEOUT_MS', 2000, 100, 60_000, (c: Config) => c.database.timeoutMs],
-  ['STORAGE_UPLOAD_QUEUE_SIZE', 2, 1, 10, (c: Config) => c.storage.uploadQueueSize],
+  ['SHUTDOWN_TIMEOUT_MS', 10_000, 1000, 300_000, (c: Config) => c.server.shutdownTimeout],
+  ['DATABASE_TIMEOUT_MS', 2000, 100, 60_000, (c: Config) => c.database.dbTimeout],
+  ['STORAGE_UPLOAD_QUEUE_SIZE', 2, 1, 10, (c: Config) => c.storage.storageUploadQueueSize],
   ['JOB_REQUESTS_ESCALATIONS_INTERVAL_MS', 60_000, 1000, 604_800_000, (c: Config) => c.jobs.escalations.intervalMs],
+  ['JOB_REQUESTS_ESCALATIONS_BUDGET_MS', 50_000, 1000, 604_800_000, (c: Config) => c.jobs.escalations.budgetMs],
   ['JOB_SUBSCRIPTIONS_NOTICES_INTERVAL_MS', 3_600_000, 1000, 604_800_000, (c: Config) => c.jobs.subscriptionNotices.intervalMs],
   ['JOB_FILES_SWEEP_INTERVAL_MS', 900_000, 1000, 604_800_000, (c: Config) => c.jobs.fileSweep.intervalMs],
   ['JOB_FILES_SWEEP_BATCH_SIZE', 100, 1, 10_000, (c: Config) => c.jobs.fileSweep.batchSize],
+  ['JOB_FILES_SWEEP_BUDGET_MS', 120_000, 1000, 604_800_000, (c: Config) => c.jobs.fileSweep.budgetMs],
   ['JOB_AUTH_TOKEN_CLEANUP_INTERVAL_MS', 86_400_000, 1000, 604_800_000, (c: Config) => c.jobs.tokenCleanup.intervalMs],
   ['JOB_AUTH_TOKEN_CLEANUP_BATCH_SIZE', 1000, 1, 10_000, (c: Config) => c.jobs.tokenCleanup.batchSize],
   ['JOB_NOTIFICATIONS_CLEANUP_INTERVAL_MS', 86_400_000, 1000, 604_800_000, (c: Config) => c.jobs.notificationsCleanup.intervalMs],
   ['JOB_NOTIFICATIONS_CLEANUP_BATCH_SIZE', 1000, 1, 10_000, (c: Config) => c.jobs.notificationsCleanup.batchSize],
 ] as const;
 
-// An interval override must leave room for the default budget; at the minimum interval of 1,000 no budget fits, so
-// these two intervals are tested from 1,001 up with the budget lowered to its own minimum.
-const LOWERED_BUDGET: Record<string, Record<string, string>> = {
-  JOB_REQUESTS_ESCALATIONS_INTERVAL_MS: { JOB_REQUESTS_ESCALATIONS_BUDGET_MS: '1000' },
-  JOB_FILES_SWEEP_INTERVAL_MS: { JOB_FILES_SWEEP_BUDGET_MS: '1000' },
-};
-
 describe.each(OPERATIONAL)('operational setting %s (R9.4)', (key, fallback, min, max, read) => {
-  const lowest = key in LOWERED_BUDGET ? min + 1 : min;
   const configWith = (value: string) => {
-    const result = parseConfig({ ...valid, ...LOWERED_BUDGET[key], [key]: value });
+    const result = parseConfig({ ...valid, [key]: value });
     return result.ok ? result.config : result.message;
   };
 
   it("defaults to today's value and takes an override", () => {
     const base = parseConfig(valid);
     expect(base.ok && read(base.config)).toBe(fallback);
-    expect(read(configWith(String(lowest + 1)) as Config)).toBe(lowest + 1);
+    expect(read(configWith(String(min + 1)) as Config)).toBe(min + 1);
   });
 
   it('accepts both bounds', () => {
-    expect(read(configWith(String(lowest)) as Config)).toBe(lowest);
+    expect(read(configWith(String(min)) as Config)).toBe(min);
     expect(read(configWith(String(max)) as Config)).toBe(max);
   });
 
@@ -262,75 +253,5 @@ describe.each(OPERATIONAL)('operational setting %s (R9.4)', (key, fallback, min,
     const message = configWith('1500.5');
     expect(message).toContain(key);
     expect(message).not.toContain('1500.5');
-  });
-});
-
-describe('job budgets (R9.5)', () => {
-  const PAIRS = [
-    ['JOB_REQUESTS_ESCALATIONS_BUDGET_MS', 'JOB_REQUESTS_ESCALATIONS_INTERVAL_MS'],
-    ['JOB_FILES_SWEEP_BUDGET_MS', 'JOB_FILES_SWEEP_INTERVAL_MS'],
-  ] as const;
-
-  it.each(PAIRS)('%s equal to its interval fails, naming the budget key', (budget, interval) => {
-    expect(parseConfig({ ...valid, [interval]: '5000', [budget]: '5000' })).toEqual({
-      ok: false,
-      message: `Invalid configuration: ${budget} (custom)`,
-    });
-  });
-
-  it.each(PAIRS)('%s above its interval fails without printing the value', (budget, interval) => {
-    const result = parseConfig({ ...valid, [interval]: '5000', [budget]: '7777' });
-    expect(result).toEqual({ ok: false, message: `Invalid configuration: ${budget} (custom)` });
-  });
-
-  it.each(PAIRS)('%s alone at its default interval fails', (budget, interval) => {
-    const defaultInterval = parseConfig(valid);
-    expect(defaultInterval.ok).toBe(true);
-    const atInterval = {
-      ...valid,
-      [budget]: interval.includes('ESCALATIONS') ? '60000' : '900000',
-    };
-    expect(parseConfig(atInterval)).toEqual({
-      ok: false,
-      message: `Invalid configuration: ${budget} (custom)`,
-    });
-  });
-
-  it('lowering an interval below the default budget fails until the budget is lowered too', () => {
-    const interval = { JOB_REQUESTS_ESCALATIONS_INTERVAL_MS: '30000' };
-    expect(parseConfig({ ...valid, ...interval }).ok).toBe(false);
-    expect(parseConfig({ ...valid, ...interval, JOB_REQUESTS_ESCALATIONS_BUDGET_MS: '20000' }).ok).toBe(true);
-  });
-
-  it('rejects a budget under one second', () => {
-    expect(parseConfig({ ...valid, JOB_FILES_SWEEP_BUDGET_MS: '999' })).toEqual({
-      ok: false,
-      message: 'Invalid configuration: JOB_FILES_SWEEP_BUDGET_MS (too_small)',
-    });
-  });
-});
-
-describe('unknownJobKeys (R9.7)', () => {
-  it('reports JOB_ keys the schema does not know, such as a typo', () => {
-    expect(unknownJobKeys({ JOB_FILE_SWEEP_INTERVAL_MS: '1000', JOB_NAME: 'x', PATH: '/bin' })).toEqual(['JOB_FILE_SWEEP_INTERVAL_MS', 'JOB_NAME']);
-  });
-
-  it('does not report JOBS or the real job keys', () => {
-    const real = Object.fromEntries(
-      [
-        'JOBS',
-        'JOB_REQUESTS_ESCALATIONS_INTERVAL_MS',
-        'JOB_REQUESTS_ESCALATIONS_BUDGET_MS',
-        'JOB_SUBSCRIPTIONS_NOTICES_INTERVAL_MS',
-        'JOB_FILES_SWEEP_INTERVAL_MS',
-        'JOB_FILES_SWEEP_BATCH_SIZE',
-        'JOB_FILES_SWEEP_BUDGET_MS',
-        'JOB_AUTH_TOKEN_CLEANUP_INTERVAL_MS',
-        'JOB_AUTH_TOKEN_CLEANUP_BATCH_SIZE',
-        'JOB_NOTIFICATIONS_CLEANUP_INTERVAL_MS',
-        'JOB_NOTIFICATIONS_CLEANUP_BATCH_SIZE',
-      ].map((key) => [key, '1']),
-    );
-    expect(unknownJobKeys(real)).toEqual([]);
   });
 });

@@ -17,7 +17,7 @@ function composeController({ db }: RolesRouterDepsType) {
 export function createRolesRouter(deps: RolesRouterDepsType): Router {
   return buildRouter(rolesApi, composeController(deps).roles, {
     db: deps.db,
-    jwtSecret: deps.auth.jwtSecret,
+    jwtSecret: deps.auth.jwt,
   });
 }
 
@@ -25,6 +25,6 @@ export function createRolesRouter(deps: RolesRouterDepsType): Router {
 export function createPermissionsRouter(deps: RolesRouterDepsType): Router {
   return buildRouter(permissionsApi, composeController(deps).permissions, {
     db: deps.db,
-    jwtSecret: deps.auth.jwtSecret,
+    jwtSecret: deps.auth.jwt,
   });
 }

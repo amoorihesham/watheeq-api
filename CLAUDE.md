@@ -35,7 +35,7 @@ Each document is authoritative for its own topic. Do not duplicate content betwe
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | `docs/PRODUCT_VISION.md`      | Long-term product direction                                                      |
 | `docs/MVP_SCOPE.md`           | What the first release must do; product decisions D1-D46; open product questions |
-| `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T62; deferred hardening                 |
+| `docs/TECHNICAL_DECISIONS.md` | Technology and architecture decisions T1-T63; deferred hardening                 |
 | `docs/ROADMAP_AND_STATUS.md`  | Phase list, phase status, next action                                            |
 | `docs/api/`                   | The HTTP contract for clients: the rules (`*.md`) and the generated endpoint shapes (`openapi.json`) |
 | `docs/specs/phase-<N>-*/phase-<N>-*.md` | Detailed requirements, design, steps, and acceptance criteria for one phase |

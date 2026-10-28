@@ -1,9 +1,9 @@
 import cookieParser from 'cookie-parser';
-import type pg from 'pg';
 import cors from 'cors';
-import express, { type Express } from 'express';
+import express, { type Express, type Router } from 'express';
+import type pg from 'pg';
+import type { Config } from './config/config.js';
 import { createDb } from './db/pool.js';
-
 import { createSmtpSender, type EmailSenderType } from './email/index.js';
 import { apis } from './http/apis.js';
 import { setContractChecks } from './http/checks.js';
@@ -48,7 +48,6 @@ import { usersApi } from './modules/users/users.endpoints.js';
 import { createWorkflowsRouter } from './modules/workflows/index.js';
 import { workflowsApi } from './modules/workflows/workflows.endpoints.js';
 import { createS3Store, type FileStoreType } from './storage/index.js';
-import type { Config } from './config/config.js';
 
 export interface AppDeps {
   pool: pg.Pool;
@@ -56,6 +55,8 @@ export interface AppDeps {
   config: Config;
   emailSender?: EmailSenderType;
   fileStore?: FileStoreType;
+  /** Extra routers mounted after the body parser. Used by tests to exercise error paths. */
+  routers?: { prefix: string; router: Router }[];
 }
 
 export function buildApp(deps: AppDeps): Express {
@@ -88,7 +89,7 @@ export function buildApp(deps: AppDeps): Express {
     createAuthRouter({
       db,
       auth: deps.config.auth,
-      links: deps.config.frontend,
+      frontend: deps.config.frontend,
       emailSender,
     }),
   );
@@ -98,7 +99,7 @@ export function buildApp(deps: AppDeps): Express {
     createTenantsRouter({
       db,
       auth: deps.config.auth,
-      links: deps.config.frontend,
+      frontend: deps.config.frontend,
       emailSender,
     }),
   );
@@ -109,7 +110,7 @@ export function buildApp(deps: AppDeps): Express {
     createUsersRouter({
       db,
       auth: deps.config.auth,
-      links: deps.config.frontend,
+      frontend: deps.config.frontend,
       emailSender,
     }),
   );
@@ -123,6 +124,10 @@ export function buildApp(deps: AppDeps): Express {
   app.use(escalationApi.prefix, createEscalationRouter({ db, auth: deps.config.auth }));
   app.use(requestsApi.prefix, createRequestsRouter({ db, auth: deps.config.auth, store }));
   app.use(notificationsApi.prefix, createNotificationsRouter({ db, auth: deps.config.auth }));
+
+  for (const { prefix, router } of deps.routers ?? []) {
+    app.use(prefix, router);
+  }
 
   if (deps.config.server.env !== 'production') {
     app.use(createDocsRouter(buildOpenApi(apis)));

@@ -11,5 +11,5 @@ export function createRequestsRouter({ db, auth, store }: RequestsRouterDepsType
   const controller = createRequestsController({
     service: createRequestsService({ db, repo: createRequestsRepository(), store }),
   });
-  return buildRouter(requestsApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(requestsApi, controller, { db, jwtSecret: auth.jwt });
 }

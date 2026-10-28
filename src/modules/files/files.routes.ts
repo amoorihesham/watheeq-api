@@ -11,5 +11,5 @@ export function createFilesRouter({ db, auth, store }: FilesRouterDepsType): Rou
   const controller = createFilesController({
     service: createFilesService({ db, repo: createFilesRepository(), store }),
   });
-  return buildRouter(filesApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(filesApi, controller, { db, jwtSecret: auth.jwt });
 }

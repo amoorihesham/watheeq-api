@@ -11,5 +11,5 @@ export function createCalendarRouter({ db, auth }: CalendarRouterDepsType): Rout
   const controller = createCalendarController({
     service: createCalendarService({ db, repo: createCalendarRepository() }),
   });
-  return buildRouter(calendarApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(calendarApi, controller, { db, jwtSecret: auth.jwt });
 }

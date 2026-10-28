@@ -11,5 +11,5 @@ export function createEscalationRouter({ db, auth }: EscalationRouterDepsType): 
   const controller = createEscalationController({
     service: createEscalationService({ db, repo: createEscalationRepository() }),
   });
-  return buildRouter(escalationApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(escalationApi, controller, { db, jwtSecret: auth.jwt });
 }

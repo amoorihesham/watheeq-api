@@ -11,6 +11,8 @@ The code is in `src/modules/auth/`.
 | `wq_refresh` | An opaque refresh token | 7 days | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/auth` |
 
 - JavaScript cannot read either cookie, so a client never handles a token: it only sends requests with credentials (`fetch(..., {credentials: "include"})`).
+- The API allows cross-origin calls with credentials from the web app's origin only (`APP_BASE_URL`, locally `http://localhost:5173`); a call from any other origin is blocked by the browser.
+  The `X-Request-Id` response header is readable from that origin.
 - `wq_refresh` is sent only to `/auth/*` routes.
 - Browsers treat `http://localhost` as secure, so the cookies work in local development.
 - Only the SHA-256 hash of a refresh token is stored.

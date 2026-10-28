@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { AuthConfigType, LinksConfigType } from '@/config/config.js';
+import type { AuthConfigType, FrontendConfigType } from '@/config/config.js';
 import type { Db } from '@/db/pool.js';
 import type { EmailSenderType } from '@/email/index.js';
 import type { OrgUnitKindType } from '@/modules/org/index.js';
@@ -66,7 +66,7 @@ export interface UsersSettingsType {
 export interface UsersRouterDepsType {
   db: Db;
   auth: AuthConfigType;
-  links: LinksConfigType;
+  frontend: FrontendConfigType;
   emailSender: EmailSenderType;
 }
 

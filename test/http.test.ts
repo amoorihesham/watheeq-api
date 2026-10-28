@@ -303,7 +303,7 @@ describe('the detail-code registry (R8.11)', () => {
         continue;
       }
       const source = readFileSync(join(SRC, file), 'utf8');
-      for (const match of source.matchAll(/params:\s*\{\s*code:\s*"(\w+)"/g)) {
+      for (const match of source.matchAll(/params:\s*\{\s*code:\s*'(\w+)'/g)) {
         named.add(match[1] ?? '');
       }
     }

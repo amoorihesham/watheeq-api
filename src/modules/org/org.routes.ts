@@ -11,5 +11,5 @@ export function createOrgRouter({ db, auth }: OrgRouterDepsType): Router {
   const service = createOrgService({ db, repo: createOrgRepository() });
   const controller = createOrgController({ service });
 
-  return buildRouter(orgApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(orgApi, controller, { db, jwtSecret: auth.jwt });
 }

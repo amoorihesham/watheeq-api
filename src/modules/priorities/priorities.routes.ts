@@ -11,5 +11,5 @@ export function createPrioritiesRouter({ db, auth }: PrioritiesRouterDepsType): 
   const controller = createPrioritiesController({
     service: createPrioritiesService({ db, repo: createPrioritiesRepository() }),
   });
-  return buildRouter(prioritiesApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(prioritiesApi, controller, { db, jwtSecret: auth.jwt });
 }

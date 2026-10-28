@@ -20,12 +20,12 @@ afterAll(async () => {
 
 const mailpitSender = () =>
   createSmtpSender({
-    host: mailpit.getHost(),
-    port: mailpit.getMappedPort(1025),
-    secure: false,
-    user: undefined,
-    password: undefined,
-    from: 'Watheeq <no-reply@watheeq.test>',
+    smtpHost: mailpit.getHost(),
+    smtpPort: mailpit.getMappedPort(1025),
+    smtpSecure: false,
+    smtpUser: undefined,
+    smtpPassword: undefined,
+    emailFrom: 'Watheeq <no-reply@watheeq.test>',
   });
 
 /** The plain text of the message Mailpit received for an address, with its subject. */

@@ -19,11 +19,11 @@ The owner wants this centralized now, as a consistency step before the staging s
 
 **In scope:**
 
-- One loader in `src/config/` that validates the environment and returns a grouped, typed `Config` (`server`, `database`, `auth`, `links`, `email`, `storage`, `jobs`).
+- One loader in `src/config/` that validates the environment and returns a grouped, typed `Config` (`server`, `frontend`, `database`, `auth`, `smtp`, `storage`, `scheduler`, `jobs`; groups renamed on 2026-10-28, see 4.2).
 - Every entry point uses it: the server, `pnpm db:migrate`, `pnpm operator:create`, and the test helpers.
 - Each module and infrastructure folder receives only the groups it needs.
 - The thirteen operational settings of 4.3 move into the central schema, keep today's values as defaults, and can be overridden by an environment variable within bounds.
-- Cross-setting checks (a job's budget is shorter than its interval).
+- Cross-setting checks (a job's budget is shorter than its interval; removed on 2026-10-28, see R9.5).
 - `<feature>.config.ts` files are renamed to `<feature>.constants.ts`, so "config" means only `src/config/`.
 - `.env.example` documents every setting, and a test keeps it in step with the schema.
 
@@ -43,11 +43,11 @@ The owner wants this centralized now, as a consistency step before the staging s
 | R9.2  | The loader returns a grouped, typed `Config` (4.2); the environment variable names do not change.                                                                                             | _A developer's existing `.env` from Phase 8 starts the server with no edit._                                                                                               |
 | R9.3  | Each router, job factory, and infrastructure factory receives only the groups it uses; no module receives the whole `Config`.                                                                 | _`createWorkflowsRouter` takes `{ db, auth }`; it cannot reach `storage.secretKey`, and `tsc` fails if it tries._                                                          |
 | R9.4  | The operational settings of 4.3 are read from the central config, default to today's values, and can be overridden by environment variable within the listed bounds.                          | _On staging, `JOB_FILES_SWEEP_INTERVAL_MS=60000` and a restart make the file sweep run every minute instead of every 15 minutes, with no code change._                     |
-| R9.5  | A job's time budget must be shorter than its interval; a violation fails startup.                                                                                                             | _`JOB_REQUESTS_ESCALATIONS_BUDGET_MS=90000` with the default 60-second interval exits 1 naming `JOB_REQUESTS_ESCALATIONS_BUDGET_MS`._                                      |
+| R9.5  | _Removed on 2026-10-28._ A job's budget is bounded like an interval (1,000 to 604,800,000) but no longer compared with its interval; a budget at or above it starts. | _`JOB_REQUESTS_ESCALATIONS_BUDGET_MS=90000` with the default 60-second interval starts; a run may then take longer than its cycle._ |
 | R9.6  | An invalid setting fails startup with the key and a reason code, never the value (as today, Phase 0).                                                                                         | _`JOB_AUTH_TOKEN_CLEANUP_BATCH_SIZE=0` exits 1 with `JOB_AUTH_TOKEN_CLEANUP_BATCH_SIZE (too_small)`._                                                                      |
-| R9.7  | An environment variable starting with `JOB_` that the schema does not know is logged as a warning at startup, naming the key; startup continues.                                              | _A typo `JOB_FILE_SWEEP_INTERVAL_MS=60000` logs `unknown setting ignored: JOB_FILE_SWEEP_INTERVAL_MS`, so the operator sees why the sweep still runs every 15 minutes._    |
+| R9.7  | _Removed on 2026-10-28._ An unknown `JOB_*` variable is ignored like any other unknown variable; no warning is logged. | _A typo `JOB_FILE_SWEEP_INTERVAL_MS=60000` is ignored silently, and the sweep keeps its 15-minute default._ |
 | R9.8  | The effective value of every operational setting is logged once at startup; no secret is ever logged.                                                                                         | _The `scheduler started` line lists each selected job with its interval, batch size, and budget._                                                                          |
-| R9.9  | `.env.example` lists every key the schemas know: required ones set, optional overrides as commented lines whose value is the default. A test fails when the two disagree.                     | _Adding `JOB_FILES_SWEEP_BATCH_SIZE` to the schema without documenting it fails the test._                                                                                 |
+| R9.9  | `.env.example` lists every key the schemas know: required ones set, optional ones either set to their default or commented with it. A test fails when the two disagree. | _Adding `JOB_FILES_SWEEP_BATCH_SIZE` to the schema without documenting it fails the test._ |
 | R9.10 | Domain rules stay in their modules, in `<feature>.constants.ts`; no file named `*.config.ts` remains under `src/modules/` or `src/storage/`, and no value changes.                            | _`MAX_FILE_BYTES` is still 25 MB, now imported from `files.constants.js`._                                                                                                 |
 | R9.11 | With no override set, behavior is unchanged: no endpoint, response, job timing, or limit differs from Phase 8.                                                                                | _The full suite passes; the only test edits are imports, how tests build config, and arguments that used to fall back to a module default._                                |
 
@@ -60,56 +60,57 @@ No changes.
 ### 4.2 Configuration shape and loading
 
 `src/config/config.ts` keeps one zod schema over the flat environment variables (the names stay), then one transform builds the groups.
-The group types are inferred from the schema and exported as `<Group>ConfigType` (`AuthConfigType`, `StorageConfigType`, `FileSweepJobConfigType`, ...), so a module names its group without the whole `Config`; `SmtpSettingsType` and `StorageSettingsType` become the `email` and `storage` groups, so `smtpSettingsOf` and `storageSettingsOf` are removed.
+The group types are inferred from the schema and exported as `<Group>ConfigType` (`AuthConfigType`, `FrontendConfigType`, `SmtpConfigType`, `StorageConfigType`, `FileSweepJobConfigType`, ...), so a module names its group without the whole `Config`; `SmtpSettingsType` and `StorageSettingsType` become the `smtp` and `storage` groups, so `smtpSettingsOf` and `storageSettingsOf` are removed.
+
+**Revision 2026-10-28.** The owner renamed the groups and fields to the shape below: `links` became `frontend` (the web app's origin only), the two link lifetimes moved to `auth`, `email` became `smtp`, `JOBS` moved to its own `scheduler` group, and the fields took the names of their variables (`dbUrl`, `jwt`, `accessExpireTTL`, `storageBucket`, ...).
 
 ```ts
 // Shape only; names of the groups and fields are part of this spec.
 type Config = {
-  server: { env; port; logLevel; shutdownTimeoutMs };
-  database: { url; timeoutMs };
-  auth: { jwtSecret; accessTokenTtlSeconds; refreshTokenTtlSeconds };
-  links: { appBaseUrl; invitationTtlSeconds; passwordResetTtlSeconds };
-  email: { host; port; secure; user?; password?; from };
-  storage: {
-    endpoint;
-    region;
-    bucket;
-    accessKey;
-    secretKey;
-    forcePathStyle;
-    uploadQueueSize;
-  };
+  server: { env; port; logLevel; shutdownTimeout };
+  frontend: { appUrl };
+  database: { dbUrl; dbTimeout };
+  auth: { jwt; accessExpireTTL; refreshExpireTTL; verificationTokenTTL; resetPasswordTokenTTL };
   jobs: {
-    enabled: JobsSettingType; // JOBS
     escalations: { intervalMs; budgetMs };
     subscriptionNotices: { intervalMs };
     fileSweep: { intervalMs; batchSize; budgetMs };
     tokenCleanup: { intervalMs; batchSize };
     notificationsCleanup: { intervalMs; batchSize };
   };
-};
-```
+  scheduler: { jobs: JobsSettingType }; // JOBS
+  smtp: { smtpHost; smtpPort; smtpUser?; smtpPassword?; smtpSecure; emailFrom };
+  storage: {
+    storageAccessKey;
+    storageSecretKey;
+    storageEndpoint;
+    storageRegion;
+    storageBucket;
+    storageForcePathStyle;
+    storageUploadQueueSize;
+  };
+};```
 
 Mapping of today's environment variables:
 
 | Group      | Field                                                                      | Environment variable                                                                                                           |
 | ---------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `server`   | `env`, `port`, `logLevel`                                                  | `NODE_ENV`, `PORT`, `LOG_LEVEL`                                                                                                |
-| `database` | `url`                                                                      | `DATABASE_URL`                                                                                                                 |
-| `auth`     | `jwtSecret`, `accessTokenTtlSeconds`, `refreshTokenTtlSeconds`             | `JWT_SECRET`, `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_SECONDS`                                                          |
-| `links`    | `appBaseUrl`, `invitationTtlSeconds`, `passwordResetTtlSeconds`            | `APP_BASE_URL`, `VERIFICATION_TOKEN_TTL_SECONDS`, `PASSWORD_RESET_TTL_SECONDS`                                                 |
-| `email`    | `host`, `port`, `secure`, `user`, `password`, `from`                       | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`                                            |
-| `storage`  | `endpoint`, `region`, `bucket`, `accessKey`, `secretKey`, `forcePathStyle` | `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_FORCE_PATH_STYLE` |
-| `jobs`     | `enabled`                                                                  | `JOBS`                                                                                                                         |
+| `frontend` | `appUrl` | `APP_BASE_URL` |
+| `database` | `dbUrl` | `DATABASE_URL` |
+| `auth`     | `jwt`, `accessExpireTTL`, `refreshExpireTTL`, `verificationTokenTTL`, `resetPasswordTokenTTL` | `JWT_SECRET`, `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_SECONDS`, `VERIFICATION_TOKEN_TTL_SECONDS`, `PASSWORD_RESET_TTL_SECONDS` |
+| `smtp`     | `smtpHost`, `smtpPort`, `smtpSecure`, `smtpUser`, `smtpPassword`, `emailFrom` | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` |
+| `storage`  | `storageEndpoint`, `storageRegion`, `storageBucket`, `storageAccessKey`, `storageSecretKey`, `storageForcePathStyle` | `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_FORCE_PATH_STYLE` |
+| `scheduler` | `jobs` | `JOBS` |
 
 The operational settings of 4.3 fill the remaining fields.
 
-`links` is its own group because both auth (password reset) and the invitation flows (tenants, users) build emailed links; it holds the web app's origin and the lifetimes of the links it sends.
+`frontend` holds the web app's origin, which the emailed links (auth, tenants, users) and the CORS allowed origin use; the link lifetimes are in `auth`.
 
 Parsers:
 
 - `parseConfig(env)` returns the whole `Config`, for the server and the test helpers. A failure names "Required" only for a key that is missing (an `invalid_type` issue on an unset key); any other issue gives its code, so a default budget that conflicts with a lowered interval reads `(custom)`, not `(Required)`. Its result and failure message keep today's form (`{ ok, config }` or `{ ok: false, message }`, keys and reason codes only).
-- `parseCliConfig(env)` returns `{ database: { url }, operatorPassword? }`, for both CLIs. It shares the `DATABASE_URL` field schema with `parseConfig` (one `databaseFields` object both schemas spread), so the two cannot drift, and it does not require SMTP or storage settings to run a migration. `DATABASE_TIMEOUT_MS` is not shared: the CLIs have no connection timeout, and adding the 2-second default would change how migrations behave. An empty `OPERATOR_PASSWORD=` is a configuration error, not a prompt.
+- `parseCliConfig(env)` returns `{ database: { dbUrl }, operatorPassword? }`, for both CLIs. It shares the `DATABASE_URL` field schema with `parseConfig` (the CLI schema picks it from the server schema), so the two cannot drift, and it does not require SMTP or storage settings to run a migration. `DATABASE_TIMEOUT_MS` is not shared: the CLIs have no connection timeout, and adding the 2-second default would change how migrations behave. An empty `OPERATOR_PASSWORD=` is a configuration error, not a prompt.
 - An empty string is a value, not "unset": `PORT=` fails as today. A setting is left to its default only by leaving it out.
 
 Settings are read once, when the process starts. The values are copied into the objects built at startup (the pool, the S3 client, the routers, the scheduler's timers), so a change takes effect on the next restart (Q4).
@@ -121,22 +122,21 @@ Each environment name of a job setting is `JOB_` plus the job's name in upper ca
 | Environment variable                    | Config path                            | Default (today)   | Bounds                        | Today in                            |
 | --------------------------------------- | -------------------------------------- | ----------------- | ----------------------------- | ----------------------------------- |
 | `JOB_REQUESTS_ESCALATIONS_INTERVAL_MS`  | `jobs.escalations.intervalMs`          | 60,000 (1 min)    | 1,000 to 604,800,000 (7 days) | `requests.config.ts`                |
-| `JOB_REQUESTS_ESCALATIONS_BUDGET_MS`    | `jobs.escalations.budgetMs`            | 50,000            | 1,000 to below its interval   | `requests.config.ts`                |
+| `JOB_REQUESTS_ESCALATIONS_BUDGET_MS`    | `jobs.escalations.budgetMs`            | 50,000            | 1,000 to 604,800,000          | `requests.config.ts`                |
 | `JOB_SUBSCRIPTIONS_NOTICES_INTERVAL_MS` | `jobs.subscriptionNotices.intervalMs`  | 3,600,000 (1 h)   | 1,000 to 604,800,000          | `subscriptions.config.ts`           |
 | `JOB_FILES_SWEEP_INTERVAL_MS`           | `jobs.fileSweep.intervalMs`            | 900,000 (15 min)  | 1,000 to 604,800,000          | `files.config.ts`                   |
 | `JOB_FILES_SWEEP_BATCH_SIZE`            | `jobs.fileSweep.batchSize`             | 100               | 1 to 10,000                   | `files.config.ts`                   |
-| `JOB_FILES_SWEEP_BUDGET_MS`             | `jobs.fileSweep.budgetMs`              | 120,000 (2 min)   | 1,000 to below its interval   | `files.config.ts`                   |
+| `JOB_FILES_SWEEP_BUDGET_MS`             | `jobs.fileSweep.budgetMs`              | 120,000 (2 min)   | 1,000 to 604,800,000          | `files.config.ts`                   |
 | `JOB_AUTH_TOKEN_CLEANUP_INTERVAL_MS`    | `jobs.tokenCleanup.intervalMs`         | 86,400,000 (24 h) | 1,000 to 604,800,000          | `auth.config.ts`                    |
 | `JOB_AUTH_TOKEN_CLEANUP_BATCH_SIZE`     | `jobs.tokenCleanup.batchSize`          | 1,000             | 1 to 10,000                   | `auth.config.ts`                    |
 | `JOB_NOTIFICATIONS_CLEANUP_INTERVAL_MS` | `jobs.notificationsCleanup.intervalMs` | 86,400,000 (24 h) | 1,000 to 604,800,000          | `notifications.config.ts`           |
 | `JOB_NOTIFICATIONS_CLEANUP_BATCH_SIZE`  | `jobs.notificationsCleanup.batchSize`  | 1,000             | 1 to 10,000                   | `notifications.config.ts`           |
-| `DATABASE_TIMEOUT_MS`                   | `database.timeoutMs`                   | 2,000             | 100 to 60,000                 | `HEALTH_TIMEOUT_MS` in `db/pool.ts` |
-| `SHUTDOWN_TIMEOUT_MS`                   | `server.shutdownTimeoutMs`             | 10,000            | 1,000 to 300,000              | `main.ts`                           |
-| `STORAGE_UPLOAD_QUEUE_SIZE`             | `storage.uploadQueueSize`              | 2                 | 1 to 10                       | `storage.config.ts`                 |
+| `DATABASE_TIMEOUT_MS`                   | `database.dbTimeout`                   | 2,000             | 100 to 60,000                 | `HEALTH_TIMEOUT_MS` in `db/pool.ts` |
+| `SHUTDOWN_TIMEOUT_MS`                   | `server.shutdownTimeout`               | 10,000            | 1,000 to 300,000              | `main.ts`                           |
+| `STORAGE_UPLOAD_QUEUE_SIZE`             | `storage.storageUploadQueueSize`       | 2                 | 1 to 10                       | `storage.config.ts`                 |
 
 - `DATABASE_TIMEOUT_MS` keeps today's double role: the pool's connection timeout and the `/health` check's timeout.
-- The budget rule runs only when every value is valid on its own, so a bad interval is reported once. Since the minimum interval and the minimum budget are both 1,000 ms, the escalation and sweep intervals effectively start at 1,001 ms; this is accepted rather than special-cased.
-- The rule "budget below interval" (R9.5) keeps each run inside its own cycle. Example: with a 60-second escalation interval and a 90-second budget, one slow run could hold back R1 and R2 firings for a run and a half, and the escalation check would no longer be "every minute" in practice (Phase 7, 4.3).
+- The budget rule (R9.5) was removed on 2026-10-28: a budget is now only bounded. Example of what it guarded against: with a 60-second escalation interval and a 90-second budget, one slow run could hold back R1 and R2 firings for a run and a half (Phase 7, 4.3).
 - What stays a constant: values that are a fact of an external system (`MAX_KEYS_PER_DELETE`, `UPLOAD_PART_SIZE_BYTES`, the S3 limits) or a product rule with a spec ID (`PENDING_LIFETIME_HOURS`, `RETENTION_DAYS`, `ENDING_SOON_DAYS`, `STORAGE_WARNING_PERCENT`, `ABANDONED_AFTER_HOURS`, `OVERDUE_AFTER_HOURS`). Changing one of those is a product decision and goes through a spec.
 
 ### 4.4 Key flows
@@ -144,9 +144,8 @@ Each environment name of a job setting is `JOB_` plus the job's name in upper ca
 **Server startup (`main.ts`):**
 
 1. `parseConfig(process.env)`; on failure, log the message at fatal and exit 1 (unchanged).
-2. Warn about unknown `JOB_*` keys (R9.7).
-3. Build the logger, the store, the jobs, the pool, and the app from their groups.
-4. The `scheduler started` line logs `jobs` as a list of `{ name, ...settings }`, one per selected job (R9.8). Each `JobType` carries its effective `settings` (interval, and batch size or budget where it has them), so the log cannot drift from what the job uses.
+2. Build the logger, the store, the jobs, the pool, and the app from their groups.
+3. The `scheduler started` line logs `jobs` as a list of `{ name, ...settings }`, one per selected job (R9.8). Each `JobType` carries its effective `settings` (interval, and batch size or budget where it has them), so the log cannot drift from what the job uses.
 
 **Wiring.** Each module still composes its own layers (T14); only the arguments change:
 
@@ -161,13 +160,13 @@ app.use(
   createUsersRouter({
     db,
     auth: config.auth,
-    links: config.links,
+    frontend: config.frontend,
     emailSender,
   }),
 );
 ```
 
-`createPool(database, logger)` takes the `database` group. The auth module keeps its own flat settings object, built in `auth.routes.ts` from the `auth` and `links` groups.
+`createPool(database, logger)` takes the `database` group. The auth module keeps its own flat settings object, built in `auth.routes.ts` from the `auth` and `frontend` groups.
 
 ```ts
 // Before (jobs.ts): each job reads its module's constants
@@ -186,7 +185,7 @@ Tests pass explicit values or read them from `testConfig()`.
 ```
 src/config/
   config.ts          the schema, parseConfig, parseCliConfig, the Config type
-src/main.ts          parses, warns about unknown JOB_* keys, passes groups
+src/main.ts          parses, passes groups
 src/app.ts           AppDeps.config stays; passes each router only its groups
 src/jobs.ts          buildJobs({ fileStore, jobs: config.jobs })
 src/cli/*.ts         parseCliConfig(process.env)
@@ -204,14 +203,14 @@ The Phase 0.5 per-module file rule changes from "Constants live only in `<featur
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | No override is set.                                                                        | Every value equals today's; behavior is identical to Phase 8 (R9.11).                                                                                  |
 | `JOB_FILES_SWEEP_INTERVAL_MS=abc`.                                                         | Startup exits 1 naming `JOB_FILES_SWEEP_INTERVAL_MS (invalid_type)`; `abc` is not printed.                                                             |
-| `JOB_FILES_SWEEP_BUDGET_MS=900000` with the default 15-minute interval (equal, not below). | Startup exits 1 naming `JOB_FILES_SWEEP_BUDGET_MS (custom)` (R9.5).                                                                                    |
-| `JOB_FILES_SWEEP_INTERVAL_MS=60000` alone, budget left at its 2-minute default.            | Startup exits 1 naming the budget: the default no longer fits; the operator must lower the budget too. Documented next to both keys in `.env.example`. |
-| A typo `JOB_FILE_SWEEP_INTERVAL_MS`.                                                       | Warning naming the key; the default applies; startup continues (R9.7).                                                                                 |
-| A CI system sets `JOB_NAME` (Jenkins does).                                                | Warning only, never a failure, so the server still starts on such a host (Q5).                                                                         |
+| `JOB_FILES_SWEEP_BUDGET_MS=900000` with the default 15-minute interval (equal, not below). | Starts; the budget rule was removed on 2026-10-28 (R9.5). |
+| `JOB_FILES_SWEEP_INTERVAL_MS=60000` alone, budget left at its 2-minute default. | Starts; the budget is longer than the interval. |
+| A typo `JOB_FILE_SWEEP_INTERVAL_MS`. | Ignored silently; the default applies (R9.7, removed on 2026-10-28). |
+| A CI system sets `JOB_NAME` (Jenkins does). | Ignored; the server starts. |
 | `pnpm db:migrate` with only `DATABASE_URL` set.                                            | Runs; SMTP and storage settings are not required by `parseCliConfig`.                                                                                  |
 | `pnpm operator:create` with no `DATABASE_URL`.                                             | Exits 1 with `Invalid configuration: DATABASE_URL (Required)` before printing usage.                                                                   |
 | An override is changed on a running server.                                                | Nothing changes until the next restart; the graceful shutdown lets the request and job in progress finish.                                             |
-| `SMTP_PASSWORD` or `STORAGE_SECRET_KEY` is malformed.                                      | The message names the key only, as today; the startup settings log never includes the `auth`, `email`, `storage` credentials, or `database.url`.       |
+| `SMTP_PASSWORD` or `STORAGE_SECRET_KEY` is malformed.                                      | The message names the key only, as today; the startup settings log never includes the `auth`, `smtp`, `storage` credentials, or `database.dbUrl`.       |
 
 ## 6. Security and Authorization
 
@@ -237,8 +236,8 @@ Agent B builds 9.2 starting from 9.1, then 9.4 once 9.2 is merged; 9.3 and 9.4 r
 
 ## 8. Test Plan
 
-- **Unit (`test/config.test.ts`):** each group's mapping from today's variables (R9.2); each operational setting's default, a valid override, and both bounds (R9.4); budget equal to and above the interval (R9.5); messages name keys and never values, including for the new keys (R9.6); `parseCliConfig` with only `DATABASE_URL` and with a bad one (R9.1).
-- **Startup (`test/startup.test.ts`, spawned process):** an override reaches the `scheduler started` log line (R9.8); an unknown `JOB_*` key is warned about and the server keeps starting (R9.7); a budget above its interval exits 1 (R9.5).
+- **Unit (`test/config.test.ts`):** each group's mapping from today's variables (R9.2); each operational setting's default, a valid override, and both bounds (R9.4); messages name keys and never values, including for the new keys (R9.6); `parseCliConfig` with only `DATABASE_URL` and with a bad one (R9.1).
+- **Startup (`test/startup.test.ts`, spawned process):** an override reaches the `scheduler started` log line (R9.8); the budget and unknown-key checks (R9.5, R9.7) were removed on 2026-10-28 with their tests.
 - **Scheduler:** a job built from settings with a short interval runs again after that interval (R9.4).
 - **CLI (`test/create-operator.test.ts`, migrate):** a `mysql://` URL exits 1 with the config message; migrate runs with only `DATABASE_URL` (R9.1).
 - **Contract tests:** no `process.env` in `src/` outside the parser calls of `main.ts` and `src/cli/` (R9.1); `.env.example` and the schema list the same keys, and every commented default equals the schema's default (R9.9).
@@ -265,9 +264,9 @@ The spec cannot be `Approved` while a blocking open question remains.
 | #    | Decision                                                                                                                                                                                                                               | Rationale                                                                                                                           |
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | P9.1 | One loader in `src/config/` returns a grouped `Config`; every entry point uses it, and modules receive only their groups. Environment variable names do not change.                                                                    | One place to see what a deployment can change, and one place to see what each module depends on; existing deployments keep working. |
-| P9.2 | Operational settings (job intervals, batch sizes, budgets, the database and shutdown timeouts, the upload queue size) are central, default to today's values, and are overridable within bounds; a job's budget is below its interval. | Tuning on staging or production is a restart, not a code change; the defaults live in one place only.                               |
+| P9.2 | Operational settings (job intervals, batch sizes, budgets, the database and shutdown timeouts, the upload queue size) are central, default to today's values, and are overridable within bounds; a job's budget is below its interval (removed on 2026-10-28). | Tuning on staging or production is a restart, not a code change; the defaults live in one place only.                               |
 | P9.3 | Domain rules and external-system facts stay in their modules as `<feature>.constants.ts`.                                                                                                                                              | A product rule changes through a spec, not an environment variable; the rule stays next to the code and tests that own it.          |
-| P9.4 | Unknown `JOB_*` keys are warned about, not fatal; the effective operational settings are logged at startup, secrets never.                                                                                                             | An operator sees a typo and the values in force without risking a secret in the logs.                                               |
+| P9.4 | Unknown `JOB_*` keys are warned about, not fatal (removed on 2026-10-28: they are ignored); the effective operational settings are logged at startup, secrets never.                                                                                                             | An operator sees a typo and the values in force without risking a secret in the logs.                                               |
 | P9.5 | Settings are read once at startup; a change takes effect on restart.                                                                                                                                                                   | Standard for a stateless API; live reload would need every consumer to re-read, timers to be rebuilt, and instances to agree.       |
 | P9.6 | Secrets from files and secret managers are deferred to the staging phase.                                                                                                                                                              | Keeps this phase to centralizing; the loader makes the addition local.                                                              |
 | P9.7 | The CLIs share only `DATABASE_URL` with the server schema; an empty `OPERATOR_PASSWORD` is an error. | Owner approval of the implementation report (2026-10-27): no connection-timeout change for migrations; an empty password variable is a mistake, not a request to be prompted. |
@@ -282,3 +281,4 @@ Promoted to `TECHNICAL_DECISIONS.md` as T57-T59; T14 and the Phase 0.5 per-modul
 | 2026-10-27 | Initial draft. | Pre-spec discussion with the owner (Q1, Q2, Q4). |
 | 2026-10-27 | Q3, Q5, and Q6 resolved as proposed. | Owner approved the draft. |
 | 2026-10-27 | Implemented and verified (steps 9.1-9.4). Folded in the approved implementation choices: CLIs share only `DATABASE_URL`, empty `OPERATOR_PASSWORD` is an error, "Required" only for missing keys, the budget check after the other values, the 1,001 ms effective minimum, `<Group>ConfigType` names, `createPool` on its group, job `settings` in the startup log, and R9.1 allowing `unknownJobKeys` (P9.7, P9.8). | Owner approval of the implementation report. |
+| 2026-10-28 | Owner revision after implementation: groups and fields renamed (`frontend`, `smtp`, `scheduler`, link lifetimes in `auth`, fields named after their variables); the budget rule (R9.5) and the unknown `JOB_*` warning (R9.7) removed; `.env.example` may set optional keys to their defaults (R9.9). Bounds, `parseCliConfig`, and the PostgreSQL-only `DATABASE_URL` kept. | Owner refactor of `src/config/`. |

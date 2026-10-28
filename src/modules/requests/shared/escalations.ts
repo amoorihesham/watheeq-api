@@ -1,4 +1,5 @@
 import { writeAuditEntry } from '@/audit/index.js';
+import type { EscalationsJobConfigType } from '@/config/config.js';
 import type { Db, Executor, Tx } from '@/db/pool.js';
 import { withTx } from '@/db/tx.js';
 import type { Logger } from '@/logging/logger.js';
@@ -12,7 +13,6 @@ import { ESCALATION_RULE_STATES } from '../requests.constants.js';
 import type { EscalationCandidateRowType, EscalationFiringType, LockedRequestRowType } from '../requests.types.js';
 import { createEscalationsRepository } from './escalations.repository.js';
 import { numberOf } from './notices.js';
-import type { EscalationsJobConfigType } from '@/config/config.js';
 
 const repo = createEscalationsRepository();
 

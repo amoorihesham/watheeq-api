@@ -8,7 +8,7 @@ if (!parsed.ok) {
 }
 
 try {
-  await runMigrations(parsed.config.database.url);
+  await runMigrations(parsed.config.database.dbUrl);
   console.log('migrations applied');
 } catch (err) {
   console.error(err);

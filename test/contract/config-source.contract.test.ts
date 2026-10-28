@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { moduleFiles } from './source-files.js';
 
 const ALLOWED_FILES = /^src\/(main\.ts|cli\/[^/]+\.ts)$/;
-// The src/config functions that read the environment: the two parsers and the unknown JOB_* check (R9.7).
-const PARSER_CALL = /\b(parseConfig|parseCliConfig|unknownJobKeys)\(\s*$/;
+// The src/config functions that read the environment: the server and CLI parsers.
+const PARSER_CALL = /\b(parseConfig|parseCliConfig)\(\s*$/;
 
 describe('R9.1: environment variables are read through src/config only', () => {
   it('uses process.env only in main.ts and src/cli, as the argument of a src/config function', () => {

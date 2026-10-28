@@ -11,5 +11,5 @@ export function createNotificationsRouter({ db, auth }: NotificationsRouterDepsT
   const controller = createNotificationsController({
     service: createNotificationsService({ db, repo: createNotificationsRepository() }),
   });
-  return buildRouter(notificationsApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(notificationsApi, controller, { db, jwtSecret: auth.jwt });
 }

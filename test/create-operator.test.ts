@@ -15,7 +15,7 @@ describe('operator:create CLI', () => {
       OPERATOR_PASSWORD: 'cli-created-password-1',
     });
     expect(out.code).toBe(1);
-    expect(out.stderr).toContain('Invalid configuration: DATABASE_URL (custom)');
+    expect(out.stderr).toContain('Invalid configuration: DATABASE_URL (invalid_format)');
     expect(out.stderr).not.toContain('topsecret');
   });
 

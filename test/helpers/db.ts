@@ -10,7 +10,7 @@ const TEST_DATABASE_TIMEOUT_MS = 2000;
 
 /** A pool connected to the test database, as the application connects. */
 export function connectToTestDb(logger: Logger = createLogger('silent')): pg.Pool {
-  return createPool({ url: inject('databaseUrl'), timeoutMs: TEST_DATABASE_TIMEOUT_MS }, logger);
+  return createPool({ dbUrl: inject('databaseUrl'), dbTimeout: TEST_DATABASE_TIMEOUT_MS }, logger);
 }
 
 export interface IsolatedDbType {
@@ -30,7 +30,7 @@ export async function createIsolatedDb(): Promise<IsolatedDbType> {
   const url = new URL(inject('databaseUrl'));
   url.pathname = `/${name}`;
   await runMigrations(url.toString());
-  const pool = createPool({ url: url.toString(), timeoutMs: TEST_DATABASE_TIMEOUT_MS }, createLogger('silent'));
+  const pool = createPool({ dbUrl: url.toString(), dbTimeout: TEST_DATABASE_TIMEOUT_MS }, createLogger('silent'));
   return {
     pool,
     async drop() {

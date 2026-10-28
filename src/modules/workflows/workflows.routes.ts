@@ -11,5 +11,5 @@ export function createWorkflowsRouter({ db, auth }: WorkflowsRouterDepsType): Ro
   const controller = createWorkflowsController({
     service: createWorkflowsService({ db, repo: createWorkflowsRepository() }),
   });
-  return buildRouter(workflowsApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(workflowsApi, controller, { db, jwtSecret: auth.jwt });
 }

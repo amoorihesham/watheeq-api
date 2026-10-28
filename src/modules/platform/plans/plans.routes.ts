@@ -11,5 +11,5 @@ export function createPlansRouter({ db, auth }: PlansRouterDepsType): Router {
   const service = createPlansService({ db, repo: createPlansRepository() });
   const controller = createPlansController({ service });
 
-  return buildRouter(plansApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(plansApi, controller, { db, jwtSecret: auth.jwt });
 }

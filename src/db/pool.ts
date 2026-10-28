@@ -4,10 +4,10 @@ import type { DatabaseConfigType } from '@/config/config.js';
 import type { Logger } from '../logging/logger.js';
 import * as schema from './schema/index.js';
 
-export function createPool({ url, timeoutMs }: DatabaseConfigType, logger: Logger): pg.Pool {
+export function createPool({ dbUrl, dbTimeout }: DatabaseConfigType, logger: Logger): pg.Pool {
   const pool = new pg.Pool({
-    connectionString: url,
-    connectionTimeoutMillis: timeoutMs,
+    connectionString: dbUrl,
+    connectionTimeoutMillis: dbTimeout,
   });
 
   pool.on('error', (err) => {

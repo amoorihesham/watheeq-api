@@ -117,7 +117,7 @@ function messageFor(err: AppError): string | undefined {
 }
 
 try {
-  const operator = await createWithConnection(database.url, email, userName);
+  const operator = await createWithConnection(database.dbUrl, email, userName);
   console.log(`operator created: ${operator.userName} <${operator.email}> (${operator.id})`);
 } catch (err) {
   const appError = err instanceof AppError ? err : fromDatabaseError(err);

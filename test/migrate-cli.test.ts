@@ -12,7 +12,7 @@ describe('db:migrate CLI', () => {
   it('exits 1 with the config message for a non-PostgreSQL DATABASE_URL, without printing it', async () => {
     const out = await runMigrate({ DATABASE_URL: 'mysql://u:topsecret@localhost/db' });
     expect(out.code).toBe(1);
-    expect(out.stderr).toContain('Invalid configuration: DATABASE_URL (custom)');
+    expect(out.stderr).toContain('Invalid configuration: DATABASE_URL (invalid_format)');
     expect(out.stderr).not.toContain('topsecret');
   });
 });

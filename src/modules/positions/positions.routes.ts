@@ -11,5 +11,5 @@ export function createPositionsRouter({ db, auth }: PositionsRouterDepsType): Ro
   const controller = createPositionsController({
     service: createPositionsService({ db, repo: createPositionsRepository() }),
   });
-  return buildRouter(positionsApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(positionsApi, controller, { db, jwtSecret: auth.jwt });
 }

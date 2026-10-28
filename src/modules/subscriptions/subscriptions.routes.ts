@@ -11,5 +11,5 @@ export function createSubscriptionsRouter({ db, auth }: SubscriptionsRouterDepsT
   const service = createSubscriptionsService({ db, repo: createSubscriptionsRepository() });
   const controller = createSubscriptionsController({ service });
 
-  return buildRouter(subscriptionsApi, controller, { db, jwtSecret: auth.jwtSecret });
+  return buildRouter(subscriptionsApi, controller, { db, jwtSecret: auth.jwt });
 }

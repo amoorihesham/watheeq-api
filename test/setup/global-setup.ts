@@ -19,7 +19,7 @@ async function createBucket(settings: StorageSettingsType): Promise<void> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
-      await client.send(new CreateBucketCommand({ Bucket: settings.bucket }));
+      await client.send(new CreateBucketCommand({ Bucket: settings.storageBucket }));
       return;
     } catch (err) {
       lastError = err;
@@ -39,13 +39,13 @@ async function startObjectStore(): Promise<StorageSettingsType> {
     .withWaitStrategy(Wait.forListeningPorts())
     .start();
   const settings: StorageSettingsType = {
-    endpoint: `http://${objectStore.getHost()}:${objectStore.getMappedPort(S3_PORT)}`,
-    region: 'us-east-1',
-    bucket: BUCKET,
-    accessKey,
-    secretKey,
-    forcePathStyle: true,
-    uploadQueueSize: 2,
+    storageEndpoint: `http://${objectStore.getHost()}:${objectStore.getMappedPort(S3_PORT)}`,
+    storageRegion: 'us-east-1',
+    storageBucket: BUCKET,
+    storageAccessKey: accessKey,
+    storageSecretKey: secretKey,
+    storageForcePathStyle: true,
+    storageUploadQueueSize: 2,
   };
   await createBucket(settings);
   await warmUp(settings);
@@ -59,8 +59,8 @@ async function startObjectStore(): Promise<StorageSettingsType> {
 async function warmUp(settings: StorageSettingsType): Promise<void> {
   const client = new S3Client(s3ClientConfigOf(settings));
   const key = 'warm-up';
-  await client.send(new PutObjectCommand({ Bucket: settings.bucket, Key: key, Body: 'x' }));
-  await client.send(new DeleteObjectCommand({ Bucket: settings.bucket, Key: key }));
+  await client.send(new PutObjectCommand({ Bucket: settings.storageBucket, Key: key, Body: 'x' }));
+  await client.send(new DeleteObjectCommand({ Bucket: settings.storageBucket, Key: key }));
 }
 
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
