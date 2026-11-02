@@ -17,7 +17,7 @@ export const servicesApi = defineApi({
       summary: 'List legal services with their form and allowed workflows',
       permission: { tenant: 'service.view' },
       query: listServicesQuerySchema,
-      response: { kind: 'page', schema: serviceResponseSchema },
+      response: { kind: 'page', schema: serviceResponseSchema, order: 'By name (case-insensitive), then by ID.' },
     }),
     get: defineEndpoint({
       method: 'get',

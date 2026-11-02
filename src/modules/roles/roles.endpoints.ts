@@ -17,7 +17,7 @@ export const rolesApi = defineApi({
       summary: "List the tenant's roles",
       permission: { tenant: 'role.view' },
       query: listRolesQuerySchema,
-      response: { kind: 'page', schema: roleResponseSchema },
+      response: { kind: 'page', schema: roleResponseSchema, order: 'By name (case-insensitive), then by ID.' },
     }),
     get: defineEndpoint({
       method: 'get',
@@ -69,7 +69,7 @@ export const permissionsApi = defineApi({
       summary: 'The permission catalog roles are built from',
       permission: { tenant: 'role.view' },
       query: listPermissionsQuerySchema,
-      response: { kind: 'page', schema: permissionResponseSchema },
+      response: { kind: 'page', schema: permissionResponseSchema, order: "In catalog order, which groups each resource's permissions together." },
     }),
   },
 });

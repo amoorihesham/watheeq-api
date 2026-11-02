@@ -6,7 +6,8 @@ import { noStore } from '@/middleware/no-store.js';
 import { authenticate, requireRole } from '@/modules/auth/shared/middlewares.js';
 import type { FileDownloadType } from '@/modules/files/files.types.js';
 import { sendDownload } from '@/modules/files/shared/download.js';
-import { requirePlatformPermission } from '@/modules/platform/shared/middlewares.js';
+import type { PlatformPermissionsOfType } from '@/modules/platform-access/platform-access.types.js';
+import { requirePlatformPermission } from '@/modules/platform-access/shared/middlewares.js';
 import { requireActiveSubscription, subscriptionGuard } from '@/modules/subscriptions/shared/middlewares.js';
 import { requireTenantPermission } from '@/modules/tenant-access/shared/middlewares.js';
 import { AppError, type ErrorCode } from './errors.js';
@@ -37,7 +38,16 @@ export type MethodType = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
 export type PermissionDeclType = { tenant: Parameters<typeof requireTenantPermission>[0] } | { platform: Parameters<typeof requirePlatformPermission>[0] };
 
-export type ResponseDeclType = { kind: 'data'; status: 200 | 201; schema: z.ZodType } | { kind: 'page'; schema: z.ZodType } | { kind: 'noContent' } | { kind: 'download' };
+export type ResponseDeclType =
+  | { kind: 'data'; status: 200 | 201; schema: z.ZodType }
+  | {
+      kind: 'page';
+      schema: z.ZodType;
+      /** One sentence naming the list's sort keys and direction, written as the operation's description (R11.10). */
+      order: string;
+    }
+  | { kind: 'noContent' }
+  | { kind: 'download' };
 
 export interface BinaryBodyType {
   kind: 'binary';
@@ -116,6 +126,8 @@ type NoExtraKeys<H, A extends ApiType> = { [K in Exclude<keyof H, keyof A['endpo
 export interface EndpointDepsType {
   db: Db;
   jwtSecret: string;
+  /** Required by a group that declares a platform permission; the session reads the same function (R11.12). */
+  platformPermissionsOf?: PlatformPermissionsOfType;
 }
 
 function stepHandler(step: StepType, deps: EndpointDepsType | undefined): RequestHandler {
@@ -156,8 +168,14 @@ function checkDeclaration(api: ApiType, name: string, endpoint: EndpointType): v
   }
 }
 
-function permissionGuard(permission: PermissionDeclType): RequestHandler {
-  return 'tenant' in permission ? requireTenantPermission(permission.tenant) : requirePlatformPermission(permission.platform);
+function permissionGuard(api: ApiType, name: string, permission: PermissionDeclType, deps: EndpointDepsType | undefined): RequestHandler {
+  if ('tenant' in permission) {
+    return requireTenantPermission(permission.tenant);
+  }
+  if (!deps?.platformPermissionsOf) {
+    throw new Error(`${api.tag}.${name}: a platform permission needs platformPermissionsOf in the buildRouter deps`);
+  }
+  return requirePlatformPermission(permission.platform, deps.platformPermissionsOf);
 }
 
 /**
@@ -228,7 +246,7 @@ export function buildRouter<A extends ApiType, H extends HandlersOf<A>>(
     router[endpoint.method](
       endpoint.path,
       ...extraSteps(api, endpoint, name).map((step) => stepHandler(step, deps)),
-      ...(endpoint.permission ? [permissionGuard(endpoint.permission)] : []),
+      ...(endpoint.permission ? [permissionGuard(api, name, endpoint.permission, deps)] : []),
       ...(endpoint.activeSubscription ? [requireActiveSubscription()] : []),
       inputStep(endpoint, handler as Parameters<typeof inputStep>[1]),
     );

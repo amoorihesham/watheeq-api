@@ -11,6 +11,8 @@ export const planResponseSchema = z
     priceHalalas: z.number(),
     paymentPeriod: z.enum(PAYMENT_PERIODS),
     discountPercent: z.number(),
+    /** `priceHalalas` after `discountPercent`, rounded half up to the halala; computed, never stored (R11.8). */
+    discountedPriceHalalas: z.number(),
     createdAt: z.date(),
     updatedAt: z.date(),
   })

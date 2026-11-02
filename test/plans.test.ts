@@ -1,12 +1,20 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { encodeCursor, fingerprintOf } from '../src/http/list.js';
 import { createLogger } from '../src/logging/logger.js';
+import { toPlanView } from '../src/modules/platform/plans/plans.service.js';
 import { testApp } from './helpers/app.js';
 import { accessCookie, hashPassword, login } from './helpers/auth.js';
 import { connectToTestDb, seedTenant, seedUser } from './helpers/db.js';
 import { listAll } from './helpers/list-all.js';
 
 const PASSWORD = 'correct horse battery staple';
+
+interface PlanItemType {
+  id: string;
+  name: string;
+  createdAt: string;
+}
 const pool = connectToTestDb();
 const app = testApp(pool, createLogger('silent'));
 
@@ -51,6 +59,31 @@ const auditFor = async (planId: string) => {
   return rows;
 };
 
+describe('toPlanView (R11.8)', () => {
+  const row = {
+    id: '00000000-0000-4000-8000-000000000001',
+    name: 'Basic',
+    userLimit: 10,
+    storageLimitGb: 10,
+    graceDays: 14,
+    priceHalalas: 100_000,
+    paymentPeriod: 'monthly' as const,
+    discountPercent: 10,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  it.each([
+    [100_000, 10, 90_000],
+    [999, 12.5, 874],
+    [0, 15, 0],
+    [100_000, 100, 0],
+    [100_000, 0, 100_000],
+  ])('prices %i halalas at %d%% off as %i, rounded half up', (priceHalalas, discountPercent, expected) => {
+    expect(toPlanView({ ...row, priceHalalas, discountPercent })).toEqual({ ...row, priceHalalas, discountPercent, discountedPriceHalalas: expected });
+  });
+});
+
 describe('create a plan (R1.1, R1.14)', () => {
   it('creates Basic with price, payment period, and discount, and audits it at platform level', async () => {
     const res = await as(omar).post('/operator/plans', basic);
@@ -58,9 +91,11 @@ describe('create a plan (R1.1, R1.14)', () => {
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.body.data).toMatchObject(basic);
     expect(res.body.data.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(res.body.data.discountedPriceHalalas).toBe(85_000);
 
     const audit = await auditFor(res.body.data.id);
     expect(audit).toHaveLength(1);
+    expect(audit[0].details.after).not.toHaveProperty('discountedPriceHalalas');
     expect(audit[0]).toMatchObject({
       tenant_id: null,
       actor_type: 'operator',
@@ -85,7 +120,8 @@ describe('create a plan (R1.1, R1.14)', () => {
       discountPercent: 12.5,
     });
     expect(half.status).toBe(201);
-    expect(half.body.data).toMatchObject({ paymentPeriod: 'yearly', discountPercent: 12.5 });
+    expect(half.body.data).toMatchObject({ paymentPeriod: 'yearly', discountPercent: 12.5, discountedPriceHalalas: 962_500 });
+    expect(free.body.data.discountedPriceHalalas).toBe(basic.priceHalalas);
   });
 
   it('refuses a duplicate name in any case with 409 TAKEN, leaving no audit row', async () => {
@@ -127,23 +163,81 @@ describe('create a plan (R1.1, R1.14)', () => {
 });
 
 describe('list and view plans', () => {
-  it('lists plans ordered by name, ignoring case', async () => {
-    await as(omar).post('/operator/plans', { ...basic, name: 'plans aaa lowercase' });
-    const res = await as(omar).get('/operator/plans');
-    expect(res.status).toBe(200);
-    const names: string[] = res.body.data.map((p: { name: string }) => p.name);
-    const sorted = [...names].sort((a, b) => new Intl.Collator('und').compare(a.toLowerCase(), b.toLowerCase()));
-    expect(names).toEqual(sorted);
+  // Other test files add plans to the same database at any moment, so the walks check only this file's plans,
+  // whose order among themselves no concurrent insert can change.
+  const walk = async (limit: number) => {
+    const seen: PlanItemType[] = [];
+    let cursor = '';
+    for (;;) {
+      const res = await as(omar).get(`/operator/plans?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeLessThanOrEqual(limit);
+      seen.push(...res.body.data);
+      if (!res.body.page.nextCursor) {
+        return seen;
+      }
+      cursor = res.body.page.nextCursor;
+    }
+  };
+
+  it('lists plans newest first, and pages that order one plan at a time (R11.9)', async () => {
+    const pilot = (await as(omar).post('/operator/plans', { ...basic, name: 'Plans Pilot' })).body.data.id;
+    const enterprise = (await as(omar).post('/operator/plans', { ...basic, name: 'Plans Enterprise' })).body.data.id;
+
+    const first = await as(omar).get('/operator/plans');
+    const ids: string[] = first.body.data.map((plan: PlanItemType) => plan.id);
+    expect(ids.indexOf(enterprise)).toBeGreaterThanOrEqual(0);
+    expect(ids.indexOf(enterprise)).toBeLessThan(ids.indexOf(pilot));
+
+    const seen = await walk(1);
+    expect(new Set(seen.map((plan) => plan.id)).size).toBe(seen.length);
+    for (let index = 1; index < seen.length; index++) {
+      expect(Date.parse(seen[index - 1]?.createdAt ?? '')).toBeGreaterThanOrEqual(Date.parse(seen[index]?.createdAt ?? ''));
+    }
+    const own = seen.map((plan) => plan.name).filter((name) => name === 'Plans Pilot' || name === 'Plans Enterprise');
+    expect(own).toEqual(['Plans Enterprise', 'Plans Pilot']);
   });
 
-  it('pages the plans by name with a cursor, the total on every page, and no cursor at the end', async () => {
+  it('orders plans created at the same moment by ID descending, with no skip or repeat across pages', async () => {
+    const client = await pool.connect();
+    let sameMoment: string[] = [];
+    try {
+      await client.query('begin');
+      const { rows } = await client.query(
+        `insert into plans (name, user_limit, grace_days, price_halalas, payment_period)
+         values ('Plans Twin A', 5, 14, 1000, 'monthly'), ('Plans Twin B', 5, 14, 1000, 'monthly'), ('Plans Twin C', 5, 14, 1000, 'monthly')
+         returning id, created_at`,
+      );
+      await client.query('commit');
+      expect(new Set(rows.map((row) => row.created_at.getTime())).size).toBe(1);
+      sameMoment = rows
+        .map((row) => row.id as string)
+        .sort()
+        .reverse();
+    } finally {
+      client.release();
+    }
+
+    const seen = (await walk(1)).map((plan) => plan.id);
+    expect(new Set(seen).size).toBe(seen.length);
+    const at = seen.indexOf(sameMoment[0] ?? '');
+    expect(seen.slice(at, at + 3)).toEqual(sameMoment);
+  });
+
+  it('refuses a cursor issued for the old order by name (R11.9)', async () => {
+    const [plan] = (await as(omar).get('/operator/plans?limit=1')).body.data;
+    const nameCursor = encodeCursor([plan.name.toLowerCase(), plan.id], fingerprintOf('plans', {}));
+    const res = await as(omar).get(`/operator/plans?cursor=${nameCursor}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error.details).toEqual([{ path: 'cursor', code: 'invalid_cursor' }]);
+  });
+
+  it('pages the plans with the total on every page and no cursor at the end', async () => {
     for (const name of ['Plans Page A', 'Plans Page B', 'Plans Page C']) {
       await as(omar).post('/operator/plans', { ...basic, name });
     }
-    // Other test files add plans to the same database at any moment, so the walks compare only this file's plans
-    // ("Plans "), whose order among themselves no concurrent insert can change.
     const own = (names: string[]) => names.filter((name) => name.startsWith('Plans '));
-    const all = await listAll<{ name: string }>(app, omar, '/operator/plans');
+    const all = await listAll<PlanItemType>(app, omar, '/operator/plans');
     const expected = own(all.items.map((p) => p.name));
     expect(expected.length).toBeGreaterThan(2);
 
@@ -152,9 +246,8 @@ describe('list and view plans', () => {
     for (;;) {
       const res = await as(omar).get(`/operator/plans?limit=2${cursor ? `&cursor=${cursor}` : ''}`);
       expect(res.status).toBe(200);
-      expect(res.body.data.length).toBeLessThanOrEqual(2);
       expect(res.body.page.total).toBeGreaterThanOrEqual(expected.length);
-      seen.push(...res.body.data.map((p: { name: string }) => p.name));
+      seen.push(...res.body.data.map((p: PlanItemType) => p.name));
       if (!res.body.page.nextCursor) {
         break;
       }
@@ -186,6 +279,9 @@ describe('list and view plans', () => {
     const res = await as(omar).get(`/operator/plans/${created.body.data.id}`);
     expect(res.status).toBe(200);
     expect(res.body.data.name).toBe('Plans View');
+    expect(res.body.data.discountedPriceHalalas).toBe(85_000);
+    const listed = (await listAll<{ id: string; discountedPriceHalalas: number }>(app, omar, '/operator/plans')).items.find((plan) => plan.id === created.body.data.id);
+    expect(listed?.discountedPriceHalalas).toBe(85_000);
     expect((await as(omar).get('/operator/plans/00000000-0000-4000-8000-000000000000')).status).toBe(404);
     expect((await as(omar).get('/operator/plans/not-a-uuid')).status).toBe(404);
   });
@@ -203,6 +299,7 @@ describe('edit a plan (R1.1, R1.14)', () => {
     expect(res.body.data).toMatchObject({
       priceHalalas: 120_000,
       discountPercent: 10,
+      discountedPriceHalalas: 108_000,
       userLimit: 10,
       storageLimitGb: 10,
     });
@@ -218,6 +315,8 @@ describe('edit a plan (R1.1, R1.14)', () => {
         after: { priceHalalas: 120_000, discountPercent: 10 },
       },
     });
+    expect(audit[1].details.before).not.toHaveProperty('discountedPriceHalalas');
+    expect(audit[1].details.after).not.toHaveProperty('discountedPriceHalalas');
   });
 
   it('refuses renaming to an existing name, an empty change, invalid values, and unknown ids', async () => {

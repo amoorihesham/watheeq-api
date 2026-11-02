@@ -7,9 +7,9 @@ import { createPlansService } from './plans.service.js';
 import type { PlansRouterDepsType } from './plans.types.js';
 
 /** The plans module's composition root; its router is built from `plansApi` and mounted at its prefix. */
-export function createPlansRouter({ db, auth }: PlansRouterDepsType): Router {
+export function createPlansRouter({ db, auth, platformPermissionsOf }: PlansRouterDepsType): Router {
   const service = createPlansService({ db, repo: createPlansRepository() });
   const controller = createPlansController({ service });
 
-  return buildRouter(plansApi, controller, { db, jwtSecret: auth.jwt });
+  return buildRouter(plansApi, controller, { db, jwtSecret: auth.jwt, platformPermissionsOf });
 }

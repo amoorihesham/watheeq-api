@@ -17,7 +17,7 @@ export const workflowsApi = defineApi({
       summary: 'List workflows with their current version header',
       permission: { tenant: 'workflow.view' },
       query: listWorkflowsQuerySchema,
-      response: { kind: 'page', schema: workflowSummaryResponseSchema },
+      response: { kind: 'page', schema: workflowSummaryResponseSchema, order: 'By name (case-insensitive), then by ID.' },
     }),
     get: defineEndpoint({
       method: 'get',

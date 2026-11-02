@@ -234,6 +234,7 @@ function operationOf(api: ApiType, name: string, endpoint: EndpointType, convert
   return {
     tags: [api.tag],
     summary: endpoint.summary,
+    ...(endpoint.response.kind === 'page' ? { description: endpoint.response.order } : {}),
     ...(isAuthenticatedRealm(realmOf(api, endpoint)) ? { security: [{ cookieAuth: [] }] } : {}),
     ...(key ? { 'x-permission': key } : {}),
     ...(parameters.length > 0 ? { parameters } : {}),

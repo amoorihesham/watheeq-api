@@ -17,7 +17,7 @@ export const prioritiesApi = defineApi({
       summary: 'List priorities in display order',
       permission: { tenant: 'priority.view' },
       query: listPrioritiesQuerySchema,
-      response: { kind: 'page', schema: priorityResponseSchema },
+      response: { kind: 'page', schema: priorityResponseSchema, order: 'By display order, then by name, then by ID; retired priorities, which have no display order, come last.' },
     }),
     create: defineEndpoint({
       method: 'post',

@@ -26,7 +26,7 @@ export const plansApi = defineApi({
       summary: 'List subscription plans',
       permission: { platform: 'platform.plan.view' },
       query: listPlansQuerySchema,
-      response: { kind: 'page', schema: planResponseSchema },
+      response: { kind: 'page', schema: planResponseSchema, order: 'Newest first: by creation time, then by ID, both descending.' },
     }),
     get: defineEndpoint({
       method: 'get',

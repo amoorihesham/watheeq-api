@@ -58,7 +58,7 @@ export const requestsApi = defineApi({
       path: '/',
       summary: 'The requests the caller can see, newest submission first',
       query: listRequestsQuerySchema,
-      response: { kind: 'page', schema: requestSummaryResponseSchema },
+      response: { kind: 'page', schema: requestSummaryResponseSchema, order: 'Newest submission first: by submission time, then by ID, both descending.' },
     }),
     get: defineEndpoint({
       method: 'get',

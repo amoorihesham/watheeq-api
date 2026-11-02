@@ -2093,6 +2093,7 @@
           "notifications"
         ],
         "summary": "The caller's notifications, newest first",
+        "description": "Newest first: by creation time, then by ID, both descending.",
         "security": [
           {
             "cookieAuth": []
@@ -2429,6 +2430,7 @@
           "operator-plans"
         ],
         "summary": "List subscription plans",
+        "description": "Newest first: by creation time, then by ID, both descending.",
         "security": [
           {
             "cookieAuth": []
@@ -2863,6 +2865,7 @@
           "operator-tenants"
         ],
         "summary": "List tenants with their subscription and usage",
+        "description": "By name (case-insensitive), then by ID.",
         "security": [
           {
             "cookieAuth": []
@@ -3761,6 +3764,7 @@
           "roles"
         ],
         "summary": "The permission catalog roles are built from",
+        "description": "In catalog order, which groups each resource's permissions together.",
         "security": [
           {
             "cookieAuth": []
@@ -3863,6 +3867,7 @@
           "positions"
         ],
         "summary": "List positions, optionally of one unit",
+        "description": "By name (case-insensitive), then by ID.",
         "security": [
           {
             "cookieAuth": []
@@ -4649,6 +4654,7 @@
           "priorities"
         ],
         "summary": "List priorities in display order",
+        "description": "By display order, then by name, then by ID; retired priorities, which have no display order, come last.",
         "security": [
           {
             "cookieAuth": []
@@ -5284,6 +5290,7 @@
           "requests"
         ],
         "summary": "The requests the caller can see, newest submission first",
+        "description": "Newest submission first: by submission time, then by ID, both descending.",
         "security": [
           {
             "cookieAuth": []
@@ -7987,6 +7994,7 @@
           "roles"
         ],
         "summary": "List the tenant's roles",
+        "description": "By name (case-insensitive), then by ID.",
         "security": [
           {
             "cookieAuth": []
@@ -8500,6 +8508,7 @@
           "services"
         ],
         "summary": "List legal services with their form and allowed workflows",
+        "description": "By name (case-insensitive), then by ID.",
         "security": [
           {
             "cookieAuth": []
@@ -9330,6 +9339,7 @@
           "users"
         ],
         "summary": "List the users the caller's directory scope reaches",
+        "description": "By user name (case-insensitive), then by ID.",
         "security": [
           {
             "cookieAuth": []
@@ -10228,6 +10238,7 @@
           "workflows"
         ],
         "summary": "List workflows with their current version header",
+        "description": "By name (case-insensitive), then by ID.",
         "security": [
           {
             "cookieAuth": []
@@ -11144,6 +11155,28 @@
                 "type": "null"
               }
             ]
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "permissions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "permissions"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -11151,7 +11184,8 @@
           "email",
           "userName",
           "role",
-          "tenant"
+          "tenant",
+          "platform"
         ],
         "additionalProperties": false
       },
@@ -12935,6 +12969,9 @@
           "discountPercent": {
             "type": "number"
           },
+          "discountedPriceHalalas": {
+            "type": "number"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -12953,6 +12990,7 @@
           "priceHalalas",
           "paymentPeriod",
           "discountPercent",
+          "discountedPriceHalalas",
           "createdAt",
           "updatedAt"
         ],
