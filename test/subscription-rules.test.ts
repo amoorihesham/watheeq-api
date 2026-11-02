@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDb } from '../src/db/pool.js';
-import { addDays, effectivePrice, riyadhDateOf, subscriptionState } from '../src/modules/subscriptions/index.js';
+import { addDays, effectivePrice, riyadhDateOf, SUBSCRIPTION_STATES, subscriptionState, subscriptionStateIs } from '../src/modules/subscriptions/index.js';
 import { connectToTestDb } from './helpers/db.js';
 
 describe('subscriptionState (R1.7)', () => {
@@ -77,5 +77,41 @@ describe('Riyadh date (R1.7)', () => {
   it('is still the end date at 23:59 Riyadh time (20:59 UTC), and the next day one minute later', async () => {
     expect(await riyadhDateAt('2027-10-31T20:59:00Z')).toBe('2027-10-31');
     expect(await riyadhDateAt('2027-10-31T21:00:00Z')).toBe('2027-11-01');
+  });
+});
+
+describe('subscriptionStateIs agrees with subscriptionState (P11.5)', () => {
+  const pool = connectToTestDb();
+  const db = createDb(pool);
+  afterAll(async () => {
+    await pool.end();
+  });
+
+  // The conditions name `subscriptions.end_date` and `subscriptions.grace_days`, so a VALUES row aliased as
+  // `subscriptions` stands in for a stored subscription.
+  const sqlStates = async (subscription: { endDate: string; graceDays: number }, today?: string) => {
+    const columns = SUBSCRIPTION_STATES.map((state) => sql`${subscriptionStateIs(state, today ? sql`${today}::date` : undefined)} as ${sql.identifier(state)}`);
+    const { rows } = await db.execute<Record<string, boolean>>(sql`select ${sql.join(columns, sql`, `)} from (values (${subscription.endDate}::date, ${subscription.graceDays}::int)) as subscriptions(end_date, grace_days)`);
+    return SUBSCRIPTION_STATES.filter((state) => rows[0]?.[state]);
+  };
+
+  const endDate = '2026-11-05';
+  it.each([0, 14])('matches on every boundary date with %i grace days', async (graceDays) => {
+    const graceEnd = addDays(endDate, graceDays);
+    for (const today of [addDays(endDate, -1), endDate, addDays(endDate, 1), graceEnd, addDays(graceEnd, 1), addDays(graceEnd, 30)]) {
+      expect(await sqlStates({ endDate, graceDays }, today), `${today} with ${graceDays} grace days`).toEqual([subscriptionState({ endDate, graceDays }, today)]);
+    }
+  });
+
+  it("uses Riyadh's today by default", async () => {
+    const { rows } = await pool.query("select (now() at time zone 'Asia/Riyadh')::date::text as today");
+    const today: string = rows[0].today;
+    for (const subscription of [
+      { endDate: today, graceDays: 14 },
+      { endDate: addDays(today, -1), graceDays: 14 },
+      { endDate: addDays(today, -1), graceDays: 0 },
+    ]) {
+      expect(await sqlStates(subscription)).toEqual([subscriptionState(subscription, today)]);
+    }
   });
 });

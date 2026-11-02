@@ -480,6 +480,103 @@ describe('list and view tenants (R1.7)', () => {
   });
 });
 
+describe('tenant list filters (R11.5-R11.7)', () => {
+  // Every name here contains "Flt" and every slug "tn-flt-", which no other test file uses, so `q` scopes each
+  // check to these tenants even while other files add tenants to the shared database.
+  const ended = (slug: string, name: string, endOffset: number) => createTenant(slug, `${slug}@tenants-filters.test`, { name, subscription: { planId: basicId, startDate: addDays(today, -60), endDate: addDays(today, endOffset) } });
+  const slugsOf = (res: request.Response) => res.body.data.map((t: { tenant: { slug: string } }) => t.tenant.slug);
+  const list = (query: string) => as(omar).get(`/operator/tenants?${query}`);
+
+  beforeAll(async () => {
+    // Basic has 14 grace days.
+    for (const res of await Promise.all([
+      ended('tn-flt-active', 'Flt Noor Active', 10),
+      ended('tn-flt-lastday', 'Flt Last Active Day', 0),
+      ended('tn-flt-grace', 'Flt Grace First Day', -1),
+      ended('tn-flt-gracelast', 'Flt Grace Last Day', -14),
+      ended('tn-flt-readonly', 'Flt Read Only', -15),
+      ended('tn-flt-pct', 'Flt 100% Club', 10),
+      ended('tn-flt-under', 'Flt_Under', 10),
+    ])) {
+      expect(res.status).toBe(201);
+    }
+  });
+
+  it.each([
+    ['active', ['tn-flt-pct', 'tn-flt-lastday', 'tn-flt-active', 'tn-flt-under']],
+    ['grace', ['tn-flt-grace', 'tn-flt-gracelast']],
+    ['read_only', ['tn-flt-readonly']],
+    ['all', ['tn-flt-pct', 'tn-flt-grace', 'tn-flt-gracelast', 'tn-flt-lastday', 'tn-flt-active', 'tn-flt-readonly', 'tn-flt-under']],
+  ])('state=%s keeps the tenants in that state today, by name, with the filtered total', async (state, slugs) => {
+    const res = await list(`state=${state}&q=tn-flt-`);
+    expect(res.status).toBe(200);
+    expect(slugsOf(res)).toEqual(slugs);
+    expect(res.body.page.total).toBe(slugs.length);
+    for (const item of res.body.data) {
+      expect(state === 'all' || item.subscription.state === state).toBe(true);
+    }
+  });
+
+  it('defaults state to all', async () => {
+    expect(slugsOf(await list('q=tn-flt-'))).toEqual(slugsOf(await list('q=tn-flt-&state=all')));
+  });
+
+  it.each([['expired'], ['Grace']])('refuses state=%s as invalid_value', async (state) => {
+    const res = await list(`state=${state}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error.details).toEqual([{ path: 'state', code: 'invalid_value' }]);
+  });
+
+  it('searches the name ignoring case, and the slug', async () => {
+    expect(slugsOf(await list('q=flt%20noor'))).toEqual(['tn-flt-active']);
+    expect(slugsOf(await list('q=FLT%20NOOR'))).toEqual(['tn-flt-active']);
+    expect(slugsOf(await list('q=tn-flt-gracel'))).toEqual(['tn-flt-gracelast']);
+  });
+
+  it('matches %, _, and \\ literally', async () => {
+    expect(slugsOf(await list(`q=${encodeURIComponent('100%')}`))).toEqual(['tn-flt-pct']);
+    const percent = await listAll<{ tenant: { name: string; slug: string } }>(app, omar, `/operator/tenants?q=${encodeURIComponent('%')}`);
+    expect(percent.items.map((t) => t.tenant.slug)).toContain('tn-flt-pct');
+    expect(percent.items.every((t) => `${t.tenant.name}${t.tenant.slug}`.includes('%'))).toBe(true);
+    expect(slugsOf(await list('q=flt_'))).toEqual(['tn-flt-under']);
+    expect(slugsOf(await list(`q=${encodeURIComponent('flt\\')}`))).toEqual([]);
+  });
+
+  it('trims q, and treats a blank one as no search', async () => {
+    expect(slugsOf(await list('q=%20tn-flt-readonly%20'))).toEqual(['tn-flt-readonly']);
+    const blank = await listAll<{ tenant: { slug: string } }>(app, omar, '/operator/tenants?q=%20%20');
+    expect(blank.items.map((t) => t.tenant.slug)).toEqual(expect.arrayContaining(['tn-flt-active', 'tn-flt-readonly', 'tn-al-noor']));
+  });
+
+  it('refuses a q of 101 characters as too_big, and takes one of 100', async () => {
+    const tooLong = await list(`q=${'a'.repeat(101)}`);
+    expect(tooLong.status).toBe(400);
+    expect(tooLong.body.error.details).toEqual([{ path: 'q', code: 'too_big' }]);
+    expect((await list(`q=${'a'.repeat(100)}`)).status).toBe(200);
+  });
+
+  it('combines state and q with AND', async () => {
+    const res = await list('state=grace&q=last%20day');
+    expect(slugsOf(res)).toEqual(['tn-flt-gracelast']);
+    expect(res.body.page.total).toBe(1);
+  });
+
+  it('pages a filtered list with its cursor, and refuses that cursor with other filters', async () => {
+    const first = await list('state=active&q=tn-flt-&limit=2');
+    expect(slugsOf(first)).toEqual(['tn-flt-pct', 'tn-flt-lastday']);
+    expect(first.body.page.total).toBe(4);
+    const cursor = first.body.page.nextCursor;
+    const second = await list(`state=active&q=tn-flt-&limit=2&cursor=${cursor}`);
+    expect(slugsOf(second)).toEqual(['tn-flt-active', 'tn-flt-under']);
+    expect(second.body.page).toEqual({ nextCursor: null, total: 4 });
+    for (const changed of ['state=active&q=tn-flt-a', 'state=all&q=tn-flt-', 'q=tn-flt-']) {
+      const res = await list(`${changed}&limit=2&cursor=${cursor}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error.details).toEqual([{ path: 'cursor', code: 'invalid_cursor' }]);
+    }
+  });
+});
+
 describe('seat check (R1.12)', () => {
   it('throws USER_LIMIT_REACHED when the tenant is already at its limit', async () => {
     const plan = await as(omar).post('/operator/plans', {

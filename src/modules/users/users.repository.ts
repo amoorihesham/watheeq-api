@@ -1,6 +1,7 @@
 import { and, count, eq, ilike, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
 import type { Executor } from '@/db/pool.js';
 import { orgUnits, roles, tenantMembers, tenants, users } from '@/db/schema/index.js';
+import { containing } from '@/db/search.js';
 import type { PageRequestType } from '@/http/list.js';
 import { withinScope } from '@/modules/tenant-access/index.js';
 import type { ListUsersQueryType, MemberChangesType, NewMemberType, UserRowType } from './users.types.js';
@@ -22,9 +23,6 @@ const userColumns = {
   unitKind: orgUnits.kind,
   isOwner: sql<boolean>`${tenants.ownerId} = ${users.id}`,
 };
-
-/** `%`, `_`, and `\` in a search are matched literally. */
-const containing = (text: string) => `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 
 type UserFiltersType = Omit<ListUsersQueryType, 'cursor' | 'limit'>;
 

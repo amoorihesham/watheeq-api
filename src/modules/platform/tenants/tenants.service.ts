@@ -165,7 +165,7 @@ export function createTenantsService({ db, repo, emailSender, settings }: { db: 
           { expr: sql`${tenants.id}`, type: 'uuid' },
         ],
         direction: 'asc',
-        where: () => undefined,
+        where: repo.listWhere,
         selectPage: repo.page,
         count: repo.count,
       });

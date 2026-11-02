@@ -1,9 +1,10 @@
-import { count, eq, type SQL, sql } from 'drizzle-orm';
+import { and, count, eq, ilike, or, type SQL, sql } from 'drizzle-orm';
 import type { Executor } from '@/db/pool.js';
 import { files, roles, subscriptions, tenantMembers, tenants, users } from '@/db/schema/index.js';
+import { containing } from '@/db/search.js';
 import type { PageRequestType } from '@/http/list.js';
-import { riyadhToday } from '@/modules/subscriptions/index.js';
-import type { NewTenantType, OwnerAccountType, TenantRowType } from './tenants.types.js';
+import { riyadhToday, subscriptionStateIs } from '@/modules/subscriptions/index.js';
+import type { ListTenantsQueryType, NewTenantType, OwnerAccountType, TenantRowType } from './tenants.types.js';
 
 const activeMembers = sql<number>`(
   select count(*)::int from ${tenantMembers}
@@ -37,6 +38,10 @@ export function createTenantsRepository() {
 
     insertAdminMember(db: Executor, tenantId: string, userId: string, roleId: string) {
       return db.insert(tenantMembers).values({ tenantId, userId, roleId });
+    },
+
+    listWhere(filters: Omit<ListTenantsQueryType, 'cursor' | 'limit'>): SQL | undefined {
+      return and(filters.state === 'all' ? undefined : subscriptionStateIs(filters.state), filters.q ? or(ilike(tenants.name, containing(filters.q)), ilike(tenants.slug, containing(filters.q))) : undefined);
     },
 
     page(db: Executor, page: PageRequestType) {
