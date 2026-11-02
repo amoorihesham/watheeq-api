@@ -26,9 +26,10 @@ The code is in `src/modules/auth/`.
 | `POST /auth/logout` | nothing | 204; the refresh token is revoked and both cookies are cleared |
 | `GET /auth/me` | the `wq_access` cookie | 200 the session; 401 `UNAUTHENTICATED` |
 
-- The session is the same object from all three calls: `user` is `{id, email, userName, role, tenant}`, and `subscription` is `{state, endDate, graceEndsOn}` for a tenant user and `null` for an operator.
+- The session is the same object from all three calls: `user` is `{id, email, userName, role, tenant, platform}`, and `subscription` is `{state, endDate, graceEndsOn}` for a tenant user and `null` for an operator.
 - `role` is `user` for a tenant user and `operator` for a platform operator.
   `tenant` is `{id, roleId, roleName, permissions}` for a tenant user and `null` for an operator.
+  `platform` is `{permissions}` for an operator, the platform permissions they hold in catalog order, and `null` for a tenant user; the access token does not carry it.
 - A login failure never says whether the email exists, the password was wrong, or the user is not active yet.
 - Refresh tokens rotate on every refresh, so a stolen token works at most once.
 

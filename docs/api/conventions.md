@@ -21,7 +21,8 @@ Example: `PATCH /priorities/<urgent>` answers `{"data": {"id": "...", "name": "U
 
 - 201 is only for a creation that has its own URL: Sara creates a priority and gets 201.
   An action on an existing resource, such as Faisal asking Khalid a question on request #42, is 200 with the request.
-- 204 is for deletes, logout, password calls, resends, and marking notifications read.
+- 204 is for deletes, logout, password calls, resending a user's invitation, and marking notifications read.
+  The operator's resend of a tenant admin's verification link answers 200 with the tenant, whose `owner.verificationEmail` says whether the email went out.
   Sara deletes the Litigation section: 204 with no body.
 - Every field of a response is always present.
   An empty value is `null`, never a missing key, and the variants of one shape carry the same keys.
@@ -56,7 +57,7 @@ GET /users?status=active&limit=25&cursor=eyJ2Ijox...
 - A cursor used with other filters, on another list, or altered or broken is 400 `VALIDATION_FAILED` with the detail `{path: "cursor", code: "invalid_cursor"}`.
   A client restarts the list from the first page.
   Example: Faisal is on page 2 of `GET /requests?view=review_queue` and the app sends the same cursor with `view=handling`; the answer is `invalid_cursor`, so the app restarts the tab instead of missing requests.
-- Each list has one fixed order, listed with its sort keys in section 4.2.3 of the Phase 8 spec, ending with the ID as the tie-breaker.
+- Each list has one fixed order, stated in its operation's `description` in `openapi.json`, ending with the ID as the tie-breaker.
   A page continues strictly after the last item of the previous page, so a new, removed, or tied item never causes a repeat or a skip.
   There is no client-chosen sorting.
 - `total` is the number of items that match the filters, not the items left, counted in the same database snapshot as the page.
