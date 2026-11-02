@@ -19,6 +19,8 @@ Every error has the same JSON shape, written only by `src/middleware/error-handl
 - Every error caused by one input field has a detail at that field's path, so a client can mark the field.
 - An unknown route is 404 `NOT_FOUND` with `details: []`.
 - A client can quote `requestId` when reporting a problem; the server logs the same ID.
+- A client handles an error code or detail code it does not know by its status (the table below), with a general message for that status.
+  A new code can reach a client before the client is updated to word it, so adding one never breaks a client: a code first seen with 409 is shown as a general conflict until the client words it.
 
 ## What each status means
 

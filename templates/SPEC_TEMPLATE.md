@@ -6,6 +6,7 @@
 | **Approved by / date** | _(set by the project owner only)_                              |
 | **Depends on**         | Phase specs this one builds on                                 |
 | **Related decisions**  | e.g. MVP D1, D2; Technical T2, T6                              |
+| **Frontend issues**    | The `fe:*` issues this phase delivers (`#4`, `#5`), or none    |
 
 ---
 
@@ -42,6 +43,11 @@ Tables and columns, constraints, indexes, and how each table is filtered by `ten
 ### 4.2 API
 
 See [phase-<N>-<name>.API.md](phase-<N>-<name>.API.md), written from `templates/SPEC_API_TEMPLATE.md`.
+
+**Contract impact** (`docs/FRONTEND_COLLABORATION.md`, section 5):
+
+- Contract changes, and the `be:contract-change` issue each one needs; include behavior a diff cannot see, such as a list's order.
+- Additions for the `be:heads-up` issue filed at the Done step.
 
 ### 4.3 Key flows and state transitions
 

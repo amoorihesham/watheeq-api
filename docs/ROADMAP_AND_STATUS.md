@@ -2,7 +2,7 @@
 
 ## Watheeq - Legal Affairs Management System
 
-**Last updated:** 2026-10-28
+**Last updated:** 2026-11-02
 
 ### Current Status
 
@@ -44,6 +44,8 @@
 - **Owner changes after Phase 10 (2026-10-28):** the code is formatted with single quotes and a 240-character line width.
   The config groups were renamed (`frontend`, `smtp`, `scheduler`, link lifetimes in `auth`, fields named after their variables), and the Phase 9 budget rule and unknown `JOB_*` warning were removed (Phase 9 spec, revision 2026-10-28; T57, T58).
   The API now allows CORS with credentials from `APP_BASE_URL` (T63), and `.env.example` sets the optional keys to their defaults.
+- **Frontend collaboration (2026-11-02):** requests, questions, and bugs from the frontend arrive as `fe:*` issues and contract changes are announced on the frontend repo (`docs/FRONTEND_COLLABORATION.md`).
+  The first triage accepted #1, #2, #4, #5, #6, and #7 for a Phase 11 (operator console requests) and asked the frontend about #3 (bilingual names). `pnpm contract:check`, the oasdiff check that enforces contract-change issues, is designed but not built.
 - **Next action:** the owner decides the next phase. A local staging setup was named next; it must avoid the ports of other local projects, it brings secrets read from files (`TECHNICAL_DECISIONS.md`, Deferred Hardening), and it hosts `/docs` for the frontend.
 
 ---
