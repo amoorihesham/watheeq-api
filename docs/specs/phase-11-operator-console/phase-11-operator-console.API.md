@@ -2,98 +2,32 @@
 
 The endpoints of [phase-11-operator-console.md](phase-11-operator-console.md), moved out of its section 4.2.
 Section numbers and requirement IDs below refer to that spec.
+This is the implemented form: an index of the endpoints.
+Request and response shapes, statuses, and the errors of each endpoint are in `docs/api/openapi.json`.
 
-## Draft form
+No endpoint is added; every row is an endpoint another phase owns that this phase changed.
 
-No endpoint is added; every row changes an endpoint another phase owns.
-Shapes not shown are unchanged in `docs/api/openapi.json`.
-Besides these rows, the operation of every list endpoint (eleven, listed in spec 4.3) gains a `description` stating its order (R11.10).
+| Method | Path                                                    | Who                            | Purpose                                                                                       | Spec refs           |
+| ------ | ------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------- | ------------------- |
+| POST   | `/operator/tenants`                                     | `platform.tenant.create`       | (changed) Answers `tenant.owner`; a failed verification email shows `failed`                  | R11.1, R11.2        |
+| GET    | `/operator/tenants`                                     | `platform.tenant.view`         | (changed) Filters by `state` and searches name or slug with `q`; items carry `tenant.owner`   | R11.1, R11.5-R11.7  |
+| GET    | `/operator/tenants/:tenantId`                           | `platform.tenant.view`         | (changed) Answers `tenant.owner`                                                              | R11.1               |
+| PUT    | `/operator/tenants/:tenantId/subscription`              | `platform.subscription.update` | (changed) Answers `tenant.owner`                                                              | R11.1               |
+| POST   | `/operator/tenants/:tenantId/admin/resend-verification` | `platform.tenant.create`       | (changed) Answers the tenant, with this send's outcome; a failed send is not an error         | R11.3, P11.2        |
+| POST   | `/operator/plans`                                       | `platform.plan.create`         | (changed) Answers `discountedPriceHalalas`                                                    | R11.8, P11.7        |
+| GET    | `/operator/plans`                                       | `platform.plan.view`           | (changed) Newest first; items carry `discountedPriceHalalas`                                  | R11.8, R11.9        |
+| GET    | `/operator/plans/:planId`                               | `platform.plan.view`           | (changed) Answers `discountedPriceHalalas`                                                    | R11.8               |
+| PATCH  | `/operator/plans/:planId`                               | `platform.plan.update`         | (changed) Answers `discountedPriceHalalas`                                                    | R11.8               |
+| GET    | `/auth/me`                                              | any user                       | (changed) `user.platform`: an operator's platform permissions, `null` for a tenant user       | R11.11, R11.12      |
+| POST   | `/auth/login`                                           | public                         | (changed) `user.platform`, as `/auth/me`                                                      | R11.11              |
+| POST   | `/auth/refresh`                                         | public                         | (changed) `user.platform`, as `/auth/me`                                                      | R11.11              |
 
-| Method | Path | Realm | Permission | Request | Responses |
-| ------ | ---- | ----- | ---------- | ------- | --------- |
-| POST | `/operator/tenants` | operator | `platform.tenant.create` | unchanged | 201 `{data: TenantDetail}` with `tenant.owner` (R11.1); `owner.verificationEmail` is `failed` when the email could not be sent, and the tenant is still created (R11.2) |
-| GET | `/operator/tenants` | operator | `platform.tenant.view` | query: `state` = `active` \| `grace` \| `read_only` \| `all` (default `all`); `q` text, trimmed, at most 100, blank is no filter; `cursor`, `limit` | 200 `{data: TenantDetail[], page}`, ordered by name then ID; `total` counts the filtered list (R11.5-R11.7) |
-| GET | `/operator/tenants/:tenantId` | operator | `platform.tenant.view` | unchanged | 200 `{data: TenantDetail}` with `tenant.owner` (R11.1) |
-| PUT | `/operator/tenants/:tenantId/subscription` | operator | `platform.subscription.update` | unchanged | 200 `{data: TenantDetail}` with `tenant.owner` (R11.1) |
-| POST | `/operator/tenants/:tenantId/admin/resend-verification` | operator | `platform.tenant.create` | none | 200 `{data: TenantDetail}`, `owner.verificationEmail` the outcome of this send (was 204, and 500 on a failed send) (R11.3, Q2); 409 `ALREADY_VERIFIED` unchanged |
-| POST | `/operator/plans` | operator | `platform.plan.create` | unchanged | 201 `{data: Plan}` with `discountedPriceHalalas` (R11.8) |
-| GET | `/operator/plans` | operator | `platform.plan.view` | unchanged | 200 `{data: Plan[], page}`, newest first: `createdAt` desc, then `id` desc (R11.9) |
-| GET | `/operator/plans/:planId` | operator | `platform.plan.view` | unchanged | 200 `{data: Plan}` with `discountedPriceHalalas` (R11.8) |
-| PATCH | `/operator/plans/:planId` | operator | `platform.plan.update` | unchanged | 200 `{data: Plan}` with `discountedPriceHalalas` (R11.8) |
-| GET | `/auth/me` | session | none | none | 200 `{data: Session}`, `user.platform` (R11.11) |
-| POST | `/auth/login` | public | none | unchanged | 200 `{data: Session}`, `user.platform` (R11.11) |
-| POST | `/auth/refresh` | public | none | none | 200 `{data: Session}`, `user.platform` (R11.11) |
+## Rules a schema does not state
 
-### Shapes
-
-```yaml
-Tenant:
-  required: [id, name, slug, owner, createdAt]   # ownerId removed
-  properties:
-    id: { type: string }
-    name: { type: string }
-    slug: { type: string }
-    owner: { $ref: TenantOwner }
-    createdAt: { type: string, format: date-time }
-
-TenantOwner:
-  required: [id, email, userName, verifiedAt, verificationEmail]
-  properties:
-    id: { type: string }
-    email: { type: string }
-    userName: { type: string }
-    verifiedAt: { type: [string, "null"], format: date-time }   # null until the owner verifies and sets a password
-    verificationEmail:
-      type: [string, "null"]
-      enum: [sent, failed, null]   # the last verification email; null once verified, or when no outcome is recorded
-
-Plan:
-  # every existing property, plus:
-  required: [..., discountedPriceHalalas]
-  properties:
-    discountedPriceHalalas: { type: integer }   # priceHalalas after discountPercent, rounded half up to the halala
-
-AuthUser:
-  # every existing property, plus:
-  required: [..., platform]
-  properties:
-    platform:
-      type: [object, "null"]   # null for a tenant user
-      required: [permissions]
-      properties:
-        permissions: { type: array, items: { type: string } }   # in catalog order
-```
-
-Examples (Omar reading Al-Noor before Sara verifies, after the email went out):
-
-```json
-{
-  "data": {
-    "tenant": {
-      "id": "6c1f...",
-      "name": "Al-Noor",
-      "slug": "al-noor",
-      "owner": {
-        "id": "a93e...",
-        "email": "sara@alnoor.sa",
-        "userName": "Sara Al-Qahtani",
-        "verifiedAt": null,
-        "verificationEmail": "sent"
-      },
-      "createdAt": "2026-11-02T09:14:03.120Z"
-    },
-    "subscription": { "...": "unchanged" },
-    "usage": { "...": "unchanged" }
-  }
-}
-```
-
-`GET /operator/tenants?state=grace&q=noor` answers the tenants in Grace whose name or slug contains `noor`, by name.
-
-### Validation
-
-No new detail codes. `state` uses `invalid_value` (R8.9); `q` uses `too_big` above 100 characters.
-
-### New error codes
-
-None.
+- Every list operation's `description` in `openapi.json` states its order (R11.10, P11.8); the texts are in spec 4.3.
+- `GET /operator/plans` was ordered by name before this phase; a cursor issued then is 400 `invalid_cursor`.
+- `owner.verificationEmail` is `sent` when the mail server accepted the newest verification email, not that it was delivered; it is `null` once the owner has verified, or when no outcome is recorded (a link sent before this phase) (P11.2).
+- `state` is the subscription state of today's Riyadh date, the same rule as `subscription.state` (P11.5); a tenant can leave a `state` page between two pages at midnight.
+- `q` is matched against the tenant's name and slug, ignoring case, with `%`, `_`, and `\` matched literally, as on `GET /users` (P11.6).
+- Invitations a Tenant Admin sends (`POST /users`, the user resend) record their email outcome too, but no answer shows it yet; their answers are unchanged (R11.4).
+- `user.platform.permissions` and the operator route checks come from one function (R11.12, P11.9).

@@ -46,8 +46,9 @@
   The API now allows CORS with credentials from `APP_BASE_URL` (T63), and `.env.example` sets the optional keys to their defaults.
 - **Frontend collaboration (2026-11-02):** requests, questions, and bugs from the frontend arrive as `fe:*` issues and contract changes are announced on the frontend repo (`docs/FRONTEND_COLLABORATION.md`).
   The first triage accepted #1, #2, #4, #5, #6, and #7 for a Phase 11 (operator console requests); #3 was accepted after the owner's answer for a Phase 12 (bilingual names: every name, label, and description a person types for others to see in Arabic and English, lists ordered by `Accept-Language`). `pnpm contract:check` (oasdiff, T64) runs in a `pre-push` hook and refuses a push to `dev` that changes the contract without naming its `be:contract-change` issue in a `Contract-change:` trailer.
-- **Phase 11 (operator console requests) spec approved (2026-11-02), in implementation** (`docs/specs/phase-11-operator-console/phase-11-operator-console.md`): the tenant owner with their verification and email outcome, tenant filters and search, the discounted plan price, plans newest first with every list's order in `openapi.json`, and the operator's platform permissions in the session (#1, #2, #4-#7).
-- **Next action:** Phase 11 is implemented by two sub-agents, then reviewed once and reported to the owner. Phase 12 (bilingual names, #3) follows it. A local staging setup was also named; it must avoid the ports of other local projects, it brings secrets read from files (`TECHNICAL_DECISIONS.md`, Deferred Hardening), and it hosts `/docs` for the frontend.
+- **Phase 11 (operator console requests) implemented** (`docs/specs/phase-11-operator-console/phase-11-operator-console.md`): the frontend's first requests (#1, #2, #4-#7). A tenant answers its `owner` (in place of `ownerId`) with the verification time and whether the last verification email was accepted, recorded for every invitation link; the operator's resend answers the tenant; the tenant list filters by subscription `state` and searches name or slug with `q`; plans carry `discountedPriceHalalas` and are listed newest first; every list states its order in `openapi.json`; and the session lists an operator's platform permissions, from a new `platform-access` module.
+  Its main decisions are T65-T68 in `TECHNICAL_DECISIONS.md`. Migration `0024` adds `users.invitation_email`. The contract changes are announced in amoorihesham/watheeq-frontend#4.
+- **Next action:** the owner decides the next phase: Phase 12 (bilingual names, #3), whose spec can now be drafted, or the local staging setup, which must avoid the ports of other local projects, brings secrets read from files (`TECHNICAL_DECISIONS.md`, Deferred Hardening), and hosts `/docs` for the frontend.
 
 ---
 
@@ -70,7 +71,7 @@ Each phase moves through: `Not started → Spec Draft → Spec Approved → In I
 | 8   | API contract                    | One response, list, and error shape; cursor paging; filters; `docs/api/`; contract checks   | 0-7        | Implemented                             |
 | 9   | Centralized configuration       | One config loader, grouped settings per module, overridable job settings, `.constants.ts`   | 8          | Implemented                             |
 | 10  | OpenAPI & API reference         | Endpoint declarations, validation from them, generated `openapi.json`, Scalar at `/docs`     | 9          | Implemented                             |
-| 11  | Operator console requests       | Tenant owner and email outcome, tenant filters, discounted plan price, list orders, platform permissions in the session | 1, 8, 10   | In Implementation                       |
+| 11  | Operator console requests       | Tenant owner and email outcome, tenant filters, discounted plan price, list orders, platform permissions in the session | 1, 8, 10   | Implemented                             |
 | 12  | Bilingual names                 | Every name a person types in Arabic and English, lists ordered by `Accept-Language`          | 11         | Not started                             |
 
 Audit is cross-cutting: built in Phase 0, used by every later phase.

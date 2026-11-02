@@ -2,7 +2,7 @@
 
 | Field                  | Value                                                                                                                                                                                   |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status**             | Approved                                                                                                                                                                                   |
+| **Status**             | Implemented                                                                                                                                                                                |
 | **Approved by / date** | _Amr - 2/11/2026 - 22.33 pm_                                                                                                                                                       |
 | **Depends on**         | Phase 1 (`phase-1-platform-subscriptions.md`) for plans, tenants, and verification; Phase 2 for invitations; Phase 8 for lists and filters; Phase 10 for endpoint declarations and `openapi.json` |
 | **Related decisions**  | MVP D16; Technical T15-T20, T25, T52-T56, T60, T61, T64; Phase 1 P1.13, P1.14, P1.16, P1.20                                                                                              |
@@ -129,10 +129,11 @@ The helper lives in `auth/shared/onboarding.ts` next to `issuePasswordToken`:
 
 ```ts
 /** Sends an invitation link email and records whether the mail server accepted it (R11.4). Never throws for a send failure. */
-export async function sendInvitationLink(db: Db, userId: string, message: EmailMessageType, emailSender: EmailSenderType): Promise<'sent' | 'failed'>;
+export async function sendInvitationLink(db: Executor, userId: string, message: EmailMessageType, emailSender: EmailSenderType, onSendError: (err: unknown) => void): Promise<'sent' | 'failed'>;
 ```
 
-The tenant user resend keeps answering 500 on failure by checking the returned outcome, so its contract does not change in this phase.
+`onSendError` receives a send failure, so each caller keeps its own warning (`verification email failed` with the tenant ID, `invitation email failed` with the user ID); the token is never passed to it.
+The tenant user resend keeps answering 500 on failure: its `onSendError` keeps the error, and it is thrown once the outcome is recorded, so its contract does not change in this phase.
 
 #### Owner in the tenant detail
 
@@ -198,7 +199,8 @@ Today the platform permission list and `platformPermissionsOf` live in `modules/
 They move to a new `modules/platform-access`, the platform counterpart of `tenant-access` (which `auth` already imports): `PLATFORM_PERMISSIONS`, `PlatformPermissionType`, `platformPermissionsOf`, and `requirePlatformPermission`.
 `platform` keeps plans and tenants.
 
-`toAuthUser` adds `platform: user.role === 'operator' ? { permissions: [...platformPermissionsOf(user)] } : null`, in `PLATFORM_PERMISSIONS` order.
+The auth service builds the session's user with `platform: user.role === 'operator' ? { permissions } : null`, where `permissions` are those `platformPermissionsOf(user)` holds, in `PLATFORM_PERMISSIONS` order.
+The function reaches both the auth service and the operator routers from app composition (`buildApp` takes an optional `platformPermissionsOf`, defaulting to the real one), so a test can replace it in one place (R11.12); `buildRouter` refuses to build a router with a platform permission when it was not given the function.
 The access token payload is unchanged: platform permissions follow from the role, and carrying them in the token would only make them stale when operator roles arrive.
 `AuthUserType` (the principal read from the token) stays as it is; the session's user shape gains `platform`.
 
@@ -302,7 +304,7 @@ The spec cannot be `Approved` while a blocking open question remains.
 | P11.8 | A `page` response declares its `order`, written as the operation's `description`.                                                                | Each list's order is a contract the diff cannot see; declaring it beside the endpoint makes a missing one a compile error.                                         |
 | P11.9 | Platform permissions live in `platform-access`; the session's `platform` comes from `platformPermissionsOf`; the token does not carry them.       | One source for routes and session (R11.12), no import cycle, and nothing to go stale in tokens when operator roles arrive.                                         |
 
-Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is implemented.
+Promoted on 2026-11-02 to `TECHNICAL_DECISIONS.md` as T65 (P11.2-P11.4), T66 (P11.5), T67 (P11.8), and T68 (P11.9). P11.1, P11.6, and P11.7 are detail that stays authoritative here.
 
 ## 11. Change Log
 
@@ -310,3 +312,4 @@ Promote these to `MVP_SCOPE.md` or `TECHNICAL_DECISIONS.md` when the phase is im
 | ---------- | --------------------------------------------------------- | ------------------------------------------------------- |
 | 2026-11-02 | Draft created from the accepted issues #1, #2, #4-#7.     | Owner asked for the Phase 11 spec after the triage.     |
 | 2026-11-02 | Resolved Q1-Q3 with the recommended options: every invitation link records its outcome, the resend answers the tenant, and the plan order change is a contract change. | Owner review. |
+| 2026-11-02 | Implemented and reviewed; two implementation choices approved and folded into 4.3: `sendInvitationLink` takes an `onSendError` callback, and `platformPermissionsOf` is passed from app composition with `buildRouter` refusing an operator router without it. Status set to `Implemented`; decisions promoted (T65-T68); the `.API.md` trimmed to its index. | Owner approved the report. |
