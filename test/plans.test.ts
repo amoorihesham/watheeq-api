@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { encodeCursor, fingerprintOf } from '../src/http/list.js';
 import { createLogger } from '../src/logging/logger.js';
 import { testApp } from './helpers/app.js';
 import { accessCookie, hashPassword, login } from './helpers/auth.js';
@@ -7,6 +8,12 @@ import { connectToTestDb, seedTenant, seedUser } from './helpers/db.js';
 import { listAll } from './helpers/list-all.js';
 
 const PASSWORD = 'correct horse battery staple';
+
+interface PlanItemType {
+  id: string;
+  name: string;
+  createdAt: string;
+}
 const pool = connectToTestDb();
 const app = testApp(pool, createLogger('silent'));
 
@@ -127,23 +134,81 @@ describe('create a plan (R1.1, R1.14)', () => {
 });
 
 describe('list and view plans', () => {
-  it('lists plans ordered by name, ignoring case', async () => {
-    await as(omar).post('/operator/plans', { ...basic, name: 'plans aaa lowercase' });
-    const res = await as(omar).get('/operator/plans');
-    expect(res.status).toBe(200);
-    const names: string[] = res.body.data.map((p: { name: string }) => p.name);
-    const sorted = [...names].sort((a, b) => new Intl.Collator('und').compare(a.toLowerCase(), b.toLowerCase()));
-    expect(names).toEqual(sorted);
+  // Other test files add plans to the same database at any moment, so the walks check only this file's plans,
+  // whose order among themselves no concurrent insert can change.
+  const walk = async (limit: number) => {
+    const seen: PlanItemType[] = [];
+    let cursor = '';
+    for (;;) {
+      const res = await as(omar).get(`/operator/plans?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeLessThanOrEqual(limit);
+      seen.push(...res.body.data);
+      if (!res.body.page.nextCursor) {
+        return seen;
+      }
+      cursor = res.body.page.nextCursor;
+    }
+  };
+
+  it('lists plans newest first, and pages that order one plan at a time (R11.9)', async () => {
+    const pilot = (await as(omar).post('/operator/plans', { ...basic, name: 'Plans Pilot' })).body.data.id;
+    const enterprise = (await as(omar).post('/operator/plans', { ...basic, name: 'Plans Enterprise' })).body.data.id;
+
+    const first = await as(omar).get('/operator/plans');
+    const ids: string[] = first.body.data.map((plan: PlanItemType) => plan.id);
+    expect(ids.indexOf(enterprise)).toBeGreaterThanOrEqual(0);
+    expect(ids.indexOf(enterprise)).toBeLessThan(ids.indexOf(pilot));
+
+    const seen = await walk(1);
+    expect(new Set(seen.map((plan) => plan.id)).size).toBe(seen.length);
+    for (let index = 1; index < seen.length; index++) {
+      expect(Date.parse(seen[index - 1]?.createdAt ?? '')).toBeGreaterThanOrEqual(Date.parse(seen[index]?.createdAt ?? ''));
+    }
+    const own = seen.map((plan) => plan.name).filter((name) => name === 'Plans Pilot' || name === 'Plans Enterprise');
+    expect(own).toEqual(['Plans Enterprise', 'Plans Pilot']);
   });
 
-  it('pages the plans by name with a cursor, the total on every page, and no cursor at the end', async () => {
+  it('orders plans created at the same moment by ID descending, with no skip or repeat across pages', async () => {
+    const client = await pool.connect();
+    let sameMoment: string[] = [];
+    try {
+      await client.query('begin');
+      const { rows } = await client.query(
+        `insert into plans (name, user_limit, grace_days, price_halalas, payment_period)
+         values ('Plans Twin A', 5, 14, 1000, 'monthly'), ('Plans Twin B', 5, 14, 1000, 'monthly'), ('Plans Twin C', 5, 14, 1000, 'monthly')
+         returning id, created_at`,
+      );
+      await client.query('commit');
+      expect(new Set(rows.map((row) => row.created_at.getTime())).size).toBe(1);
+      sameMoment = rows
+        .map((row) => row.id as string)
+        .sort()
+        .reverse();
+    } finally {
+      client.release();
+    }
+
+    const seen = (await walk(1)).map((plan) => plan.id);
+    expect(new Set(seen).size).toBe(seen.length);
+    const at = seen.indexOf(sameMoment[0] ?? '');
+    expect(seen.slice(at, at + 3)).toEqual(sameMoment);
+  });
+
+  it('refuses a cursor issued for the old order by name (R11.9)', async () => {
+    const [plan] = (await as(omar).get('/operator/plans?limit=1')).body.data;
+    const nameCursor = encodeCursor([plan.name.toLowerCase(), plan.id], fingerprintOf('plans', {}));
+    const res = await as(omar).get(`/operator/plans?cursor=${nameCursor}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error.details).toEqual([{ path: 'cursor', code: 'invalid_cursor' }]);
+  });
+
+  it('pages the plans with the total on every page and no cursor at the end', async () => {
     for (const name of ['Plans Page A', 'Plans Page B', 'Plans Page C']) {
       await as(omar).post('/operator/plans', { ...basic, name });
     }
-    // Other test files add plans to the same database at any moment, so the walks compare only this file's plans
-    // ("Plans "), whose order among themselves no concurrent insert can change.
     const own = (names: string[]) => names.filter((name) => name.startsWith('Plans '));
-    const all = await listAll<{ name: string }>(app, omar, '/operator/plans');
+    const all = await listAll<PlanItemType>(app, omar, '/operator/plans');
     const expected = own(all.items.map((p) => p.name));
     expect(expected.length).toBeGreaterThan(2);
 
@@ -152,9 +217,8 @@ describe('list and view plans', () => {
     for (;;) {
       const res = await as(omar).get(`/operator/plans?limit=2${cursor ? `&cursor=${cursor}` : ''}`);
       expect(res.status).toBe(200);
-      expect(res.body.data.length).toBeLessThanOrEqual(2);
       expect(res.body.page.total).toBeGreaterThanOrEqual(expected.length);
-      seen.push(...res.body.data.map((p: { name: string }) => p.name));
+      seen.push(...res.body.data.map((p: PlanItemType) => p.name));
       if (!res.body.page.nextCursor) {
         break;
       }

@@ -1,6 +1,5 @@
 import { sql } from 'drizzle-orm';
 import { type AuditContextType, writeAuditEntry } from '@/audit/index.js';
-import { byName } from '@/db/order.js';
 import type { Db } from '@/db/pool.js';
 import { plans } from '@/db/schema/index.js';
 import { withTx } from '@/db/tx.js';
@@ -36,10 +35,10 @@ export function createPlansService({ db, repo }: { db: Db; repo: PlansRepository
         list: 'plans',
         query,
         keys: [
-          { expr: byName(plans.name), type: 'text' },
+          { expr: sql`${plans.createdAt}`, type: 'timestamptz' },
           { expr: sql`${plans.id}`, type: 'uuid' },
         ],
-        direction: 'asc',
+        direction: 'desc',
         where: () => undefined,
         selectPage: repo.page,
         count: repo.count,

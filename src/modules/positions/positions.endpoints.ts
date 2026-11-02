@@ -17,7 +17,7 @@ export const positionsApi = defineApi({
       summary: 'List positions, optionally of one unit',
       permission: { tenant: 'position.view' },
       query: listPositionsQuerySchema,
-      response: { kind: 'page', schema: positionResponseSchema },
+      response: { kind: 'page', schema: positionResponseSchema, order: 'By name (case-insensitive), then by ID.' },
     }),
     get: defineEndpoint({
       method: 'get',

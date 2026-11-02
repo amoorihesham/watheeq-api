@@ -15,7 +15,7 @@ export const notificationsApi = defineApi({
       path: '/',
       summary: "The caller's notifications, newest first",
       query: listNotificationsQuerySchema,
-      response: { kind: 'page', schema: notificationResponseSchema },
+      response: { kind: 'page', schema: notificationResponseSchema, order: 'Newest first: by creation time, then by ID, both descending.' },
     }),
     unreadCount: defineEndpoint({
       method: 'get',

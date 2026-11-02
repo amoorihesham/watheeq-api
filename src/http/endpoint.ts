@@ -38,7 +38,16 @@ export type MethodType = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
 export type PermissionDeclType = { tenant: Parameters<typeof requireTenantPermission>[0] } | { platform: Parameters<typeof requirePlatformPermission>[0] };
 
-export type ResponseDeclType = { kind: 'data'; status: 200 | 201; schema: z.ZodType } | { kind: 'page'; schema: z.ZodType } | { kind: 'noContent' } | { kind: 'download' };
+export type ResponseDeclType =
+  | { kind: 'data'; status: 200 | 201; schema: z.ZodType }
+  | {
+      kind: 'page';
+      schema: z.ZodType;
+      /** One sentence naming the list's sort keys and direction, written as the operation's description (R11.10). */
+      order: string;
+    }
+  | { kind: 'noContent' }
+  | { kind: 'download' };
 
 export interface BinaryBodyType {
   kind: 'binary';

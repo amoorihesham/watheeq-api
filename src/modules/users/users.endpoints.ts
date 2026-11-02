@@ -17,7 +17,7 @@ export const usersApi = defineApi({
       summary: "List the users the caller's directory scope reaches",
       permission: { tenant: 'user.view' },
       query: listUsersQuerySchema,
-      response: { kind: 'page', schema: userResponseSchema },
+      response: { kind: 'page', schema: userResponseSchema, order: 'By user name (case-insensitive), then by ID.' },
     }),
     invite: defineEndpoint({
       method: 'post',

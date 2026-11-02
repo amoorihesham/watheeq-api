@@ -26,7 +26,7 @@ export const tenantsApi = defineApi({
       summary: 'List tenants with their subscription and usage',
       permission: { platform: 'platform.tenant.view' },
       query: listTenantsQuerySchema,
-      response: { kind: 'page', schema: tenantDetailResponseSchema },
+      response: { kind: 'page', schema: tenantDetailResponseSchema, order: 'By name (case-insensitive), then by ID.' },
     }),
     get: defineEndpoint({
       method: 'get',

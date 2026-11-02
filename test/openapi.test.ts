@@ -7,6 +7,7 @@ import { buildOpenApi } from '../src/http/openapi.js';
 import { idSchema } from '../src/http/validate.js';
 
 interface OperationType {
+  description?: string;
   security?: unknown;
   'x-permission'?: string;
   parameters?: { name: string; in: string; required: boolean; schema: Record<string, unknown> }[];
@@ -31,7 +32,7 @@ const sample = defineApi({
       path: '/',
       summary: 'List',
       query: z.strictObject({ owner: idFilter({ none: true }), active: z.boolean().optional() }),
-      response: { kind: 'page', schema: viewSchema },
+      response: { kind: 'page', schema: viewSchema, order: 'By opening time, then by ID.' },
     }),
     open: defineEndpoint({
       method: 'post',
@@ -180,6 +181,47 @@ describe('schemas', () => {
   it('writes path parameters as required parameters of the path', () => {
     const open = operation('/sample/{itemId}/open', 'post');
     expect(open.parameters).toMatchObject([{ name: 'itemId', in: 'path', required: true }]);
+  });
+});
+
+describe('list orders (R11.10)', () => {
+  it('writes a page response order as the operation description, and nothing on other operations', () => {
+    expect(operation('/sample', 'get').description).toBe('By opening time, then by ID.');
+    expect(operation('/sample/{itemId}/open', 'post').description).toBeUndefined();
+  });
+
+  it('refuses at compile time a page response declared without an order', () => {
+    defineEndpoint({
+      method: 'get',
+      path: '/',
+      summary: 'List',
+      // @ts-expect-error: a page response must declare its order (R11.10).
+      response: { kind: 'page', schema: viewSchema },
+    });
+  });
+
+  it('states the order of every list endpoint of the API, as spec 4.3 words it', () => {
+    const lists = Object.fromEntries(
+      Object.entries(doc.paths).flatMap(([path, methods]) =>
+        Object.entries(methods)
+          .filter(([, op]) => (op.responses['200']?.content?.['application/json']?.schema as { required?: string[] } | undefined)?.required?.includes('page'))
+          .map(([method, op]) => [`${method.toUpperCase()} ${path}`, op.description]),
+      ),
+    );
+    delete lists['GET /sample'];
+    expect(lists).toEqual({
+      'GET /operator/plans': 'Newest first: by creation time, then by ID, both descending.',
+      'GET /operator/tenants': 'By name (case-insensitive), then by ID.',
+      'GET /users': 'By user name (case-insensitive), then by ID.',
+      'GET /roles': 'By name (case-insensitive), then by ID.',
+      'GET /permissions': "In catalog order, which groups each resource's permissions together.",
+      'GET /positions': 'By name (case-insensitive), then by ID.',
+      'GET /workflows': 'By name (case-insensitive), then by ID.',
+      'GET /services': 'By name (case-insensitive), then by ID.',
+      'GET /priorities': 'By display order, then by name, then by ID; retired priorities, which have no display order, come last.',
+      'GET /requests': 'Newest submission first: by submission time, then by ID, both descending.',
+      'GET /notifications': 'Newest first: by creation time, then by ID, both descending.',
+    });
   });
 });
 
