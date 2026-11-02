@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { AuthConfigType, FrontendConfigType } from '@/config/config.js';
 import type { Db } from '@/db/pool.js';
+import type { tenants } from '@/db/schema/index.js';
 import type { EmailSenderType } from '@/email/index.js';
 import type { PlatformPermissionsOfType } from '@/modules/platform-access/index.js';
 import type { createTenantsController } from './tenants.controller.js';
@@ -10,6 +11,7 @@ import type { changeSubscriptionRequestSchema, createTenantRequestSchema, listTe
 import type { createTenantsService } from './tenants.service.js';
 
 export type TenantType = z.output<typeof tenantResponseSchema>;
+export type TenantRowType = typeof tenants.$inferSelect;
 
 export interface NewTenantType {
   name: string;
@@ -17,7 +19,8 @@ export interface NewTenantType {
   ownerId: string;
 }
 
-export interface TenantOwnerType {
+/** The owner's account, as the resend reads it. */
+export interface OwnerAccountType {
   id: string;
   email: string;
   userName: string;

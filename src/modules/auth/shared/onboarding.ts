@@ -1,7 +1,7 @@
-import type { Tx } from '@/db/pool.js';
-import type { EmailMessageType } from '@/email/index.js';
+import type { Executor, Tx } from '@/db/pool.js';
+import type { EmailMessageType, EmailSenderType } from '@/email/index.js';
 import { createAuthRepository } from '../auth.repository.js';
-import type { PasswordTokenPurposeType, PendingUserType, UserSummaryType } from '../auth.types.js';
+import type { EmailSendOutcomeType, PasswordTokenPurposeType, PendingUserType, UserSummaryType } from '../auth.types.js';
 import { generateOpaqueToken, hashToken } from './tokens.js';
 
 // Used by the tenants and users modules to onboard users; auth keeps ownership of credentials and links (P1.15).
@@ -21,9 +21,15 @@ export async function insertPendingUser(tx: Tx, user: PendingUserType): Promise<
   return row;
 }
 
-/** Retires the user's older links of this purpose and issues a new one. Returns the raw token, which only the email carries. */
+/**
+ * Retires the user's older links of this purpose and issues a new one. Returns the raw token, which only the email carries.
+ * A new invitation link clears the recorded email outcome, so an outcome always belongs to the newest link (P11.3).
+ */
 export async function issuePasswordToken(tx: Tx, userId: string, purpose: PasswordTokenPurposeType, ttlSeconds: number): Promise<string> {
   await repo.retirePasswordTokens(tx, userId, purpose);
+  if (purpose === 'invitation') {
+    await repo.setInvitationEmail(tx, userId, null);
+  }
   const token = generateOpaqueToken();
   await repo.insertPasswordToken(tx, {
     userId,
@@ -32,6 +38,22 @@ export async function issuePasswordToken(tx: Tx, userId: string, purpose: Passwo
     expiresAt: new Date(Date.now() + ttlSeconds * 1000),
   });
   return token;
+}
+
+/**
+ * Sends an invitation link email and records whether the mail server accepted it (R11.4). Never throws for a send
+ * failure: it hands the error to `onSendError`, which logs it, and returns `failed`. Call it after the link's commit.
+ */
+export async function sendInvitationLink(db: Executor, userId: string, message: EmailMessageType, emailSender: EmailSenderType, onSendError: (err: unknown) => void): Promise<EmailSendOutcomeType> {
+  let outcome: EmailSendOutcomeType = 'sent';
+  try {
+    await emailSender.send(message);
+  } catch (err) {
+    outcome = 'failed';
+    onSendError(err);
+  }
+  await repo.setInvitationEmail(db, userId, outcome);
+  return outcome;
 }
 
 /** For a deactivated user: no emailed link works any more, and every session is signed out at its next refresh. */

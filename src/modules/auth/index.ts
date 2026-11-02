@@ -4,6 +4,7 @@ export { emailSchema, userNameSchema } from './auth.schemas.js';
 export { createOperator } from './auth.service.js';
 export type {
   AuthUserType,
+  EmailSendOutcomeType,
   PasswordTokenPurposeType,
   TenantClaimType,
   UserRoleType,
@@ -15,6 +16,7 @@ export {
   insertPendingUser,
   invitationEmail,
   issuePasswordToken,
+  sendInvitationLink,
   verificationEmail,
 } from './shared/onboarding.js';
 export { hashPassword, verifyPassword } from './shared/passwords.js';

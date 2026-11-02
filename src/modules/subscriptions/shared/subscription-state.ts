@@ -1,3 +1,6 @@
+import { type SQL, sql } from 'drizzle-orm';
+import { subscriptions } from '@/db/schema/index.js';
+import { riyadhToday } from '../subscriptions.repository.js';
 import type { SubscriptionStateType } from '../subscriptions.types.js';
 
 /** `YYYY-MM-DD` plus whole days, computed in UTC so no local time zone or DST shifts the date. */
@@ -18,4 +21,17 @@ export function subscriptionState(subscription: { endDate: string; graceDays: nu
     return 'grace';
   }
   return 'read_only';
+}
+
+/**
+ * `subscriptionState` as an SQL condition on `subscriptions`, for list filters (P11.5). Tested against the
+ * TypeScript rule over the boundary dates; change both together. `today` is a date expression, Riyadh's by default.
+ */
+export function subscriptionStateIs(state: SubscriptionStateType, today: SQL = sql`(${riyadhToday})::date`): SQL {
+  const graceEnd = sql`${subscriptions.endDate} + ${subscriptions.graceDays}`;
+  return {
+    active: sql`${today} <= ${subscriptions.endDate}`,
+    grace: sql`(${today} > ${subscriptions.endDate} and ${today} <= ${graceEnd})`,
+    read_only: sql`${today} > ${graceEnd}`,
+  }[state];
 }

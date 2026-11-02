@@ -17,8 +17,6 @@ export function createTenantsController({ service }: { service: TenantsServiceTy
 
     changeSubscription: (async ({ params, body }, req) => service.changeSubscription(params.tenantId, body, auditContextOf(req))) satisfies HandlerOf<typeof tenantsApi.endpoints.changeSubscription>,
 
-    resendVerification: (async ({ params }, req) => {
-      await service.resendVerification(params.tenantId, auditContextOf(req));
-    }) satisfies HandlerOf<typeof tenantsApi.endpoints.resendVerification>,
+    resendVerification: (async ({ params }, req) => service.resendVerification(params.tenantId, auditContextOf(req), req.log)) satisfies HandlerOf<typeof tenantsApi.endpoints.resendVerification>,
   };
 }

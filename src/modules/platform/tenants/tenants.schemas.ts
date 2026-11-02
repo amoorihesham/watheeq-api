@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { pageQuery } from '@/http/filters.js';
+import { optionalText, pageQuery, valueFilter } from '@/http/filters.js';
 import { idSchema } from '@/http/validate.js';
 import { emailSchema, userNameSchema } from '@/modules/auth/index.js';
+import { SUBSCRIPTION_STATES } from '@/modules/subscriptions/index.js';
 import { discountPercentSchema } from '../plans/plans.schemas.js';
-import { MAX_REASON_LENGTH, MAX_TENANT_NAME_LENGTH, SLUG_PATTERN } from './tenants.constants.js';
+import { MAX_REASON_LENGTH, MAX_TENANT_NAME_LENGTH, MAX_TENANT_SEARCH_LENGTH, SLUG_PATTERN } from './tenants.constants.js';
 
 export const createTenantRequestSchema = z
   .strictObject({
@@ -41,4 +42,9 @@ export const changeSubscriptionRequestSchema = z
   })
   .meta({ id: 'ChangeSubscriptionRequest' });
 
-export const listTenantsQuerySchema = z.object({ ...pageQuery });
+export const listTenantsQuerySchema = z.object({
+  state: valueFilter(SUBSCRIPTION_STATES, 'all'),
+  // Matches the name or the slug (R11.6).
+  q: optionalText(MAX_TENANT_SEARCH_LENGTH).default(null),
+  ...pageQuery,
+});

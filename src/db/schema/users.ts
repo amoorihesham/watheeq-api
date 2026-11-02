@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { boolean, check, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 export const userRoles = pgEnum('user_roles', ['user', 'operator']);
+export const emailSendOutcomes = pgEnum('email_send_outcomes', ['sent', 'failed']);
 
 export const users = pgTable(
   'users',
@@ -15,6 +16,8 @@ export const users = pgTable(
     role: userRoles().notNull().default('user'),
     isActive: boolean('is_active').notNull().default(true),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    // Whether the mail server accepted the email with the newest invitation link; null while it is being sent (R11.4).
+    invitationEmail: emailSendOutcomes('invitation_email'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

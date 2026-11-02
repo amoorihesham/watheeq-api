@@ -3,6 +3,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb } from '../src/db/pool.js';
 import { withTx } from '../src/db/tx.js';
+import { issuePasswordToken } from '../src/modules/auth/index.js';
 import { DEFAULT_WEEK } from '../src/modules/calendar/index.js';
 import { assertSeatAvailable } from '../src/modules/subscriptions/index.js';
 import { systemRoleGrants, TENANT_PERMISSIONS } from '../src/modules/tenant-access/index.js';
@@ -53,6 +54,8 @@ const createTenant = (slug: string, adminEmail: string, overrides: Record<string
 
 const verify = (token: string, password = SARA_PASSWORD) => request(app).post('/auth/verify').send({ token, password });
 
+const invitationEmailOf = async (userId: string) => (await pool.query('select invitation_email from users where id = $1', [userId])).rows[0]?.invitation_email;
+
 beforeAll(async () => {
   const passwordHash = await hashPassword(PASSWORD);
   omarId = await seedUser(pool, {
@@ -88,18 +91,21 @@ describe('create a tenant (R1.3, R1.14)', () => {
     expect(res.headers['cache-control']).toBe('no-store');
     const { tenant, subscription, usage } = res.body.data;
     expect(Object.keys(res.body.data).sort()).toEqual(['subscription', 'tenant', 'usage']);
-    expect(tenant).toMatchObject({
+    expect(tenant).toEqual({
+      id: expect.any(String),
       name: 'Tenant tn-al-noor',
       slug: 'tn-al-noor',
-      ownerId: expect.any(String),
+      owner: { id: expect.any(String), email: 'sara@tenants-alnoor.test', userName: 'Sara Al-Qahtani', verifiedAt: null, verificationEmail: 'sent' },
+      createdAt: expect.any(String),
     });
+    expect(await invitationEmailOf(tenant.owner.id)).toBe('sent');
     expect(usage).toEqual({
       activeUsers: 1,
       userLimit: 10,
       overLimit: false,
       storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
     });
-    const admin = (await pool.query<{ id: string; email: string }>('select id, email from users where id = $1', [tenant.ownerId])).rows[0];
+    const admin = (await pool.query<{ id: string; email: string }>('select id, email from users where id = $1', [tenant.owner.id])).rows[0];
     expect(admin?.email).toBe('sara@tenants-alnoor.test');
     const view = await as(omar).get(`/operator/tenants/${tenant.id}`);
     expect(res.body).toEqual(view.body);
@@ -132,7 +138,7 @@ describe('create a tenant (R1.3, R1.14)', () => {
     // The only role a new tenant starts with is Tenant Admin, and the owner holds it (R3.2, P3.9).
     const roles = await pool.query('select id, name, is_system from roles where tenant_id = $1', [tenant.id]);
     expect(roles.rows).toEqual([{ id: expect.any(String), name: 'Tenant Admin', is_system: true }]);
-    const member = await pool.query('select tenant_id, role_id from tenant_members where user_id = $1', [tenant.ownerId]);
+    const member = await pool.query('select tenant_id, role_id from tenant_members where user_id = $1', [tenant.owner.id]);
     expect(member.rows[0]).toEqual({ tenant_id: tenant.id, role_id: roles.rows[0].id });
 
     const audit = await pool.query('select action, actor_type, actor_id from audit_log where tenant_id = $1 order by id', [tenant.id]);
@@ -225,12 +231,29 @@ describe('create a tenant (R1.3, R1.14)', () => {
     expect(oneDay.body.data.subscription.pricing.customerDiscountPercent).toBe(0);
   });
 
-  it('still creates the tenant when the email cannot be sent, and logs the failure', async () => {
+  it('still creates the tenant when the email cannot be sent, shows `failed` on it, and logs the failure (R11.2)', async () => {
     email.failNext();
     const res = await createTenant('tn-al-nomail', 'nomail@tenants-alnoor.test');
     expect(res.status).toBe(201);
+    const { owner } = res.body.data.tenant;
+    expect(owner).toMatchObject({ email: 'nomail@tenants-alnoor.test', verifiedAt: null, verificationEmail: 'failed' });
+    expect(await invitationEmailOf(owner.id)).toBe('failed');
+    expect((await as(omar).get(`/operator/tenants/${res.body.data.tenant.id}`)).body).toEqual(res.body);
     const warn = capture.lines().find((line) => line.msg === 'verification email failed' && line.tenantId === res.body.data.tenant.id);
     expect(warn?.level).toBe(40);
+  });
+
+  it('clears the recorded outcome when a new invitation link is issued (R11.4)', async () => {
+    const res = await createTenant('tn-al-reissue', 'reissue@tenants-alnoor.test');
+    const ownerId = res.body.data.tenant.owner.id;
+    expect(await invitationEmailOf(ownerId)).toBe('sent');
+    await withTx(createDb(pool), (tx) => issuePasswordToken(tx, ownerId, 'invitation', 60));
+    expect(await invitationEmailOf(ownerId)).toBeNull();
+    expect((await as(omar).get(`/operator/tenants/${res.body.data.tenant.id}`)).body.data.tenant.owner.verificationEmail).toBeNull();
+    // A password reset link leaves the outcome alone (R11.4).
+    await pool.query("update users set invitation_email = 'sent' where id = $1", [ownerId]);
+    await withTx(createDb(pool), (tx) => issuePasswordToken(tx, ownerId, 'reset', 60));
+    expect(await invitationEmailOf(ownerId)).toBe('sent');
   });
 });
 
@@ -263,6 +286,17 @@ describe('verify email and log in (R1.4)', () => {
       userName: 'Sara Al-Qahtani',
       tenant: { roleName: 'Tenant Admin', permissions: TENANT_PERMISSIONS },
     });
+
+    // Verified: `verifiedAt` is set and the email outcome no longer shows (R11.1, R11.2).
+    const tenant = await as(omar).get(`/operator/tenants/${session.res.body.data.user.tenant.id}`);
+    expect(tenant.body.data.tenant.owner).toEqual({
+      id: session.res.body.data.user.id,
+      email: 'sara@tenants-alnoor.test',
+      userName: 'Sara Al-Qahtani',
+      verifiedAt: expect.any(String),
+      verificationEmail: null,
+    });
+    expect(await invitationEmailOf(session.res.body.data.user.id)).toBe('sent');
 
     const audit = await pool.query("select actor_type, actor_id, tenant_id from audit_log where action = 'user.email_verified' and actor_id = $1", [session.res.body.data.user.id]);
     expect(audit.rows).toEqual([
@@ -301,7 +335,9 @@ describe('resend verification (R1.4, P1.16)', () => {
     const created = await createTenant('tn-al-resend', 'resend@tenants-alnoor.test');
     const first = email.lastTokenFor('resend@tenants-alnoor.test');
     const res = await as(omar).post(`/operator/tenants/${created.body.data.tenant.id}/admin/resend-verification`);
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    expect(res.body.data.tenant.owner.verificationEmail).toBe('sent');
+    expect((await as(omar).get(`/operator/tenants/${created.body.data.tenant.id}`)).body).toEqual(res.body);
     const second = email.lastTokenFor('resend@tenants-alnoor.test');
     expect(second).not.toBe(first);
     expect((await verify(first)).body.error.code).toBe('VERIFICATION_INVALID');
@@ -313,18 +349,38 @@ describe('resend verification (R1.4, P1.16)', () => {
 
   it('refuses an admin who already verified, an unknown tenant, and a non-UUID', async () => {
     const alNoor = await pool.query("select id from tenants where slug = 'tn-al-noor'");
+    const sentBefore = email.sent.length;
     const verified = await as(omar).post(`/operator/tenants/${alNoor.rows[0].id}/admin/resend-verification`);
     expect(verified.status).toBe(409);
+    expect(email.sent.length).toBe(sentBefore);
     expect(verified.body.error.code).toBe('ALREADY_VERIFIED');
     expect((await as(omar).post('/operator/tenants/00000000-0000-4000-8000-000000000000/admin/resend-verification')).status).toBe(404);
     expect((await as(omar).post('/operator/tenants/not-a-uuid/admin/resend-verification')).status).toBe(404);
   });
 
-  it('answers 500 when the email cannot be sent, so Omar is not told it went out', async () => {
+  it('answers 200 with `failed` when the email cannot be sent, and `sent` once it goes out again (R11.3)', async () => {
     const created = await createTenant('tn-al-resend-fail', 'resendfail@tenants-alnoor.test');
+    const { id } = created.body.data.tenant;
+    const ownerId = created.body.data.tenant.owner.id;
     email.failNext();
-    const res = await as(omar).post(`/operator/tenants/${created.body.data.tenant.id}/admin/resend-verification`);
-    expect(res.status).toBe(500);
+    const failed = await as(omar).post(`/operator/tenants/${id}/admin/resend-verification`);
+    expect(failed.status).toBe(200);
+    expect(failed.body.data.tenant.owner).toMatchObject({ verifiedAt: null, verificationEmail: 'failed' });
+    expect(await invitationEmailOf(ownerId)).toBe('failed');
+    expect((await as(omar).get(`/operator/tenants/${id}`)).body).toEqual(failed.body);
+    const warn = capture.lines().find((line) => line.msg === 'verification email failed' && line.tenantId === id);
+    expect(warn?.level).toBe(40);
+
+    const first = email.lastTokenFor('resendfail@tenants-alnoor.test');
+    const sent = await as(omar).post(`/operator/tenants/${id}/admin/resend-verification`);
+    expect(sent.status).toBe(200);
+    expect(sent.body.data.tenant.owner.verificationEmail).toBe('sent');
+    expect(await invitationEmailOf(ownerId)).toBe('sent');
+    const newest = email.lastTokenFor('resendfail@tenants-alnoor.test');
+    expect(newest).not.toBe(first);
+    expect((await verify(first)).body.error.code).toBe('VERIFICATION_INVALID');
+    expect((await verify(newest)).status).toBe(204);
+    expect(JSON.stringify(capture.lines())).not.toContain(newest);
   });
 });
 
@@ -351,6 +407,7 @@ describe('list and view tenants (R1.7)', () => {
     expect(bySlug['tn-al-noor']?.subscription.state).toBe('active');
     expect(bySlug['tn-al-grace']?.subscription.state).toBe('grace');
     expect(bySlug['tn-al-readonly']?.subscription.state).toBe('read_only');
+    expect(bySlug['tn-al-grace']?.tenant).toMatchObject({ owner: { email: 'grace@tenants-alnoor.test', userName: 'Sara Al-Qahtani', verifiedAt: null, verificationEmail: 'sent' } });
     expect(bySlug['tn-al-noor']?.usage).toEqual({
       activeUsers: 1,
       userLimit: 10,
@@ -420,6 +477,103 @@ describe('list and view tenants (R1.7)', () => {
     const res = await as(omar).get(`/operator/tenants/${alNoor.rows[0].id}`);
     expect(res.body.data.subscription.pricing.priceHalalas).toBe(100_000);
     await as(omar).patch(`/operator/plans/${basicId}`, { priceHalalas: 100_000 });
+  });
+});
+
+describe('tenant list filters (R11.5-R11.7)', () => {
+  // Every name here contains "Flt" and every slug "tn-flt-", which no other test file uses, so `q` scopes each
+  // check to these tenants even while other files add tenants to the shared database.
+  const ended = (slug: string, name: string, endOffset: number) => createTenant(slug, `${slug}@tenants-filters.test`, { name, subscription: { planId: basicId, startDate: addDays(today, -60), endDate: addDays(today, endOffset) } });
+  const slugsOf = (res: request.Response) => res.body.data.map((t: { tenant: { slug: string } }) => t.tenant.slug);
+  const list = (query: string) => as(omar).get(`/operator/tenants?${query}`);
+
+  beforeAll(async () => {
+    // Basic has 14 grace days.
+    for (const res of await Promise.all([
+      ended('tn-flt-active', 'Flt Noor Active', 10),
+      ended('tn-flt-lastday', 'Flt Last Active Day', 0),
+      ended('tn-flt-grace', 'Flt Grace First Day', -1),
+      ended('tn-flt-gracelast', 'Flt Grace Last Day', -14),
+      ended('tn-flt-readonly', 'Flt Read Only', -15),
+      ended('tn-flt-pct', 'Flt 100% Club', 10),
+      ended('tn-flt-under', 'Flt_Under', 10),
+    ])) {
+      expect(res.status).toBe(201);
+    }
+  });
+
+  it.each([
+    ['active', ['tn-flt-pct', 'tn-flt-lastday', 'tn-flt-active', 'tn-flt-under']],
+    ['grace', ['tn-flt-grace', 'tn-flt-gracelast']],
+    ['read_only', ['tn-flt-readonly']],
+    ['all', ['tn-flt-pct', 'tn-flt-grace', 'tn-flt-gracelast', 'tn-flt-lastday', 'tn-flt-active', 'tn-flt-readonly', 'tn-flt-under']],
+  ])('state=%s keeps the tenants in that state today, by name, with the filtered total', async (state, slugs) => {
+    const res = await list(`state=${state}&q=tn-flt-`);
+    expect(res.status).toBe(200);
+    expect(slugsOf(res)).toEqual(slugs);
+    expect(res.body.page.total).toBe(slugs.length);
+    for (const item of res.body.data) {
+      expect(state === 'all' || item.subscription.state === state).toBe(true);
+    }
+  });
+
+  it('defaults state to all', async () => {
+    expect(slugsOf(await list('q=tn-flt-'))).toEqual(slugsOf(await list('q=tn-flt-&state=all')));
+  });
+
+  it.each([['expired'], ['Grace']])('refuses state=%s as invalid_value', async (state) => {
+    const res = await list(`state=${state}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error.details).toEqual([{ path: 'state', code: 'invalid_value' }]);
+  });
+
+  it('searches the name ignoring case, and the slug', async () => {
+    expect(slugsOf(await list('q=flt%20noor'))).toEqual(['tn-flt-active']);
+    expect(slugsOf(await list('q=FLT%20NOOR'))).toEqual(['tn-flt-active']);
+    expect(slugsOf(await list('q=tn-flt-gracel'))).toEqual(['tn-flt-gracelast']);
+  });
+
+  it('matches %, _, and \\ literally', async () => {
+    expect(slugsOf(await list(`q=${encodeURIComponent('100%')}`))).toEqual(['tn-flt-pct']);
+    const percent = await listAll<{ tenant: { name: string; slug: string } }>(app, omar, `/operator/tenants?q=${encodeURIComponent('%')}`);
+    expect(percent.items.map((t) => t.tenant.slug)).toContain('tn-flt-pct');
+    expect(percent.items.every((t) => `${t.tenant.name}${t.tenant.slug}`.includes('%'))).toBe(true);
+    expect(slugsOf(await list('q=flt_'))).toEqual(['tn-flt-under']);
+    expect(slugsOf(await list(`q=${encodeURIComponent('flt\\')}`))).toEqual([]);
+  });
+
+  it('trims q, and treats a blank one as no search', async () => {
+    expect(slugsOf(await list('q=%20tn-flt-readonly%20'))).toEqual(['tn-flt-readonly']);
+    const blank = await listAll<{ tenant: { slug: string } }>(app, omar, '/operator/tenants?q=%20%20');
+    expect(blank.items.map((t) => t.tenant.slug)).toEqual(expect.arrayContaining(['tn-flt-active', 'tn-flt-readonly', 'tn-al-noor']));
+  });
+
+  it('refuses a q of 101 characters as too_big, and takes one of 100', async () => {
+    const tooLong = await list(`q=${'a'.repeat(101)}`);
+    expect(tooLong.status).toBe(400);
+    expect(tooLong.body.error.details).toEqual([{ path: 'q', code: 'too_big' }]);
+    expect((await list(`q=${'a'.repeat(100)}`)).status).toBe(200);
+  });
+
+  it('combines state and q with AND', async () => {
+    const res = await list('state=grace&q=last%20day');
+    expect(slugsOf(res)).toEqual(['tn-flt-gracelast']);
+    expect(res.body.page.total).toBe(1);
+  });
+
+  it('pages a filtered list with its cursor, and refuses that cursor with other filters', async () => {
+    const first = await list('state=active&q=tn-flt-&limit=2');
+    expect(slugsOf(first)).toEqual(['tn-flt-pct', 'tn-flt-lastday']);
+    expect(first.body.page.total).toBe(4);
+    const cursor = first.body.page.nextCursor;
+    const second = await list(`state=active&q=tn-flt-&limit=2&cursor=${cursor}`);
+    expect(slugsOf(second)).toEqual(['tn-flt-active', 'tn-flt-under']);
+    expect(second.body.page).toEqual({ nextCursor: null, total: 4 });
+    for (const changed of ['state=active&q=tn-flt-a', 'state=all&q=tn-flt-', 'q=tn-flt-']) {
+      const res = await list(`${changed}&limit=2&cursor=${cursor}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error.details).toEqual([{ path: 'cursor', code: 'invalid_cursor' }]);
+    }
   });
 });
 

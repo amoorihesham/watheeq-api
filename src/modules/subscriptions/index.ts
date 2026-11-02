@@ -11,7 +11,7 @@ export {
 } from './shared/notices.js';
 export { effectivePrice } from './shared/pricing.js';
 export { assertSeatAvailable } from './shared/seats.js';
-export { addDays, subscriptionState } from './shared/subscription-state.js';
+export { addDays, subscriptionState, subscriptionStateIs } from './shared/subscription-state.js';
 export { toSubscriptionStatus, toSubscriptionView, toUsage } from './shared/view.js';
 export {
   BYTES_PER_GB,

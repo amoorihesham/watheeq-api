@@ -2,7 +2,7 @@ import { and, eq, gt, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import type { Executor } from '@/db/pool.js';
 import { passwordTokens, refreshTokens, rolePermissions, roles, subscriptions, tenantMembers, users } from '@/db/schema/index.js';
 import { riyadhToday } from '@/modules/subscriptions/index.js';
-import type { AccountType, NewPasswordTokenType, NewRefreshTokenType, NewUserType, PasswordTokenPurposeType, UserSummaryType } from './auth.types.js';
+import type { AccountType, EmailSendOutcomeType, NewPasswordTokenType, NewRefreshTokenType, NewUserType, PasswordTokenPurposeType, UserSummaryType } from './auth.types.js';
 
 const accountColumns = {
   id: users.id,
@@ -93,6 +93,10 @@ export function createAuthRepository() {
         .set({ usedAt: sql`now()` })
         .where(and(eq(passwordTokens.tokenHash, tokenHash), eq(passwordTokens.purpose, purpose), isNull(passwordTokens.usedAt), gt(passwordTokens.expiresAt, sql`now()`)))
         .returning({ userId: passwordTokens.userId });
+    },
+
+    setInvitationEmail(db: Executor, userId: string, outcome: EmailSendOutcomeType | null) {
+      return db.update(users).set({ invitationEmail: outcome }).where(eq(users.id, userId));
     },
 
     setPassword(db: Executor, userId: string, passwordHash: string) {
