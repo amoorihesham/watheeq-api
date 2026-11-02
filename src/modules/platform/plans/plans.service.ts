@@ -6,12 +6,19 @@ import { withTx } from '@/db/tx.js';
 import { AppError } from '@/http/errors.js';
 import { listPage } from '@/http/list.js';
 import type { PageType } from '@/http/respond.js';
-import type { CreatePlanRequestType, ListPlansQueryType, PlansRepositoryType, PlanType, UpdatePlanRequestType } from './plans.types.js';
+import { effectivePrice } from '@/modules/subscriptions/index.js';
+import type { CreatePlanRequestType, ListPlansQueryType, PlanResponseType, PlansRepositoryType, PlanType, UpdatePlanRequestType } from './plans.types.js';
+
+/** One rounding rule for every price (P11.7). */
+export const toPlanView = (plan: PlanType): PlanResponseType => ({
+  ...plan,
+  discountedPriceHalalas: effectivePrice({ priceHalalas: plan.priceHalalas, planDiscountPercent: plan.discountPercent, customerDiscountPercent: 0 }),
+});
 
 export function createPlansService({ db, repo }: { db: Db; repo: PlansRepositoryType }) {
   return {
     /** A duplicate name (any case) reaches the error handler as PLAN_NAME_TAKEN and rolls back the audit entry too. */
-    create(values: CreatePlanRequestType, context: AuditContextType): Promise<PlanType> {
+    create(values: CreatePlanRequestType, context: AuditContextType): Promise<PlanResponseType> {
       return withTx(db, async (tx) => {
         const [plan] = await repo.insert(tx, values);
         if (!plan) {
@@ -25,12 +32,12 @@ export function createPlansService({ db, repo }: { db: Db; repo: PlansRepository
           resourceId: plan.id,
           details: { after: plan },
         });
-        return plan;
+        return toPlanView(plan);
       });
     },
 
-    list(query: ListPlansQueryType): Promise<PageType<PlanType>> {
-      return listPage({
+    async list(query: ListPlansQueryType): Promise<PageType<PlanResponseType>> {
+      const page = await listPage({
         db,
         list: 'plans',
         query,
@@ -43,18 +50,19 @@ export function createPlansService({ db, repo }: { db: Db; repo: PlansRepository
         selectPage: repo.page,
         count: repo.count,
       });
+      return { ...page, items: page.items.map(toPlanView) };
     },
 
-    async get(planId: string): Promise<PlanType> {
+    async get(planId: string): Promise<PlanResponseType> {
       const [plan] = await repo.findById(db, planId);
       if (!plan) {
         throw new AppError('NOT_FOUND');
       }
-      return plan;
+      return toPlanView(plan);
     },
 
     /** Changes the plan only; subscriptions keep the terms they copied (R1.2, D14). */
-    update(id: string, changes: UpdatePlanRequestType, context: AuditContextType): Promise<PlanType> {
+    update(id: string, changes: UpdatePlanRequestType, context: AuditContextType): Promise<PlanResponseType> {
       return withTx(db, async (tx) => {
         const [before] = await repo.findByIdForUpdate(tx, id);
         if (!before) {
@@ -72,7 +80,7 @@ export function createPlansService({ db, repo }: { db: Db; repo: PlansRepository
           resourceId: id,
           details: { before, after },
         });
-        return after;
+        return toPlanView(after);
       });
     },
   };

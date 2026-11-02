@@ -12969,6 +12969,9 @@
           "discountPercent": {
             "type": "number"
           },
+          "discountedPriceHalalas": {
+            "type": "number"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -12987,6 +12990,7 @@
           "priceHalalas",
           "paymentPeriod",
           "discountPercent",
+          "discountedPriceHalalas",
           "createdAt",
           "updatedAt"
         ],

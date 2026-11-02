@@ -2,6 +2,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { encodeCursor, fingerprintOf } from '../src/http/list.js';
 import { createLogger } from '../src/logging/logger.js';
+import { toPlanView } from '../src/modules/platform/plans/plans.service.js';
 import { testApp } from './helpers/app.js';
 import { accessCookie, hashPassword, login } from './helpers/auth.js';
 import { connectToTestDb, seedTenant, seedUser } from './helpers/db.js';
@@ -58,6 +59,31 @@ const auditFor = async (planId: string) => {
   return rows;
 };
 
+describe('toPlanView (R11.8)', () => {
+  const row = {
+    id: '00000000-0000-4000-8000-000000000001',
+    name: 'Basic',
+    userLimit: 10,
+    storageLimitGb: 10,
+    graceDays: 14,
+    priceHalalas: 100_000,
+    paymentPeriod: 'monthly' as const,
+    discountPercent: 10,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  it.each([
+    [100_000, 10, 90_000],
+    [999, 12.5, 874],
+    [0, 15, 0],
+    [100_000, 100, 0],
+    [100_000, 0, 100_000],
+  ])('prices %i halalas at %d%% off as %i, rounded half up', (priceHalalas, discountPercent, expected) => {
+    expect(toPlanView({ ...row, priceHalalas, discountPercent })).toEqual({ ...row, priceHalalas, discountPercent, discountedPriceHalalas: expected });
+  });
+});
+
 describe('create a plan (R1.1, R1.14)', () => {
   it('creates Basic with price, payment period, and discount, and audits it at platform level', async () => {
     const res = await as(omar).post('/operator/plans', basic);
@@ -65,9 +91,11 @@ describe('create a plan (R1.1, R1.14)', () => {
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.body.data).toMatchObject(basic);
     expect(res.body.data.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(res.body.data.discountedPriceHalalas).toBe(85_000);
 
     const audit = await auditFor(res.body.data.id);
     expect(audit).toHaveLength(1);
+    expect(audit[0].details.after).not.toHaveProperty('discountedPriceHalalas');
     expect(audit[0]).toMatchObject({
       tenant_id: null,
       actor_type: 'operator',
@@ -92,7 +120,8 @@ describe('create a plan (R1.1, R1.14)', () => {
       discountPercent: 12.5,
     });
     expect(half.status).toBe(201);
-    expect(half.body.data).toMatchObject({ paymentPeriod: 'yearly', discountPercent: 12.5 });
+    expect(half.body.data).toMatchObject({ paymentPeriod: 'yearly', discountPercent: 12.5, discountedPriceHalalas: 962_500 });
+    expect(free.body.data.discountedPriceHalalas).toBe(basic.priceHalalas);
   });
 
   it('refuses a duplicate name in any case with 409 TAKEN, leaving no audit row', async () => {
@@ -250,6 +279,9 @@ describe('list and view plans', () => {
     const res = await as(omar).get(`/operator/plans/${created.body.data.id}`);
     expect(res.status).toBe(200);
     expect(res.body.data.name).toBe('Plans View');
+    expect(res.body.data.discountedPriceHalalas).toBe(85_000);
+    const listed = (await listAll<{ id: string; discountedPriceHalalas: number }>(app, omar, '/operator/plans')).items.find((plan) => plan.id === created.body.data.id);
+    expect(listed?.discountedPriceHalalas).toBe(85_000);
     expect((await as(omar).get('/operator/plans/00000000-0000-4000-8000-000000000000')).status).toBe(404);
     expect((await as(omar).get('/operator/plans/not-a-uuid')).status).toBe(404);
   });
@@ -267,6 +299,7 @@ describe('edit a plan (R1.1, R1.14)', () => {
     expect(res.body.data).toMatchObject({
       priceHalalas: 120_000,
       discountPercent: 10,
+      discountedPriceHalalas: 108_000,
       userLimit: 10,
       storageLimitGb: 10,
     });
@@ -282,6 +315,8 @@ describe('edit a plan (R1.1, R1.14)', () => {
         after: { priceHalalas: 120_000, discountPercent: 10 },
       },
     });
+    expect(audit[1].details.before).not.toHaveProperty('discountedPriceHalalas');
+    expect(audit[1].details.after).not.toHaveProperty('discountedPriceHalalas');
   });
 
   it('refuses renaming to an existing name, an empty change, invalid values, and unknown ids', async () => {
