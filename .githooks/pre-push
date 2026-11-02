@@ -1,0 +1,21 @@
+#!/bin/sh
+# A contract change reaches dev only with its be:contract-change issue (docs/FRONTEND_COLLABORATION.md, section 5).
+# Git passes one line per pushed ref: <local ref> <local sha> <remote ref> <remote sha>.
+zero=0000000000000000000000000000000000000000
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" != "refs/heads/dev" ] || [ "$local_sha" = "$zero" ]; then
+    continue
+  fi
+  if [ "$remote_sha" = "$zero" ]; then
+    echo "pre-push: the remote has no dev branch to compare with; skipping the contract check." >&2
+    continue
+  fi
+  if ! git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    echo "pre-push: the remote dev ($remote_sha) is not in this clone; fetch and rebase first." >&2
+    status=1
+    continue
+  fi
+  pnpm --silent contract:check --base "$remote_sha" --head "$local_sha" || status=1
+done
+exit $status

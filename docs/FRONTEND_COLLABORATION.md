@@ -81,7 +81,7 @@ It needs a `be:contract-change` issue on the frontend repo before it reaches `de
 **What is a heads-up.** A new operation, a new optional field, or a new error or detail code, since a client handles an unknown code by its status (`docs/api/errors.md`).
 The additions of a phase that the frontend could use go in one `be:heads-up` issue, filed at the phase's Done step.
 
-**The check** (designed, not built yet; until it is, the review checks contract changes by hand). `pnpm contract:check` compares `docs/api/openapi.json` on `origin/dev` (the contract the frontend can sync against) with the working tree, using [oasdiff](https://github.com/oasdiff/oasdiff), run from its Docker image pinned by digest:
+**The check.** `pnpm contract:check` (`src/cli/contract-check.ts`) compares `docs/api/openapi.json` on `origin/dev` (the contract the frontend can sync against) with the working tree, using [oasdiff](https://github.com/oasdiff/oasdiff), run from its Docker image pinned by digest:
 
 - `oasdiff breaking` lists the contract changes.
   The check counts a new value of `Error.error.code` or `ErrorDetail.code` as a heads-up, listed once instead of once per operation.
@@ -92,7 +92,11 @@ The additions of a phase that the frontend could use go in one `be:heads-up` iss
   ```
 
 - `oasdiff changelog` lists the additions, printed as heads-up candidates; they never fail the check.
-- It runs in the `pre-push` hook (`.githooks/pre-push`, enabled by `pnpm install`), so a contract change cannot reach `dev` before its issue exists, and in the review of every phase.
+- It runs in the `pre-push` hook (`.githooks/pre-push`, enabled by `pnpm install`) for every push to `dev`, comparing the remote `dev` with the pushed commit, so a contract change cannot reach `dev` before its issue exists.
+  It also runs in the review of every phase; a push to any other branch is not checked.
+- It needs Docker, like the tests. If Docker is not running, the check fails rather than passing unchecked.
+- The trailer's format is checked, not the issue itself, since the frontend repo is private to most `gh` accounts; the issue is filed before the trailer is written.
+- `git push --no-verify` skips the hook; use it only when the owner says so.
 
 **What the check cannot see.** Behavior with no schema, such as a list's order or a rule in `docs/api/`, is invisible to a diff.
 Each spec's section 4.2 states its contract impact, and the review checks it by hand.

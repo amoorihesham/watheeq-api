@@ -115,6 +115,7 @@ The `.env.example` values point at it; tests start their own server through Test
 ## Notes
 
 - Tests need a running Docker daemon but nothing started by hand.
+- `pnpm install` also enables the `pre-push` hook in `.githooks/`, which runs `pnpm contract:check` on every push to `dev` and also needs Docker (`docs/FRONTEND_COLLABORATION.md`, section 5).
 - The local database lives in a Docker volume on your machine only.
 - The migration history was reset to a single baseline on 2026-10-21 (regenerated the same day to add `users.user_name`).
   A volume created before that still holds the old schema: run `docker compose down -v` once (this deletes local data), then `docker compose up -d --wait` and `pnpm db:migrate`.
