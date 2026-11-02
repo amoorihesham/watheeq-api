@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { AuthConfigType } from '@/config/config.js';
 import type { Db } from '@/db/pool.js';
+import type { PlatformPermissionsOfType } from '@/modules/platform-access/index.js';
 import type { PAYMENT_PERIODS } from './plans.constants.js';
 import type { createPlansController } from './plans.controller.js';
 import type { createPlansRepository } from './plans.repository.js';
@@ -23,6 +24,7 @@ export type ListPlansQueryType = z.output<typeof listPlansQuerySchema>;
 export interface PlansRouterDepsType {
   db: Db;
   auth: AuthConfigType;
+  platformPermissionsOf: PlatformPermissionsOfType;
 }
 
 export type PlansRepositoryType = ReturnType<typeof createPlansRepository>;

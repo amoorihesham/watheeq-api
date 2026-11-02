@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express';
 import { AppError } from '@/http/errors.js';
 import { principalOf } from '@/modules/auth/shared/middlewares.js';
-import type { PlatformPermissionsOfType, PlatformPermissionType } from '../platform.types.js';
+import type { PlatformPermissionsOfType, PlatformPermissionType } from '../platform-access.types.js';
 import { platformPermissionsOf } from './permissions.js';
 
 /**

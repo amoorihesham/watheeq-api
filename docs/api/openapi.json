@@ -11144,6 +11144,28 @@
                 "type": "null"
               }
             ]
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "permissions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "permissions"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -11151,7 +11173,8 @@
           "email",
           "userName",
           "role",
-          "tenant"
+          "tenant",
+          "platform"
         ],
         "additionalProperties": false
       },

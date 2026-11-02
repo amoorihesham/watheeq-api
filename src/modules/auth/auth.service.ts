@@ -4,6 +4,7 @@ import { withTx } from '@/db/tx.js';
 import type { EmailSenderType } from '@/email/index.js';
 import { AppError } from '@/http/errors.js';
 import type { Logger } from '@/logging/logger.js';
+import { PLATFORM_PERMISSIONS, type PlatformPermissionsOfType } from '@/modules/platform-access/index.js';
 import { toSubscriptionStatus } from '@/modules/subscriptions/index.js';
 import { grantedPermissions } from '@/modules/tenant-access/index.js';
 import { DUMMY_PASSWORD_HASH } from './auth.constants.js';
@@ -20,6 +21,7 @@ import type {
   PasswordResetRequestType,
   ResetPasswordRequestType,
   SessionResponseType,
+  SessionUserType,
   UserSummaryType,
   VerifyEmailRequestType,
 } from './auth.types.js';
@@ -46,7 +48,28 @@ const toAuthUser = (account: AccountType): AuthUserType => ({
       : null,
 });
 
-export function createAuthService({ db, repo, settings, emailSender }: { db: Db; repo: AuthRepositoryType; settings: AuthSettingsType; emailSender: EmailSenderType }) {
+export function createAuthService({
+  db,
+  repo,
+  settings,
+  emailSender,
+  platformPermissionsOf,
+}: {
+  db: Db;
+  repo: AuthRepositoryType;
+  settings: AuthSettingsType;
+  emailSender: EmailSenderType;
+  platformPermissionsOf: PlatformPermissionsOfType;
+}) {
+  // The same function the operator routes check, so the session never offers an action a route refuses (R11.12).
+  function toSessionUser(user: AuthUserType): SessionUserType {
+    if (user.role !== 'operator') {
+      return { ...user, platform: null };
+    }
+    const held = platformPermissionsOf(user);
+    return { ...user, platform: { permissions: PLATFORM_PERMISSIONS.filter((permission) => held.has(permission)) } };
+  }
+
   /** Null for an operator, who has no tenant. */
   async function subscriptionStatusOf(executor: Executor, account: AccountType) {
     const [status] = account.tenantId ? await repo.findSubscriptionStatus(executor, account.tenantId) : [];
@@ -63,7 +86,7 @@ export function createAuthService({ db, repo, settings, emailSender }: { db: Db;
       expiresAt: new Date(Date.now() + settings.refreshTokenTtlSeconds * 1000),
     });
     return {
-      user,
+      user: toSessionUser(user),
       subscription: await subscriptionStatusOf(executor, account),
       tokens: { accessToken, refreshToken },
     };
@@ -218,7 +241,7 @@ export function createAuthService({ db, repo, settings, emailSender }: { db: Db;
         throw new AppError('UNAUTHENTICATED');
       }
       return {
-        user: toAuthUser(account),
+        user: toSessionUser(toAuthUser(account)),
         subscription: await subscriptionStatusOf(db, account),
       };
     },

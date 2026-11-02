@@ -31,6 +31,7 @@ import { orgApi } from './modules/org/org.endpoints.js';
 import { createPlansRouter, createTenantsRouter } from './modules/platform/index.js';
 import { plansApi } from './modules/platform/plans/plans.endpoints.js';
 import { tenantsApi } from './modules/platform/tenants/tenants.endpoints.js';
+import { type PlatformPermissionsOfType, platformPermissionsOf } from './modules/platform-access/index.js';
 import { createPositionsRouter } from './modules/positions/index.js';
 import { positionsApi } from './modules/positions/positions.endpoints.js';
 import { createPrioritiesRouter } from './modules/priorities/index.js';
@@ -55,6 +56,8 @@ export interface AppDeps {
   config: Config;
   emailSender?: EmailSenderType;
   fileStore?: FileStoreType;
+  /** What each operator holds; the session and the operator routes both read it (R11.12). Tests replace it. */
+  platformPermissionsOf?: PlatformPermissionsOfType;
   /** Extra routers mounted after the body parser. Used by tests to exercise error paths. */
   routers?: { prefix: string; router: Router }[];
 }
@@ -81,6 +84,7 @@ export function buildApp(deps: AppDeps): Express {
   const db = createDb(deps.pool);
   const emailSender = deps.emailSender ?? createSmtpSender(deps.config.smtp);
   const store = deps.fileStore ?? createS3Store(deps.config.storage);
+  const platformPermissions = deps.platformPermissionsOf ?? platformPermissionsOf;
   // /files carries raw bytes, so it is mounted before the JSON-only body rule.
   app.use(filesApi.prefix, createFilesRouter({ db, auth: deps.config.auth, store }));
   app.use(jsonBody());
@@ -91,9 +95,10 @@ export function buildApp(deps: AppDeps): Express {
       auth: deps.config.auth,
       frontend: deps.config.frontend,
       emailSender,
+      platformPermissionsOf: platformPermissions,
     }),
   );
-  app.use(plansApi.prefix, createPlansRouter({ db, auth: deps.config.auth }));
+  app.use(plansApi.prefix, createPlansRouter({ db, auth: deps.config.auth, platformPermissionsOf: platformPermissions }));
   app.use(
     tenantsApi.prefix,
     createTenantsRouter({
@@ -101,6 +106,7 @@ export function buildApp(deps: AppDeps): Express {
       auth: deps.config.auth,
       frontend: deps.config.frontend,
       emailSender,
+      platformPermissionsOf: platformPermissions,
     }),
   );
   app.use(subscriptionsApi.prefix, createSubscriptionsRouter({ db, auth: deps.config.auth }));

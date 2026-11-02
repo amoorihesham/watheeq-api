@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import type { AuthConfigType, FrontendConfigType } from '@/config/config.js';
 import type { Db } from '@/db/pool.js';
 import type { EmailSenderType } from '@/email/index.js';
+import type { PlatformPermissionsOfType } from '@/modules/platform-access/index.js';
 import type { createTenantsController } from './tenants.controller.js';
 import type { createTenantsRepository } from './tenants.repository.js';
 import type { tenantDetailResponseSchema, tenantResponseSchema } from './tenants.responses.js';
@@ -39,6 +40,7 @@ export interface TenantsRouterDepsType {
   auth: AuthConfigType;
   frontend: FrontendConfigType;
   emailSender: EmailSenderType;
+  platformPermissionsOf: PlatformPermissionsOfType;
 }
 
 export type TenantsRepositoryType = ReturnType<typeof createTenantsRepository>;

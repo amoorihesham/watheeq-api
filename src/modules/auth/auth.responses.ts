@@ -15,6 +15,8 @@ export const authUserResponseSchema = z
         permissions: z.array(z.string()),
       })
       .nullable(),
+    /** Null for a tenant user (R11.11). */
+    platform: z.strictObject({ permissions: z.array(z.string()) }).nullable(),
   })
   .meta({ id: 'AuthUser' });
 

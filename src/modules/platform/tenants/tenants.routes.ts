@@ -7,7 +7,7 @@ import { createTenantsService } from './tenants.service.js';
 import type { TenantsRouterDepsType } from './tenants.types.js';
 
 /** The tenants module's composition root; its router is built from `tenantsApi` and mounted at its prefix. */
-export function createTenantsRouter({ db, auth, frontend, emailSender }: TenantsRouterDepsType): Router {
+export function createTenantsRouter({ db, auth, frontend, emailSender, platformPermissionsOf }: TenantsRouterDepsType): Router {
   const service = createTenantsService({
     db,
     repo: createTenantsRepository(),
@@ -19,5 +19,5 @@ export function createTenantsRouter({ db, auth, frontend, emailSender }: Tenants
   });
   const controller = createTenantsController({ service });
 
-  return buildRouter(tenantsApi, controller, { db, jwtSecret: auth.jwt });
+  return buildRouter(tenantsApi, controller, { db, jwtSecret: auth.jwt, platformPermissionsOf });
 }

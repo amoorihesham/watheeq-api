@@ -4,6 +4,7 @@ import type { Db } from '@/db/pool.js';
 import type { passwordTokenPurposes } from '@/db/schema/password-tokens.js';
 import type { userRoles } from '@/db/schema/users.js';
 import type { EmailSenderType } from '@/email/index.js';
+import type { PlatformPermissionsOfType } from '@/modules/platform-access/index.js';
 import type { createAuthController } from './auth.controller.js';
 import type { createAuthRepository } from './auth.repository.js';
 import type { authUserResponseSchema, sessionResponseSchema } from './auth.responses.js';
@@ -58,8 +59,11 @@ export type TenantClaimType = z.infer<typeof tenantClaimSchema>;
 
 export type AccessTokenPayloadType = z.infer<typeof accessTokenPayloadSchema>;
 
-/** The signed-in user: returned by the auth endpoints and attached to the request by `authenticate()`. */
-export type AuthUserType = z.output<typeof authUserResponseSchema>;
+/** The signed-in user as the session answers it: the principal plus its platform permissions (R11.11). */
+export type SessionUserType = z.output<typeof authUserResponseSchema>;
+
+/** The signed-in user as the access token carries it, attached to the request by `authenticate()`. */
+export type AuthUserType = Omit<SessionUserType, 'platform'>;
 
 export type CreateOperatorRequestType = z.infer<typeof createOperatorRequestSchema>;
 export type VerifyEmailRequestType = z.infer<typeof verifyEmailRequestSchema>;
@@ -112,6 +116,7 @@ export interface AuthRouterDepsType {
   auth: AuthConfigType;
   frontend: FrontendConfigType;
   emailSender: EmailSenderType;
+  platformPermissionsOf: PlatformPermissionsOfType;
 }
 
 export type AuthRepositoryType = ReturnType<typeof createAuthRepository>;

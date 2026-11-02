@@ -3,6 +3,7 @@ import { decodeJwt, SignJWT } from 'jose';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { authenticate, principalOf, requireRole } from '../src/modules/auth/index.js';
+import { PLATFORM_PERMISSIONS } from '../src/modules/platform-access/index.js';
 import { TENANT_PERMISSIONS } from '../src/modules/tenant-access/index.js';
 import { testApp } from './helpers/app.js';
 import { ACCESS_COOKIE, accessCookie, cookieValue, hashPassword, login, REFRESH_COOKIE, refreshCookie, setCookiesOf, storedHashOf } from './helpers/auth.js';
@@ -75,6 +76,7 @@ describe('login (R0.10, R0.11)', () => {
             roleName: 'Tenant Admin',
             permissions: TENANT_PERMISSIONS,
           },
+          platform: null,
         },
         subscription: null,
       },
@@ -166,6 +168,29 @@ describe('login (R0.10, R0.11)', () => {
     for (const secret of [PASSWORD, access, refreshToken]) {
       expect(text).not.toContain(secret);
     }
+  });
+});
+
+describe('platform permissions in the session (R11.11)', () => {
+  it('lists every platform permission of an operator, in catalog order, on login, me, and refresh', async () => {
+    const { res, access, refresh: refreshToken } = await login(app, OMAR, PASSWORD);
+    const platform = { permissions: [...PLATFORM_PERMISSIONS] };
+    expect(platform.permissions).toEqual(['platform.plan.view', 'platform.plan.create', 'platform.plan.update', 'platform.tenant.view', 'platform.tenant.create', 'platform.subscription.update']);
+    expect(res.body.data.user.platform).toEqual(platform);
+    expect((await me(access)).body.data.user.platform).toEqual(platform);
+    expect((await refresh(refreshToken)).body.data.user.platform).toEqual(platform);
+  });
+
+  it('answers platform: null for a tenant user on login, me, and refresh', async () => {
+    const { res, access, refresh: refreshToken } = await login(app, KHALID, PASSWORD);
+    expect(res.body.data.user.platform).toBeNull();
+    expect((await me(access)).body.data.user.platform).toBeNull();
+    expect((await refresh(refreshToken)).body.data.user.platform).toBeNull();
+  });
+
+  it('keeps platform permissions out of the access token', async () => {
+    const { access } = await login(app, OMAR, PASSWORD);
+    expect(Object.keys(decodeJwt(access)).sort()).toEqual(['email', 'exp', 'iat', 'iss', 'role', 'sub', 'tenant', 'username']);
   });
 });
 
