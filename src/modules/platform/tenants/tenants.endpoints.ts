@@ -51,7 +51,7 @@ export const tenantsApi = defineApi({
       summary: 'Send the Tenant Admin a fresh verification link',
       permission: { platform: 'platform.tenant.create' },
       params: tenantParams,
-      response: { kind: 'noContent' },
+      response: { kind: 'data', status: 200, schema: tenantDetailResponseSchema },
       errors: ['ALREADY_VERIFIED'],
     }),
   },

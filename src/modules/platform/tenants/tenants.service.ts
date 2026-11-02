@@ -9,7 +9,7 @@ import { AppError, fromDatabaseError } from '@/http/errors.js';
 import { listPage } from '@/http/list.js';
 import type { PageType } from '@/http/respond.js';
 import type { Logger } from '@/logging/logger.js';
-import { insertPendingUser, issuePasswordToken, verificationEmail } from '@/modules/auth/index.js';
+import { type EmailSendOutcomeType, insertPendingUser, issuePasswordToken, sendInvitationLink, verificationEmail } from '@/modules/auth/index.js';
 import { insertDefaultHours } from '@/modules/calendar/index.js';
 import { assertSeatAvailable, createSubscriptionsRepository, toSubscriptionView, toUsage } from '@/modules/subscriptions/index.js';
 import { SYSTEM_ROLE_NAME, systemRoleGrants } from '@/modules/tenant-access/index.js';
@@ -19,9 +19,20 @@ import type { ChangeSubscriptionRequestType, CreateTenantRequestType, ListTenant
 const plansRepo = createPlansRepository();
 const subscriptionsRepo = createSubscriptionsRepository();
 
-function toDetail(row: { tenant: TenantDetailType['tenant']; subscription: Parameters<typeof toSubscriptionView>[0]; activeUsers: number; storedBytes: number; today: string }): TenantDetailType {
+interface DetailRowType {
+  tenant: Omit<TenantDetailType['tenant'], 'owner'>;
+  owner: Omit<TenantDetailType['tenant']['owner'], 'verificationEmail'> & { invitationEmail: EmailSendOutcomeType | null };
+  subscription: Parameters<typeof toSubscriptionView>[0];
+  activeUsers: number;
+  storedBytes: number;
+  today: string;
+}
+
+function toDetail(row: DetailRowType): TenantDetailType {
+  const { invitationEmail, ...owner } = row.owner;
   return {
-    tenant: row.tenant,
+    // Once verified, the outcome of an old email no longer matters (P11.2).
+    tenant: { ...row.tenant, owner: { ...owner, verificationEmail: owner.verifiedAt ? null : invitationEmail } },
     subscription: toSubscriptionView(row.subscription, row.today),
     usage: toUsage(row.activeUsers, row.storedBytes, row.subscription),
   };
@@ -46,6 +57,14 @@ export function createTenantsService({ db, repo, emailSender, settings }: { db: 
     return toDetail(row);
   }
 
+  async function get(tenantId: string): Promise<TenantDetailType> {
+    const [row] = await repo.findById(db, tenantId);
+    if (!row) {
+      throw new AppError('NOT_FOUND');
+    }
+    return toDetail(row);
+  }
+
   return {
     /**
      * Creates the tenant, its subscription with the plan's terms copied, the first Tenant Admin, and their
@@ -53,7 +72,7 @@ export function createTenantsService({ db, repo, emailSender, settings }: { db: 
      * goes out only after commit, so a rolled-back tenant never sends one (P1.14).
      */
     async create(body: CreateTenantRequestType, context: AuditContextType, log: Logger): Promise<TenantDetailType> {
-      const { admin, token, response } = await withTx(db, async (tx) => {
+      const { admin, token, tenantId } = await withTx(db, async (tx) => {
         const today = (await subscriptionsRepo.today(tx)).rows[0]?.today ?? '';
         if (body.subscription.startDate > today) {
           throw new AppError('VALIDATION_FAILED', [{ path: 'subscription.startDate', code: 'in_future' }]);
@@ -128,20 +147,12 @@ export function createTenantsService({ db, repo, emailSender, settings }: { db: 
         });
         // The tenant's calendar starts with the default normal hours (R4.1).
         await insertDefaultHours(tx, tenant.id, today, context);
-        return {
-          admin,
-          token,
-          response: await detailOf(tx, tenant.id),
-        };
+        return { admin, token, tenantId: tenant.id };
       }).catch(adminEmailPath);
 
-      try {
-        await emailSender.send(verificationEmail(admin, token, settings.appBaseUrl));
-      } catch (err) {
-        // The tenant exists; Omar can resend the link (P1.16). The token is never logged.
-        log.warn({ err, tenantId: response.tenant.id }, 'verification email failed');
-      }
-      return response;
+      // The tenant exists even when the email fails; its owner shows `failed` and Omar can resend (R11.2, P1.16).
+      await sendInvitationLink(db, admin.id, verificationEmail(admin, token, settings.appBaseUrl), emailSender, (err) => log.warn({ err, tenantId }, 'verification email failed'));
+      return get(tenantId);
     },
 
     async list(query: ListTenantsQueryType): Promise<PageType<TenantDetailType>> {
@@ -161,13 +172,7 @@ export function createTenantsService({ db, repo, emailSender, settings }: { db: 
       return { ...page, items: page.items.map(toDetail) };
     },
 
-    async get(tenantId: string): Promise<TenantDetailType> {
-      const [row] = await repo.findById(db, tenantId);
-      if (!row) {
-        throw new AppError('NOT_FOUND');
-      }
-      return toDetail(row);
-    },
+    get,
 
     /**
      * Sets the tenant's plan, period, and customer discount (R1.6). The plan's current terms are copied again
@@ -219,10 +224,10 @@ export function createTenantsService({ db, repo, emailSender, settings }: { db: 
     },
 
     /**
-     * Issues a new link for the tenant's owner and retires every older one (P1.16).
-     * A send failure surfaces as an error: Omar asked for an email, so he must not be told it went out.
+     * Issues a new link for the tenant's owner and retires every older one (P1.16). A send failure is not an error:
+     * the answer's `owner.verificationEmail` tells Omar it did not go out (R11.3).
      */
-    async resendVerification(id: string, context: AuditContextType): Promise<void> {
+    async resendVerification(id: string, context: AuditContextType, log: Logger): Promise<TenantDetailType> {
       const { owner, token } = await withTx(db, async (tx) => {
         const [owner] = await repo.findOwner(tx, id);
         if (!owner) {
@@ -241,7 +246,8 @@ export function createTenantsService({ db, repo, emailSender, settings }: { db: 
         });
         return { owner, token };
       });
-      await emailSender.send(verificationEmail(owner, token, settings.appBaseUrl));
+      await sendInvitationLink(db, owner.id, verificationEmail(owner, token, settings.appBaseUrl), emailSender, (err) => log.warn({ err, tenantId: id }, 'verification email failed'));
+      return get(id);
     },
   };
 }

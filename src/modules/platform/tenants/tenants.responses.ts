@@ -1,12 +1,24 @@
 import { z } from 'zod';
+import { emailSendOutcomes } from '@/db/schema/index.js';
 import { subscriptionViewResponseSchema, usageResponseSchema } from '@/modules/subscriptions/index.js';
+
+/** The first Tenant Admin. `verificationEmail` is the outcome of their newest link's email, null once verified or when unknown (P11.2). */
+export const tenantOwnerResponseSchema = z
+  .strictObject({
+    id: z.string(),
+    email: z.string(),
+    userName: z.string(),
+    verifiedAt: z.date().nullable(),
+    verificationEmail: z.enum(emailSendOutcomes.enumValues).nullable(),
+  })
+  .meta({ id: 'TenantOwner' });
 
 export const tenantResponseSchema = z
   .strictObject({
     id: z.string(),
     name: z.string(),
     slug: z.string(),
-    ownerId: z.string().nullable(),
+    owner: tenantOwnerResponseSchema,
     createdAt: z.date(),
   })
   .meta({ id: 'Tenant' });

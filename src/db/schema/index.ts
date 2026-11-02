@@ -35,5 +35,5 @@ export { subscriptions } from './subscriptions.js';
 export { tenantMembers } from './tenant-members.js';
 export { tenantNoticeKinds, tenantNotices } from './tenant-notices.js';
 export { tenants } from './tenants.js';
-export { userRoles, users } from './users.js';
+export { emailSendOutcomes, userRoles, users } from './users.js';
 export { stageFallbacks, workflowStages, workflows, workflowVersions } from './workflows.js';

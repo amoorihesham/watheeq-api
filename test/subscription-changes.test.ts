@@ -102,7 +102,7 @@ describe('change a subscription (R1.6)', () => {
         id,
         name: expect.any(String),
         slug: 'sc-al-noor',
-        ownerId: expect.any(String),
+        owner: { id: expect.any(String), email: 'admin@sc-al-noor.test', userName: 'Sara Al-Qahtani', verifiedAt: null, verificationEmail: 'sent' },
         createdAt: expect.any(String),
       },
       subscription: {

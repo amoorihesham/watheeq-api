@@ -3182,8 +3182,23 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TenantDetail"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "`UNAUTHENTICATED`",
@@ -14623,11 +14638,8 @@
           "slug": {
             "type": "string"
           },
-          "ownerId": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "owner": {
+            "$ref": "#/components/schemas/TenantOwner"
           },
           "createdAt": {
             "type": "string",
@@ -14638,7 +14650,7 @@
           "id",
           "name",
           "slug",
-          "ownerId",
+          "owner",
           "createdAt"
         ],
         "additionalProperties": false
@@ -14660,6 +14672,53 @@
           "tenant",
           "subscription",
           "usage"
+        ],
+        "additionalProperties": false
+      },
+      "TenantOwner": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "verifiedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verificationEmail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "sent",
+                  "failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "userName",
+          "verifiedAt",
+          "verificationEmail"
         ],
         "additionalProperties": false
       },

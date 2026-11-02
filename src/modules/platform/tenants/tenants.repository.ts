@@ -3,7 +3,7 @@ import type { Executor } from '@/db/pool.js';
 import { files, roles, subscriptions, tenantMembers, tenants, users } from '@/db/schema/index.js';
 import type { PageRequestType } from '@/http/list.js';
 import { riyadhToday } from '@/modules/subscriptions/index.js';
-import type { NewTenantType, TenantOwnerType, TenantType } from './tenants.types.js';
+import type { NewTenantType, OwnerAccountType, TenantRowType } from './tenants.types.js';
 
 const activeMembers = sql<number>`(
   select count(*)::int from ${tenantMembers}
@@ -18,7 +18,8 @@ const storedBytes = sql<number>`(
 /** Platform code: reads across tenants, reached only behind `requireRole("operator")` (P1.1). */
 export function createTenantsRepository() {
   const detailColumns = {
-    tenant: tenants,
+    tenant: { id: tenants.id, name: tenants.name, slug: tenants.slug, createdAt: tenants.createdAt },
+    owner: { id: users.id, email: users.email, userName: users.userName, verifiedAt: users.emailVerifiedAt, invitationEmail: users.invitationEmail },
     subscription: subscriptions,
     activeUsers: activeMembers,
     storedBytes,
@@ -26,7 +27,7 @@ export function createTenantsRepository() {
   };
 
   return {
-    insertTenant(db: Executor, values: NewTenantType): Promise<TenantType[]> {
+    insertTenant(db: Executor, values: NewTenantType): Promise<TenantRowType[]> {
       return db.insert(tenants).values(values).returning();
     },
 
@@ -43,6 +44,7 @@ export function createTenantsRepository() {
         .select({ ...detailColumns, sortValues: page.sortValues })
         .from(tenants)
         .innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
+        .innerJoin(users, eq(users.id, tenants.ownerId))
         .where(page.where)
         .orderBy(...page.orderBy)
         .limit(page.limit);
@@ -54,10 +56,10 @@ export function createTenantsRepository() {
     },
 
     findById(db: Executor, tenantId: string) {
-      return db.select(detailColumns).from(tenants).innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id)).where(eq(tenants.id, tenantId));
+      return db.select(detailColumns).from(tenants).innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id)).innerJoin(users, eq(users.id, tenants.ownerId)).where(eq(tenants.id, tenantId));
     },
 
-    findOwner(db: Executor, tenantId: string): Promise<TenantOwnerType[]> {
+    findOwner(db: Executor, tenantId: string): Promise<OwnerAccountType[]> {
       return db
         .select({
           id: users.id,

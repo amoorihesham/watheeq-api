@@ -3,6 +3,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb } from '../src/db/pool.js';
 import { withTx } from '../src/db/tx.js';
+import { issuePasswordToken } from '../src/modules/auth/index.js';
 import { DEFAULT_WEEK } from '../src/modules/calendar/index.js';
 import { assertSeatAvailable } from '../src/modules/subscriptions/index.js';
 import { systemRoleGrants, TENANT_PERMISSIONS } from '../src/modules/tenant-access/index.js';
@@ -53,6 +54,8 @@ const createTenant = (slug: string, adminEmail: string, overrides: Record<string
 
 const verify = (token: string, password = SARA_PASSWORD) => request(app).post('/auth/verify').send({ token, password });
 
+const invitationEmailOf = async (userId: string) => (await pool.query('select invitation_email from users where id = $1', [userId])).rows[0]?.invitation_email;
+
 beforeAll(async () => {
   const passwordHash = await hashPassword(PASSWORD);
   omarId = await seedUser(pool, {
@@ -88,18 +91,21 @@ describe('create a tenant (R1.3, R1.14)', () => {
     expect(res.headers['cache-control']).toBe('no-store');
     const { tenant, subscription, usage } = res.body.data;
     expect(Object.keys(res.body.data).sort()).toEqual(['subscription', 'tenant', 'usage']);
-    expect(tenant).toMatchObject({
+    expect(tenant).toEqual({
+      id: expect.any(String),
       name: 'Tenant tn-al-noor',
       slug: 'tn-al-noor',
-      ownerId: expect.any(String),
+      owner: { id: expect.any(String), email: 'sara@tenants-alnoor.test', userName: 'Sara Al-Qahtani', verifiedAt: null, verificationEmail: 'sent' },
+      createdAt: expect.any(String),
     });
+    expect(await invitationEmailOf(tenant.owner.id)).toBe('sent');
     expect(usage).toEqual({
       activeUsers: 1,
       userLimit: 10,
       overLimit: false,
       storage: { usedBytes: 0, limitBytes: 10 * 1024 ** 3, overLimit: false },
     });
-    const admin = (await pool.query<{ id: string; email: string }>('select id, email from users where id = $1', [tenant.ownerId])).rows[0];
+    const admin = (await pool.query<{ id: string; email: string }>('select id, email from users where id = $1', [tenant.owner.id])).rows[0];
     expect(admin?.email).toBe('sara@tenants-alnoor.test');
     const view = await as(omar).get(`/operator/tenants/${tenant.id}`);
     expect(res.body).toEqual(view.body);
@@ -132,7 +138,7 @@ describe('create a tenant (R1.3, R1.14)', () => {
     // The only role a new tenant starts with is Tenant Admin, and the owner holds it (R3.2, P3.9).
     const roles = await pool.query('select id, name, is_system from roles where tenant_id = $1', [tenant.id]);
     expect(roles.rows).toEqual([{ id: expect.any(String), name: 'Tenant Admin', is_system: true }]);
-    const member = await pool.query('select tenant_id, role_id from tenant_members where user_id = $1', [tenant.ownerId]);
+    const member = await pool.query('select tenant_id, role_id from tenant_members where user_id = $1', [tenant.owner.id]);
     expect(member.rows[0]).toEqual({ tenant_id: tenant.id, role_id: roles.rows[0].id });
 
     const audit = await pool.query('select action, actor_type, actor_id from audit_log where tenant_id = $1 order by id', [tenant.id]);
@@ -225,12 +231,29 @@ describe('create a tenant (R1.3, R1.14)', () => {
     expect(oneDay.body.data.subscription.pricing.customerDiscountPercent).toBe(0);
   });
 
-  it('still creates the tenant when the email cannot be sent, and logs the failure', async () => {
+  it('still creates the tenant when the email cannot be sent, shows `failed` on it, and logs the failure (R11.2)', async () => {
     email.failNext();
     const res = await createTenant('tn-al-nomail', 'nomail@tenants-alnoor.test');
     expect(res.status).toBe(201);
+    const { owner } = res.body.data.tenant;
+    expect(owner).toMatchObject({ email: 'nomail@tenants-alnoor.test', verifiedAt: null, verificationEmail: 'failed' });
+    expect(await invitationEmailOf(owner.id)).toBe('failed');
+    expect((await as(omar).get(`/operator/tenants/${res.body.data.tenant.id}`)).body).toEqual(res.body);
     const warn = capture.lines().find((line) => line.msg === 'verification email failed' && line.tenantId === res.body.data.tenant.id);
     expect(warn?.level).toBe(40);
+  });
+
+  it('clears the recorded outcome when a new invitation link is issued (R11.4)', async () => {
+    const res = await createTenant('tn-al-reissue', 'reissue@tenants-alnoor.test');
+    const ownerId = res.body.data.tenant.owner.id;
+    expect(await invitationEmailOf(ownerId)).toBe('sent');
+    await withTx(createDb(pool), (tx) => issuePasswordToken(tx, ownerId, 'invitation', 60));
+    expect(await invitationEmailOf(ownerId)).toBeNull();
+    expect((await as(omar).get(`/operator/tenants/${res.body.data.tenant.id}`)).body.data.tenant.owner.verificationEmail).toBeNull();
+    // A password reset link leaves the outcome alone (R11.4).
+    await pool.query("update users set invitation_email = 'sent' where id = $1", [ownerId]);
+    await withTx(createDb(pool), (tx) => issuePasswordToken(tx, ownerId, 'reset', 60));
+    expect(await invitationEmailOf(ownerId)).toBe('sent');
   });
 });
 
@@ -263,6 +286,17 @@ describe('verify email and log in (R1.4)', () => {
       userName: 'Sara Al-Qahtani',
       tenant: { roleName: 'Tenant Admin', permissions: TENANT_PERMISSIONS },
     });
+
+    // Verified: `verifiedAt` is set and the email outcome no longer shows (R11.1, R11.2).
+    const tenant = await as(omar).get(`/operator/tenants/${session.res.body.data.user.tenant.id}`);
+    expect(tenant.body.data.tenant.owner).toEqual({
+      id: session.res.body.data.user.id,
+      email: 'sara@tenants-alnoor.test',
+      userName: 'Sara Al-Qahtani',
+      verifiedAt: expect.any(String),
+      verificationEmail: null,
+    });
+    expect(await invitationEmailOf(session.res.body.data.user.id)).toBe('sent');
 
     const audit = await pool.query("select actor_type, actor_id, tenant_id from audit_log where action = 'user.email_verified' and actor_id = $1", [session.res.body.data.user.id]);
     expect(audit.rows).toEqual([
@@ -301,7 +335,9 @@ describe('resend verification (R1.4, P1.16)', () => {
     const created = await createTenant('tn-al-resend', 'resend@tenants-alnoor.test');
     const first = email.lastTokenFor('resend@tenants-alnoor.test');
     const res = await as(omar).post(`/operator/tenants/${created.body.data.tenant.id}/admin/resend-verification`);
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    expect(res.body.data.tenant.owner.verificationEmail).toBe('sent');
+    expect((await as(omar).get(`/operator/tenants/${created.body.data.tenant.id}`)).body).toEqual(res.body);
     const second = email.lastTokenFor('resend@tenants-alnoor.test');
     expect(second).not.toBe(first);
     expect((await verify(first)).body.error.code).toBe('VERIFICATION_INVALID');
@@ -313,18 +349,38 @@ describe('resend verification (R1.4, P1.16)', () => {
 
   it('refuses an admin who already verified, an unknown tenant, and a non-UUID', async () => {
     const alNoor = await pool.query("select id from tenants where slug = 'tn-al-noor'");
+    const sentBefore = email.sent.length;
     const verified = await as(omar).post(`/operator/tenants/${alNoor.rows[0].id}/admin/resend-verification`);
     expect(verified.status).toBe(409);
+    expect(email.sent.length).toBe(sentBefore);
     expect(verified.body.error.code).toBe('ALREADY_VERIFIED');
     expect((await as(omar).post('/operator/tenants/00000000-0000-4000-8000-000000000000/admin/resend-verification')).status).toBe(404);
     expect((await as(omar).post('/operator/tenants/not-a-uuid/admin/resend-verification')).status).toBe(404);
   });
 
-  it('answers 500 when the email cannot be sent, so Omar is not told it went out', async () => {
+  it('answers 200 with `failed` when the email cannot be sent, and `sent` once it goes out again (R11.3)', async () => {
     const created = await createTenant('tn-al-resend-fail', 'resendfail@tenants-alnoor.test');
+    const { id } = created.body.data.tenant;
+    const ownerId = created.body.data.tenant.owner.id;
     email.failNext();
-    const res = await as(omar).post(`/operator/tenants/${created.body.data.tenant.id}/admin/resend-verification`);
-    expect(res.status).toBe(500);
+    const failed = await as(omar).post(`/operator/tenants/${id}/admin/resend-verification`);
+    expect(failed.status).toBe(200);
+    expect(failed.body.data.tenant.owner).toMatchObject({ verifiedAt: null, verificationEmail: 'failed' });
+    expect(await invitationEmailOf(ownerId)).toBe('failed');
+    expect((await as(omar).get(`/operator/tenants/${id}`)).body).toEqual(failed.body);
+    const warn = capture.lines().find((line) => line.msg === 'verification email failed' && line.tenantId === id);
+    expect(warn?.level).toBe(40);
+
+    const first = email.lastTokenFor('resendfail@tenants-alnoor.test');
+    const sent = await as(omar).post(`/operator/tenants/${id}/admin/resend-verification`);
+    expect(sent.status).toBe(200);
+    expect(sent.body.data.tenant.owner.verificationEmail).toBe('sent');
+    expect(await invitationEmailOf(ownerId)).toBe('sent');
+    const newest = email.lastTokenFor('resendfail@tenants-alnoor.test');
+    expect(newest).not.toBe(first);
+    expect((await verify(first)).body.error.code).toBe('VERIFICATION_INVALID');
+    expect((await verify(newest)).status).toBe(204);
+    expect(JSON.stringify(capture.lines())).not.toContain(newest);
   });
 });
 
@@ -351,6 +407,7 @@ describe('list and view tenants (R1.7)', () => {
     expect(bySlug['tn-al-noor']?.subscription.state).toBe('active');
     expect(bySlug['tn-al-grace']?.subscription.state).toBe('grace');
     expect(bySlug['tn-al-readonly']?.subscription.state).toBe('read_only');
+    expect(bySlug['tn-al-grace']?.tenant).toMatchObject({ owner: { email: 'grace@tenants-alnoor.test', userName: 'Sara Al-Qahtani', verifiedAt: null, verificationEmail: 'sent' } });
     expect(bySlug['tn-al-noor']?.usage).toEqual({
       activeUsers: 1,
       userLimit: 10,

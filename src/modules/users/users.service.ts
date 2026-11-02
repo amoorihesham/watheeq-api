@@ -9,7 +9,7 @@ import { AppError } from '@/http/errors.js';
 import { listPage } from '@/http/list.js';
 import type { PageType } from '@/http/respond.js';
 import type { Logger } from '@/logging/logger.js';
-import { endUserAccess, insertPendingUser, invitationEmail, issuePasswordToken } from '@/modules/auth/index.js';
+import { endUserAccess, insertPendingUser, invitationEmail, issuePasswordToken, sendInvitationLink } from '@/modules/auth/index.js';
 import { assertSeatAvailable } from '@/modules/subscriptions/index.js';
 import { assertGrantsHeld, type GrantMapType, grantListOf, loadRoleGrants, type TenantPermissionType } from '@/modules/tenant-access/index.js';
 import type { AssignRoleRequestType, CallerType, InviteUserRequestType, ListUsersQueryType, MemberChangesType, UpdateUserRequestType, UserRowType, UsersRepositoryType, UsersSettingsType, UserType } from './users.types.js';
@@ -136,12 +136,8 @@ export function createUsersService({ db, repo, emailSender, settings }: { db: Db
         return { user, token, tenantName: tenant?.name ?? '' };
       });
 
-      try {
-        await emailSender.send(invitationEmail(user, { userName: caller.userName, tenantName }, token, settings.appBaseUrl));
-      } catch (err) {
-        // The token is never logged.
-        log.warn({ err, userId: user.id }, 'invitation email failed');
-      }
+      // The token is never logged.
+      await sendInvitationLink(db, user.id, invitationEmail(user, { userName: caller.userName, tenantName }, token, settings.appBaseUrl), emailSender, (err) => log.warn({ err, userId: user.id }, 'invitation email failed'));
       return user;
     },
 
@@ -337,7 +333,14 @@ export function createUsersService({ db, repo, emailSender, settings }: { db: Db
         const [tenant] = await repo.tenantName(tx, tenantId);
         return { user, token, tenantName: tenant?.name ?? '' };
       });
-      await emailSender.send(invitationEmail(user, { userName: caller.userName, tenantName }, token, settings.appBaseUrl));
+      let sendError: unknown;
+      const outcome = await sendInvitationLink(db, id, invitationEmail(user, { userName: caller.userName, tenantName }, token, settings.appBaseUrl), emailSender, (err) => {
+        sendError = err;
+      });
+      // Still a 500 after the outcome is recorded, so this answer is unchanged in Phase 11 (spec 4.3).
+      if (outcome === 'failed') {
+        throw sendError;
+      }
     },
   };
 }

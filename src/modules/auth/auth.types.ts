@@ -2,7 +2,7 @@ import type { z } from 'zod';
 import type { AuthConfigType, FrontendConfigType } from '@/config/config.js';
 import type { Db } from '@/db/pool.js';
 import type { passwordTokenPurposes } from '@/db/schema/password-tokens.js';
-import type { userRoles } from '@/db/schema/users.js';
+import type { emailSendOutcomes, userRoles } from '@/db/schema/users.js';
 import type { EmailSenderType } from '@/email/index.js';
 import type { createAuthController } from './auth.controller.js';
 import type { createAuthRepository } from './auth.repository.js';
@@ -71,6 +71,7 @@ export type ResetPasswordRequestType = z.infer<typeof resetPasswordRequestSchema
 export type SessionResponseType = z.output<typeof sessionResponseSchema>;
 
 export type PasswordTokenPurposeType = (typeof passwordTokenPurposes.enumValues)[number];
+export type EmailSendOutcomeType = (typeof emailSendOutcomes.enumValues)[number];
 
 export interface NewPasswordTokenType {
   userId: string;

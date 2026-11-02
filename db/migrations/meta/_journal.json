@@ -169,6 +169,13 @@
       "when": 1793033889066,
       "tag": "0023_tiny_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793651874721,
+      "tag": "0024_invitation_email",
+      "breakpoints": true
     }
   ]
 }

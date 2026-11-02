@@ -46,6 +46,8 @@ const as = (access: string) => ({
   put: (path: string, body: object) => request(app).put(path).set('Cookie', accessCookie(access)).send(body),
 });
 
+const invitationEmailOf = async (userId: string) => (await pool.query('select invitation_email from users where id = $1', [userId])).rows[0]?.invitation_email;
+
 const nextEmail = () => `user${++counter}@us-alnoor.test`;
 const adminRole = () => ({ id: adminRoleId, name: 'Tenant Admin', isSystem: true });
 const memberRole = () => ({ id: memberRoleId, name: 'Member', isSystem: false });
@@ -146,6 +148,9 @@ describe('inviting a user (R2.8)', () => {
     const message = email.sent.filter((m) => m.to === 'huda@us-alnoor.test').at(-1);
     expect(message?.text).toContain('Sara invited you to join us-al-noor');
     expect(message?.text).toContain(`${TEST_APP_BASE_URL}/verify-email?token=`);
+    // Recorded on the user, shown on no response yet (R11.4, Q1).
+    expect(await invitationEmailOf(res.body.data.id)).toBe('sent');
+    expect(Object.keys(res.body.data)).not.toContain('invitationEmail');
     expect(await auditOf(res.body.data.id)).toEqual([
       {
         action: 'user.invited',
@@ -257,9 +262,12 @@ describe('inviting a user (R2.8)', () => {
       roleId: memberRoleId,
     });
     expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({ email: address, status: 'invited' });
     expect(email.lastTokenFor(address)).toBe('');
+    expect(await invitationEmailOf(res.body.data.id)).toBe('failed');
     expect((await as(sara).post(`/users/${res.body.data.id}/resend-invitation`)).status).toBe(204);
     expect(email.lastTokenFor(address)).not.toBe('');
+    expect(await invitationEmailOf(res.body.data.id)).toBe('sent');
   });
 });
 
@@ -802,10 +810,12 @@ describe('resending an invitation (R2.14)', () => {
     expect(inactive.body.error.code).toBe('USER_INACTIVE');
   });
 
-  it('reports a failed email as an error', async () => {
+  it('reports a failed email as an error, after recording it (R11.4)', async () => {
     const id = await invite();
+    expect(await invitationEmailOf(id)).toBe('sent');
     email.failNext();
     expect((await as(sara).post(`/users/${id}/resend-invitation`)).status).toBe(500);
+    expect(await invitationEmailOf(id)).toBe('failed');
   });
 });
 
